@@ -301,5 +301,5 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('load', async () => {
   await loadConfig();
   document.getElementById('trackCount').textContent = tracks.length;
-  switchView('terrain');
+  switchView('neural');
 });
