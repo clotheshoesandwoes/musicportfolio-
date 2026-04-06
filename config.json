@@ -6,9 +6,9 @@
     "soundcloud": "https://soundcloud.com/kanisongs"
   },
   "theme": {
-    "accent": "#ffffff",
-    "accent2": "#846ce4",
-    "background": "#42a9a7"
+    "accent": "#6fd4e2",
+    "accent2": "#4052b0",
+    "background": "#ededed"
   },
   "featured": [
     0,
