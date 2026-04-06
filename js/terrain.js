@@ -73,13 +73,20 @@
       list.style.cssText = 'position:absolute;top:45%;left:0;right:0;bottom:0;overflow-y:auto;padding:12px 16px 20px;-webkit-overflow-scrolling:touch';
       let html = '<div style="display:flex;gap:8px;margin-bottom:12px"><button class="info-btn" style="font-size:12px" id="mTerrainPlay">Play All</button><button class="info-btn secondary" style="font-size:12px" id="mTerrainShuffle">Shuffle</button></div>';
       tracks.forEach((t, i) => {
-        html += `<div class="sea-track" data-index="${i}" style="padding:10px 6px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name">${escapeHtml(t.title)}</span></div>`;
+        const badges = [];
+        if (t.isNew) badges.push('<span class="track-badge-new">NEW</span>');
+        if (t.isFeatured) badges.push('<span class="track-badge-featured">★</span>');
+        html += `<div class="sea-track" data-index="${i}" style="padding:10px 6px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name">${escapeHtml(t.title)}</span>${badges.join('')}</div>`;
       });
       list.innerHTML = html;
       container.appendChild(list);
 
       list.querySelectorAll('.sea-track').forEach(el => {
-        el.addEventListener('click', () => playTrack(parseInt(el.dataset.index)));
+        let clickTimer = null;
+        el.addEventListener('click', () => {
+          if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; showTrackDetail(parseInt(el.dataset.index)); }
+          else { clickTimer = setTimeout(() => { clickTimer = null; playTrack(parseInt(el.dataset.index)); }, 250); }
+        });
       });
       document.getElementById('mTerrainPlay').addEventListener('click', () => playTrack(0));
       document.getElementById('mTerrainShuffle').addEventListener('click', () => {

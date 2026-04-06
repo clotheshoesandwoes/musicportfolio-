@@ -58,13 +58,20 @@
       html += '<button class="info-btn secondary" style="font-size:12px" id="mNeuralShuffle">Shuffle</button>';
       html += '</div>';
       tracks.forEach((t, i) => {
-        html += `<div class="sea-track" data-index="${i}" style="padding:10px 6px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name">${escapeHtml(t.title)}</span></div>`;
+        const badges = [];
+        if (t.isNew) badges.push('<span class="track-badge-new">NEW</span>');
+        if (t.isFeatured) badges.push('<span class="track-badge-featured">★</span>');
+        html += `<div class="sea-track" data-index="${i}" style="padding:10px 6px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name">${escapeHtml(t.title)}</span>${badges.join('')}</div>`;
       });
       list.innerHTML = html;
       container.appendChild(list);
 
       list.querySelectorAll('.sea-track').forEach(el => {
-        el.addEventListener('click', () => playTrack(parseInt(el.dataset.index)));
+        let clickTimer = null;
+        el.addEventListener('click', () => {
+          if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; showTrackDetail(parseInt(el.dataset.index)); }
+          else { clickTimer = setTimeout(() => { clickTimer = null; playTrack(parseInt(el.dataset.index)); }, 250); }
+        });
       });
       document.getElementById('mNeuralPlay').addEventListener('click', () => playTrack(0));
       document.getElementById('mNeuralShuffle').addEventListener('click', () => {

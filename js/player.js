@@ -174,6 +174,16 @@ playPauseBtn.addEventListener('click', togglePlay);
 nextBtn.addEventListener('click', playNext);
 prevBtn.addEventListener('click', playPrev);
 
+// Click player track info to open detail panel
+const playerTrackInfo = document.getElementById('playerTrackInfo');
+if (playerTrackInfo) {
+  playerTrackInfo.addEventListener('dblclick', () => {
+    if (state.currentTrack >= 0 && typeof showTrackDetail === 'function') {
+      showTrackDetail(state.currentTrack);
+    }
+  });
+}
+
 shuffleBtn.addEventListener('click', () => {
   state.shuffleMode = !state.shuffleMode;
   shuffleBtn.classList.toggle('active', state.shuffleMode);

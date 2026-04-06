@@ -10,7 +10,7 @@
     "accent2": "#ec4899",
     "background": "#050505"
   },
-  "featured": [0, 13, 7, 4, 27],
+  "featured": [0, 4, 7, 13, 27],
   "newReleases": [0, 1, 2, 3, 4],
   "tracks": [
     {
@@ -19,7 +19,7 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [],
       "isNew": true,
       "isFeatured": true
     },
@@ -29,7 +29,7 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [],
       "isNew": true,
       "isFeatured": false
     },
@@ -39,7 +39,7 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [],
       "isNew": true,
       "isFeatured": false
     },
@@ -49,8 +49,8 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
-      "isNew": false,
+      "tags": [],
+      "isNew": true,
       "isFeatured": false
     },
     {
@@ -60,7 +60,7 @@
       "credits": "",
       "links": {},
       "tags": ["hard"],
-      "isNew": false,
+      "isNew": true,
       "isFeatured": true
     },
     {
@@ -69,7 +69,7 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [],
       "isNew": false,
       "isFeatured": false
     },
@@ -79,7 +79,7 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [],
       "isNew": false,
       "isFeatured": false
     },
@@ -92,6 +92,1096 @@
       "tags": ["grunge"],
       "isNew": false,
       "isFeatured": true
+    },
+    {
+      "title": "Caught in Thoughts",
+      "file": "Caught in Thoughts.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Chicago Seven",
+      "file": "chicago seven.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Chilly Nites",
+      "file": "chilly nites dannz0.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Clarity",
+      "file": "CLARITY bloomberg 5 effects only.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Thymiopolous",
+      "file": "cmb thymiopolous.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Coffee (Back in the Day)",
+      "file": "Coffee back in the day.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": true
+    },
+    {
+      "title": "Convinced",
+      "file": "convinced.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Wired",
+      "file": "dannz0 wired.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Davey",
+      "file": "DAVEY.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Down Down Down",
+      "file": "down down down.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Dutch",
+      "file": "dutch.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Fancy Nour Nour",
+      "file": "fancy nour nour.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Fall Away",
+      "file": "final but wip fall away.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "First Rap in a While",
+      "file": "first rap in a while.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Formidable",
+      "file": "Formidable Dannz03.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "C'est La Vie",
+      "file": "french love song cest la vie.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Fucking Up His Liver",
+      "file": "fucking up his liver and.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Greatest Consequences",
+      "file": "greatest consequences.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Gunning",
+      "file": "gunning.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Hol' Up Freestyle",
+      "file": "HOL UP FREESTYLE4.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": true
+    },
+    {
+      "title": "Hotel California",
+      "file": "HOTEL CALIFORNIA.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "If I Had (Universal)",
+      "file": "If i had Universal.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Indie Time",
+      "file": "indie time2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "It Doesn't Get Better",
+      "file": "IT DOESNT GET BETTER prod cmb.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Jolly Mood Turn Sour",
+      "file": "jolly mood turn sour prod Abstract.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Kani Demarco's Memoir",
+      "file": "KANI DEMARCO's MEMOIR- 2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Beachouse",
+      "file": "kaniburn - beachouse (prod.dannz0) final mix.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Car Mixtape",
+      "file": "Kaniburn car mixtape (prod.dannz0).mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Lame",
+      "file": "lame.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Lemonade",
+      "file": "LemonadeGucciKane.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Little Indie Valentine",
+      "file": "little indie valentine mf2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Lotus (Try to Breathe)",
+      "file": "LOTUS TRY TO BREATHE2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Louie 003 (Remix)",
+      "file": "LOUIE 003 KANI REMIX.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Mario Island Funky Beat",
+      "file": "Mario Island Funky Beat with Hum.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Moods",
+      "file": "MOODS ROLO.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Need New",
+      "file": "NEED NEW SEAN X DANNZ0.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Neopolitan Dreams",
+      "file": "NEOPOLITAN DREAMS2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Nice Beat",
+      "file": "nice beat.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Nice Lil Indie Moonlight",
+      "file": "nice lil indie moonlight.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Nice",
+      "file": "nice.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Nirvana (Alt Lyrics)",
+      "file": "nirvana dannz0-differentlyrics.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Nirvana",
+      "file": "nirvana dannz0-original.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "No Service",
+      "file": "NO SERVICE.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "ODST",
+      "file": "odst.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "On Tour Soon",
+      "file": "ON TOUR soon.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Passion Pit Remix",
+      "file": "passion pit remix.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Follow You",
+      "file": "Project 24 follow you.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Ohohohohoho",
+      "file": "Project_8 ohohohohoho.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Days Get Longer",
+      "file": "Project_9 days get longer.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "10 Miles",
+      "file": "Project_song__Apr4_10miles.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "May Flowers",
+      "file": "Project_song_apr12_may flowers.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Wait / Weight",
+      "file": "Project_song_apr14_waitweight.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Emo",
+      "file": "Project_song_apr16_emo.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Birthday Freestyle",
+      "file": "Project_song_birthdayfreestyle.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Bluff Caller",
+      "file": "Project_song_emo_bluff_caller.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Emo Rock",
+      "file": "Project_song_june14_emorock.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Money Ain't a Thing",
+      "file": "Project_song_june16_moneymoneyaintathing.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Final Chapter",
+      "file": "Project_song_june19_finalchapter3.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Love Easily",
+      "file": "Project_song_june27_loveeasily.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Emo Rock II",
+      "file": "Project_song_Mar26_emorock2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Runaway",
+      "file": "Project_song_may10_RUNAWAY.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Peep Demo",
+      "file": "Project_song_may22_peepdemo2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Shroomy",
+      "file": "Project_song_may24_shroomy2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Rock (Full)",
+      "file": "Project_song_may5_rock_full.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Capz",
+      "file": "quickexportCapz.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Random Song After David's",
+      "file": "random song after davids_2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Rap About Some Bullshit",
+      "file": "rap about some bullshit 3.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Real Love",
+      "file": "real love.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Cute (Rolo)",
+      "file": "Really cool idea - Cute Rolo.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Remember",
+      "file": "remember yogicbeats.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Robot Song",
+      "file": "robot song c world.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Rolla",
+      "file": "rolla.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Rusk",
+      "file": "rusk.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Sean USB",
+      "file": "sean usb 3.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Sean Vox (Yeat Beat)",
+      "file": "sean vox yeat dannz0 beat.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "If I Had (Full v2)",
+      "file": "sean x dannz0 _if i had_ full song v2.0.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "I Will Survive",
+      "file": "sean x dannz0 i will survive 1.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "See Fair",
+      "file": "see fair.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Shoebox",
+      "file": "shoebox.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Sickboi",
+      "file": "sickboi2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Silk Pillowcase",
+      "file": "silk pillowcase.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Silo Galaxy (Renewed)",
+      "file": "Silo Galaxy-renewed.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Silo Galaxy",
+      "file": "Silo Galaxy2.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Skeat x Kani",
+      "file": "skeatxkanikani.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Two of Us",
+      "file": "snip2Awesome Two of Us.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Soul",
+      "file": "soul.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Space Star Galactica",
+      "file": "SPACE STAR GALACTICA.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Spotlight",
+      "file": "SPOT LIGHT 6.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Stop Light",
+      "file": "STOP LIGHT.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Stayin' Alive",
+      "file": "stayin alive.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Stop But I Won't",
+      "file": "stop but i wont.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Streets",
+      "file": "streets.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Take Me Home",
+      "file": "take me home dawg.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Thunderbird",
+      "file": "thunderbird.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Times Away",
+      "file": "times away.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Told That Girl",
+      "file": "told that girl.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Turned Into Taylor Swift",
+      "file": "turned into taylor swift.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Uh Huh",
+      "file": "uh huh.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Uh, I'm Sick",
+      "file": "uh im sick.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Underrated",
+      "file": "UNDER RATED.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Wallet",
+      "file": "wallet.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Warzone",
+      "file": "warzone.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "What Do U Think of Me",
+      "file": "WHAT DO U THINK OF ME.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "What Changed With U",
+      "file": "what changed w u cworld kazoo.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "What U Expect of Me",
+      "file": "what u expect of me - jayzlinkinpark.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Wind Blows",
+      "file": "WIND BLOWS_3.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Work Smart",
+      "file": "work smart.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Filip",
+      "file": "filip+gay+(1).mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Gay K",
+      "file": "gay k.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": false,
+      "isFeatured": false
     }
   ]
 }

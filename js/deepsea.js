@@ -92,10 +92,14 @@
       html += `<div class="sea-zone-label" style="color:${z.labelColor}">${z.label}</div>`;
       z.tracks.forEach(t => {
         const isActive = t.originalIndex === state.currentTrack;
+        const badges = [];
+        if (t.isNew) badges.push('<span class="track-badge-new">NEW</span>');
+        if (t.isFeatured) badges.push('<span class="track-badge-featured">★</span>');
         html += `
           <div class="sea-track${isActive ? ' active' : ''}" data-index="${t.originalIndex}">
             <div class="sea-dot" style="background:${z.color};box-shadow:0 0 8px ${z.dotShadow}"></div>
             <span class="sea-name">${escapeHtml(t.title)}</span>
+            ${badges.join('')}
             <span class="sea-dur"></span>
           </div>
         `;
@@ -105,11 +109,21 @@
     html += '<div style="height:200px"></div>';
     scrollArea.innerHTML = html;
 
-    // Click handlers
+    // Click = play, double click = show detail
     scrollArea.querySelectorAll('.sea-track').forEach(el => {
+      let clickTimer = null;
       el.addEventListener('click', () => {
-        playTrack(parseInt(el.dataset.index));
-        updateActiveTrack();
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+          clickTimer = null;
+          showTrackDetail(parseInt(el.dataset.index));
+        } else {
+          clickTimer = setTimeout(() => {
+            clickTimer = null;
+            playTrack(parseInt(el.dataset.index));
+            updateActiveTrack();
+          }, 250);
+        }
       });
     });
   }
