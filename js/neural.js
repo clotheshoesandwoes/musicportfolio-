@@ -143,9 +143,12 @@
       const cellH = (H - margin * 2) / Math.max(rows, 2);
       const clusterCx = margin + cellW * (col + 0.5);
       const clusterCy = margin + cellH * (row + 0.5);
-      const spread = mobile ? Math.min(cellW, cellH) * 0.42 : 120;
-      const x = clusterCx + ((h % 200) - 100) / 100 * spread;
-      const y = clusterCy + (((h >> 8) % 200) - 100) / 100 * spread;
+      const spread = mobile ? Math.min(cellW, cellH) * 0.38 : 120;
+      const rawX = clusterCx + ((h % 200) - 100) / 100 * spread;
+      const rawY = clusterCy + (((h >> 8) % 200) - 100) / 100 * spread;
+      // Clamp to canvas bounds
+      const x = Math.max(margin, Math.min(W - margin, rawX));
+      const y = Math.max(margin, Math.min(H - margin, rawY));
 
       // Build connections (2-4 nearest + 1 random cross-cluster)
       const connections = [];
@@ -208,13 +211,21 @@
     const titleEl = document.getElementById('neuralTitle');
     const metaEl = document.getElementById('neuralMeta');
 
-    // Animate node positions (gentle drift)
+    // Animate node positions (gentle drift) and clamp to canvas
     hoveredNode = -1;
     let hDist = Infinity;
+    const pad = 20;
 
     nodes.forEach((n, i) => {
       n.x = n.ox + Math.sin(frame * 0.006 + i) * 4;
       n.y = n.oy + Math.cos(frame * 0.008 + i * 1.3) * 3;
+
+      // Clamp nodes within canvas bounds
+      n.x = Math.max(pad, Math.min(W - pad, n.x));
+      n.y = Math.max(pad, Math.min(H - pad, n.y));
+      // Also clamp the base position so drift doesn't accumulate out of bounds
+      n.ox = Math.max(pad, Math.min(W - pad, n.ox));
+      n.oy = Math.max(pad, Math.min(H - pad, n.oy));
 
       const dx = mx - n.x, dy = my - n.y;
       const d = Math.sqrt(dx * dx + dy * dy);
