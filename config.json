@@ -6,12 +6,24 @@
     "soundcloud": "https://soundcloud.com/YOUR_SOUNDCLOUD"
   },
   "theme": {
-    "accent": "#8b5cf6",
-    "accent2": "#ec4899",
-    "background": "#050505"
+    "accent": "#ffffff",
+    "accent2": "#846ce4",
+    "background": "#42a9a7"
   },
-  "featured": [0, 4, 7, 13, 27],
-  "newReleases": [0, 1, 2, 3, 4],
+  "featured": [
+    0,
+    4,
+    7,
+    13,
+    27
+  ],
+  "newReleases": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
   "tracks": [
     {
       "title": "The Fall (Shift Perceptions)",
@@ -59,7 +71,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": true,
       "isFeatured": true
     },
@@ -89,7 +103,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": true
     },
@@ -119,7 +135,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -149,7 +167,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": true
     },
@@ -249,7 +269,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -259,7 +281,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -279,7 +303,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -289,7 +315,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": true
     },
@@ -299,7 +327,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -319,7 +349,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -339,7 +371,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -399,7 +433,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -429,7 +465,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -439,7 +477,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -459,7 +499,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -479,7 +521,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -499,7 +543,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -509,7 +555,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -619,7 +667,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -629,7 +679,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -639,7 +691,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -649,7 +703,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -679,7 +735,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -689,7 +747,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -729,7 +789,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -769,7 +831,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -789,7 +853,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -799,7 +865,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -889,7 +957,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -899,7 +969,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -909,7 +981,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -919,7 +993,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -949,7 +1025,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["chill"],
+      "tags": [
+        "chill"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -959,7 +1037,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -989,7 +1069,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["vibe"],
+      "tags": [
+        "vibe"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -1029,7 +1111,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["grunge"],
+      "tags": [
+        "grunge"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -1079,7 +1163,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
@@ -1109,7 +1195,9 @@
       "description": "",
       "credits": "",
       "links": {},
-      "tags": ["hard"],
+      "tags": [
+        "hard"
+      ],
       "isNew": false,
       "isFeatured": false
     },
