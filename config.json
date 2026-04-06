@@ -1,0 +1,97 @@
+{
+  "artist": "Kani",
+  "tagline": "can't mute me.",
+  "socials": {
+    "instagram": "https://instagram.com/seankani",
+    "soundcloud": "https://soundcloud.com/YOUR_SOUNDCLOUD"
+  },
+  "theme": {
+    "accent": "#8b5cf6",
+    "accent2": "#ec4899",
+    "background": "#050505"
+  },
+  "featured": [0, 13, 7, 4, 27],
+  "newReleases": [0, 1, 2, 3, 4],
+  "tracks": [
+    {
+      "title": "The Fall (Shift Perceptions)",
+      "file": "2THE FALL shift perceptions.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": true,
+      "isFeatured": true
+    },
+    {
+      "title": "4-5 Years",
+      "file": "4 5 years.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": true,
+      "isFeatured": false
+    },
+    {
+      "title": "Akira World - I'm Next Up",
+      "file": "Akira World Im Next Up.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": true,
+      "isFeatured": false
+    },
+    {
+      "title": "Amy Winespliff",
+      "file": "AMY WINESPLIFF.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Arkham Villain",
+      "file": "arkham villain.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["hard"],
+      "isNew": false,
+      "isFeatured": true
+    },
+    {
+      "title": "Backyardian",
+      "file": "backyardian.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["vibe"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Best Day Ever (Clarity)",
+      "file": "best day ever10 clarity.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["chill"],
+      "isNew": false,
+      "isFeatured": false
+    },
+    {
+      "title": "Chains (Grunge)",
+      "file": "CHAINS GRUNGE.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": ["grunge"],
+      "isNew": false,
+      "isFeatured": true
+    }
+  ]
+}
