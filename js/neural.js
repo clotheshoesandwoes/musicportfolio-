@@ -46,35 +46,17 @@
     });
     container.appendChild(filters);
 
-    // On mobile: full canvas, no list. Tap nodes to play. Pan to explore.
+    // On mobile: full canvas, no list, no pan. Tap nodes to play.
     if (isMobile()) {
-      // Touch pan
-      let lastTouchX = 0, lastTouchY = 0, isPanning = false;
+      // Tap to set hover position + play
       canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
-          isPanning = true;
-          lastTouchX = e.touches[0].clientX;
-          lastTouchY = e.touches[0].clientY;
           const r = container.getBoundingClientRect();
           mx = e.touches[0].clientX - r.left;
           my = e.touches[0].clientY - r.top;
         }
       }, { passive: true });
-      canvas.addEventListener('touchmove', (e) => {
-        if (isPanning && e.touches.length === 1) {
-          const dx = e.touches[0].clientX - lastTouchX;
-          const dy = e.touches[0].clientY - lastTouchY;
-          lastTouchX = e.touches[0].clientX;
-          lastTouchY = e.touches[0].clientY;
-          nodes.forEach(n => { n.ox += dx; n.oy += dy; });
-          const r = container.getBoundingClientRect();
-          mx = e.touches[0].clientX - r.left;
-          my = e.touches[0].clientY - r.top;
-        }
-      }, { passive: true });
-      canvas.addEventListener('touchend', () => { isPanning = false; });
 
-      // Tap to play
       canvas.addEventListener('click', () => {
         if (hoveredNode >= 0 && hoveredNode < nodes.length) {
           playTrack(nodes[hoveredNode].trackIndex);
