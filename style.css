@@ -141,10 +141,9 @@ input { font-family: var(--font-body); }
 .mobile-view-tabs {
   display: none;
   position: fixed;
-  bottom: calc(var(--player-h) + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
+  top: 14px;
+  right: 16px;
+  z-index: 55;
   background: #0a0a0aee;
   backdrop-filter: blur(16px);
   border: 0.5px solid #ffffff08;
@@ -739,7 +738,7 @@ input { font-family: var(--font-body); }
   .social-btn { display: none; }
   .mobile-view-tabs { display: flex; gap: 4px; }
 
-  .view-container { bottom: calc(var(--player-h) + 44px); }
+  .view-container { bottom: var(--player-h); }
 
   .player-inner { padding: 0 12px; gap: 10px; }
   .player-track-info { flex: 0 1 auto; min-width: 0; }
@@ -752,8 +751,14 @@ input { font-family: var(--font-body); }
   .info-panel { display: none; }
   .latest-panel { display: none; }
 
-  .sea-scroll { padding: 80px 16px 40px; }
-  .sea-track { padding: 10px 6px; min-height: 44px; }
+  .sea-scroll {
+    padding: 80px 12px 40px;
+    background: rgba(5,5,5,0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .sea-zone-label { margin-top: 20px; }
+  .sea-track { padding: 10px 8px; min-height: 44px; }
   .sea-name { font-size: 14px; }
   .depth-indicator { display: none; }
 
