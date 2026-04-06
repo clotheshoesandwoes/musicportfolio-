@@ -488,6 +488,120 @@
       border-color: var(--accent);
     }
 
+    /* Live Preview */
+    .preview-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      margin: -24px -20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .preview-swatch {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .preview-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .preview-site-btn {
+      margin-left: auto;
+      padding: 8px 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .preview-site-btn:hover { opacity: 0.85; }
+
+    /* GitHub Push */
+    .github-section {
+      background: rgba(34, 197, 94, 0.05);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .github-section h3 {
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+      color: var(--success);
+    }
+
+    .github-token-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .github-token-row input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      outline: none;
+    }
+
+    .github-token-row input:focus { border-color: var(--success); }
+
+    .push-btn {
+      padding: 12px 32px;
+      background: var(--success);
+      color: #000;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: opacity 0.2s;
+    }
+
+    .push-btn:hover { opacity: 0.85; }
+    .push-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .github-help {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+      margin-top: 10px;
+    }
+
+    .github-help code {
+      background: var(--bg);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.75rem;
+    }
+
     /* Export section */
     .export-area {
       width: 100%;
@@ -590,6 +704,17 @@
     </div>
   </div>
 
+  <!-- Live Preview Bar -->
+  <div class="preview-bar" id="previewBar">
+    <span class="preview-label">Theme:</span>
+    <div class="preview-swatch">
+      <div class="swatch swatch-accent" style="background:#8b5cf6" title="Accent"></div>
+      <div class="swatch swatch-accent2" style="background:#ec4899" title="Accent 2"></div>
+      <div class="swatch swatch-bg" style="background:#050505" title="Background"></div>
+    </div>
+    <button class="preview-site-btn" onclick="window.open('index.html','_blank')">Open Site Preview</button>
+  </div>
+
   <!-- Site Settings -->
   <div class="section" id="siteSettingsSection">
     <h2>Site Settings</h2>
@@ -650,9 +775,30 @@
     </div>
   </div>
 
-  <!-- Export -->
+  <!-- Deploy to GitHub -->
+  <div class="section" id="deploySection">
+    <h2>Deploy</h2>
+    <div class="github-section">
+      <h3>Push to GitHub (auto-deploys to Cloudflare)</h3>
+      <div class="github-token-row">
+        <input type="password" id="githubToken" placeholder="GitHub Personal Access Token">
+        <button class="btn btn-outline" id="saveTokenBtn">Save</button>
+      </div>
+      <button class="push-btn" id="pushBtn">Push Config &amp; Deploy</button>
+      <div class="github-help">
+        <strong>First time setup (one-time):</strong><br>
+        1. Go to <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--success)">github.com/settings/tokens/new</a><br>
+        2. Name it "cantmute.me admin", set expiration to "No expiration"<br>
+        3. Check <code>repo</code> scope (full control of repositories)<br>
+        4. Generate, copy the token, paste above, click Save<br>
+        5. Now "Push & Deploy" works with one click forever
+      </div>
+    </div>
+  </div>
+
+  <!-- Export (manual fallback) -->
   <div class="section" id="exportSection">
-    <h2>Export</h2>
+    <h2>Export (Manual)</h2>
     <div class="export-buttons">
       <button class="btn btn-accent btn-large" id="exportBtn">Export Config</button>
       <button class="btn btn-success btn-large" id="downloadBtn">Download config.json</button>
@@ -660,10 +806,10 @@
     </div>
     <textarea class="export-area" id="exportArea" readonly placeholder="Click 'Export Config' to generate..."></textarea>
     <div class="export-instructions">
-      <strong>How to deploy:</strong><br>
+      <strong>Manual deploy (if you don't want to use the token):</strong><br>
       1. Click "Export Config" to generate the updated config.json content.<br>
-      2. Copy it or download the file.<br>
-      3. Paste it into <code>config.json</code> in your GitHub repo, or replace the file with the download.<br>
+      2. Download the file.<br>
+      3. Replace <code>config.json</code> in your GitHub repo.<br>
       4. Push to deploy.
     </div>
   </div>
@@ -1055,6 +1201,103 @@
     div.textContent = str || '';
     return div.innerHTML.replace(/"/g, '&quot;');
   }
+
+  // --- Live Preview (color swatches update in real-time) ---
+  [settAccent, settAccent2, settBg].forEach(function(input) {
+    input.addEventListener('input', updatePreviewSwatches);
+  });
+
+  function updatePreviewSwatches() {
+    var bar = document.getElementById('previewBar');
+    if (!bar) return;
+    var s1 = bar.querySelector('.swatch-accent');
+    var s2 = bar.querySelector('.swatch-accent2');
+    var s3 = bar.querySelector('.swatch-bg');
+    if (s1) s1.style.background = settAccent.value;
+    if (s2) s2.style.background = settAccent2.value;
+    if (s3) s3.style.background = settBg.value;
+  }
+
+  // --- GitHub Push ---
+  var GITHUB_REPO = 'clotheshoesandwoes/musicportfolio-';
+  var GITHUB_TOKEN_KEY = 'kani_github_token';
+
+  var githubToken = document.getElementById('githubToken');
+  var saveTokenBtn = document.getElementById('saveTokenBtn');
+  var pushBtn = document.getElementById('pushBtn');
+
+  // Load saved token
+  var savedToken = localStorage.getItem(GITHUB_TOKEN_KEY);
+  if (savedToken) {
+    githubToken.value = savedToken;
+    githubToken.placeholder = 'Token saved (hidden)';
+  }
+
+  saveTokenBtn.addEventListener('click', function() {
+    if (githubToken.value.trim()) {
+      localStorage.setItem(GITHUB_TOKEN_KEY, githubToken.value.trim());
+      showToast('Token saved locally!');
+    }
+  });
+
+  pushBtn.addEventListener('click', async function() {
+    var token = githubToken.value.trim() || localStorage.getItem(GITHUB_TOKEN_KEY);
+    if (!token) {
+      showToast('Enter a GitHub token first!');
+      return;
+    }
+
+    pushBtn.disabled = true;
+    pushBtn.textContent = 'Pushing...';
+
+    try {
+      var json = buildExportJSON();
+
+      // Step 1: Get current file SHA
+      var getRes = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/config.json', {
+        headers: {
+          'Authorization': 'token ' + token,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+
+      var sha = '';
+      if (getRes.ok) {
+        var fileData = await getRes.json();
+        sha = fileData.sha;
+      }
+
+      // Step 2: Push updated file
+      var putBody = {
+        message: 'Update config via admin panel',
+        content: btoa(unescape(encodeURIComponent(json))),
+        branch: 'master'
+      };
+      if (sha) putBody.sha = sha;
+
+      var putRes = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/config.json', {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'token ' + token,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(putBody)
+      });
+
+      if (putRes.ok) {
+        showToast('Pushed! Cloudflare will auto-deploy in ~1 min.');
+      } else {
+        var errData = await putRes.json();
+        showToast('Push failed: ' + (errData.message || 'Unknown error'));
+      }
+    } catch (e) {
+      showToast('Push failed: ' + e.message);
+    }
+
+    pushBtn.disabled = false;
+    pushBtn.textContent = 'Push Config & Deploy';
+  });
 
   // --- Init ---
   checkAuth();
