@@ -203,26 +203,52 @@
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, W, H);
 
-    // Audio reactivity
-    let avgFreq = 0;
+    // Audio reactivity — get frequency bands
+    let avgFreq = 0, bassFreq = 0, midFreq = 0, highFreq = 0;
     const freqData = getFrequencyData();
     if (freqData && state.isPlaying) {
-      for (let i = 0; i < freqData.length; i++) avgFreq += freqData[i];
-      avgFreq = avgFreq / freqData.length / 255;
+      const len = freqData.length;
+      for (let i = 0; i < len; i++) {
+        const v = freqData[i] / 255;
+        avgFreq += v;
+        if (i < len * 0.15) bassFreq += v;
+        else if (i < len * 0.5) midFreq += v;
+        else highFreq += v;
+      }
+      avgFreq /= len;
+      bassFreq /= Math.floor(len * 0.15);
+      midFreq /= Math.floor(len * 0.35);
+      highFreq /= Math.floor(len * 0.5);
+    }
+
+    // Background pulse with bass
+    if (state.isPlaying && bassFreq > 0.3) {
+      const pulseGrd = ctx.createRadialGradient(W / 2, baseY, 0, W / 2, baseY, W * 0.6);
+      pulseGrd.addColorStop(0, `rgba(139,92,246,${bassFreq * 0.08})`);
+      pulseGrd.addColorStop(0.5, `rgba(236,72,153,${bassFreq * 0.04})`);
+      pulseGrd.addColorStop(1, 'transparent');
+      ctx.fillStyle = pulseGrd;
+      ctx.fillRect(0, 0, W, H);
     }
 
     // Draw terrain layers back-to-front
     for (let L = layers - 1; L >= 0; L--) {
       const off = L * 28;
-      const alpha = 0.06 + L * 0.11;
-      const wobbleAmp = 8 + avgFreq * 12;
+      const alpha = 0.06 + L * 0.11 + avgFreq * 0.15;
+      const wobbleAmp = 8 + bassFreq * 30 + midFreq * 15;
 
       ctx.beginPath();
       for (let i = 0; i < peaks.length; i++) {
         const p = peaks[i];
+        // Per-peak audio boost from frequency bin
+        let peakBoost = 0;
+        if (freqData && state.isPlaying) {
+          const binIdx = Math.floor((i / peaks.length) * freqData.length);
+          peakBoost = (freqData[binIdx] / 255) * 40;
+        }
         const wave = Math.sin(frame * 0.012 + i * 0.4 + L * 0.5) * wobbleAmp;
         const px = p.x + L * 12;
-        const py = baseY - p.h * (1 - L * 0.12) + off + wave;
+        const py = baseY - (p.h + peakBoost) * (1 - L * 0.12) + off + wave;
 
         if (i === 0) {
           ctx.moveTo(px, py);
@@ -252,8 +278,9 @@
       ctx.fill();
 
       if (L === 0) {
-        ctx.strokeStyle = 'rgba(139,92,246,0.3)';
-        ctx.lineWidth = 1;
+        const strokeAlpha = 0.3 + avgFreq * 0.5;
+        ctx.strokeStyle = `rgba(139,92,246,${strokeAlpha})`;
+        ctx.lineWidth = 1 + bassFreq * 2;
         ctx.stroke();
       }
     }

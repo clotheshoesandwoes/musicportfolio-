@@ -211,14 +211,46 @@
     const titleEl = document.getElementById('neuralTitle');
     const metaEl = document.getElementById('neuralMeta');
 
-    // Animate node positions (gentle drift) and clamp to canvas
+    // Audio reactivity
+    let avgFreq = 0, bassFreq = 0, midFreq = 0;
+    const freqData = getFrequencyData();
+    if (freqData && state.isPlaying) {
+      const len = freqData.length;
+      for (let i = 0; i < len; i++) {
+        const v = freqData[i] / 255;
+        avgFreq += v;
+        if (i < len * 0.15) bassFreq += v;
+        else if (i < len * 0.5) midFreq += v;
+      }
+      avgFreq /= len;
+      bassFreq /= Math.floor(len * 0.15);
+      midFreq /= Math.floor(len * 0.35);
+    }
+
+    // Background bass pulse
+    if (state.isPlaying && bassFreq > 0.2) {
+      const pulseGrd = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.5);
+      pulseGrd.addColorStop(0, `rgba(139,92,246,${bassFreq * 0.06})`);
+      pulseGrd.addColorStop(1, 'transparent');
+      ctx.fillStyle = pulseGrd;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Animate node positions (gentle drift + audio breathing) and clamp to canvas
     hoveredNode = -1;
     let hDist = Infinity;
     const pad = 20;
+    const breathe = state.isPlaying ? bassFreq * 6 : 0;
 
     nodes.forEach((n, i) => {
-      n.x = n.ox + Math.sin(frame * 0.006 + i) * 4;
-      n.y = n.oy + Math.cos(frame * 0.008 + i * 1.3) * 3;
+      // Per-node frequency bin for individual reactivity
+      let nodeBeat = 0;
+      if (freqData && state.isPlaying) {
+        const binIdx = Math.floor((i / nodes.length) * freqData.length);
+        nodeBeat = freqData[binIdx] / 255;
+      }
+      n.x = n.ox + Math.sin(frame * 0.006 + i) * (4 + breathe) + Math.sin(frame * 0.03 + i) * nodeBeat * 3;
+      n.y = n.oy + Math.cos(frame * 0.008 + i * 1.3) * (3 + breathe) + Math.cos(frame * 0.03 + i) * nodeBeat * 3;
 
       // Clamp nodes within canvas bounds
       n.x = Math.max(pad, Math.min(W - pad, n.x));
@@ -235,7 +267,8 @@
       }
     });
 
-    // Draw connections
+    // Draw connections — brighten with audio
+    const connBoost = state.isPlaying ? midFreq * 0.15 : 0;
     nodes.forEach((n, i) => {
       n.connections.forEach(ci => {
         if (ci >= nodes.length) return;
@@ -249,24 +282,25 @@
         ctx.lineTo(t.x, t.y);
         ctx.strokeStyle = active
           ? `rgba(${n.hue},${(0.2 + pulse * 0.4) * opacity})`
-          : `rgba(255,255,255,${0.025 * opacity})`;
-        ctx.lineWidth = active ? 1.5 : 0.5;
+          : `rgba(255,255,255,${(0.025 + connBoost) * opacity})`;
+        ctx.lineWidth = active ? 1.5 + bassFreq : 0.5 + avgFreq * 0.5;
         ctx.stroke();
 
-        // Traveling pulse on active connections
-        if (active && opacity > 0.5) {
-          const progress = (frame * 0.02 + i * 0.5) % 1;
+        // Traveling pulse on active connections + audio-triggered pulses
+        if ((active || (state.isPlaying && avgFreq > 0.3 && (i + ci + frame) % 60 < 2)) && opacity > 0.5) {
+          const speed = state.isPlaying ? 0.02 + bassFreq * 0.03 : 0.02;
+          const progress = (frame * speed + i * 0.5) % 1;
           const px = n.x + (t.x - n.x) * progress;
           const py = n.y + (t.y - n.y) * progress;
           ctx.beginPath();
-          ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+          ctx.arc(px, py, 2.5 + avgFreq * 2, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(${n.hue},${(0.6 + pulse * 0.4) * opacity})`;
           ctx.fill();
         }
       });
     });
 
-    // Draw nodes
+    // Draw nodes — size and brightness react to audio
     nodes.forEach((n, i) => {
       const isH = hoveredNode === i;
       const isC = hoveredNode >= 0 && hoveredNode < nodes.length && nodes[hoveredNode].connections.includes(i);
@@ -274,24 +308,33 @@
       const isPlaying = n.trackIndex === state.currentTrack;
       const fo = n.filterOpacity;
 
+      // Per-node audio beat
+      let nodeBeat = 0;
+      if (freqData && state.isPlaying) {
+        const binIdx = Math.floor((i / nodes.length) * freqData.length);
+        nodeBeat = freqData[binIdx] / 255;
+      }
+      const audioSize = nodeBeat * 5;
+      const audioAlpha = nodeBeat * 0.3;
+
       ctx.beginPath();
-      ctx.arc(n.x, n.y, n.size + glow * 6, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, n.size + glow * 6 + audioSize, 0, Math.PI * 2);
 
       if (isPlaying) {
         const playPulse = Math.sin(frame * 0.05) * 0.2 + 0.8;
-        ctx.fillStyle = `rgba(${n.hue},${0.7 * playPulse * fo})`;
+        ctx.fillStyle = `rgba(${n.hue},${(0.7 * playPulse + audioAlpha) * fo})`;
       } else if (isH || isC) {
-        ctx.fillStyle = `rgba(${n.hue},${(0.5 + glow * 0.4) * fo})`;
+        ctx.fillStyle = `rgba(${n.hue},${(0.5 + glow * 0.4 + audioAlpha) * fo})`;
       } else {
-        ctx.fillStyle = `rgba(${n.hue},${0.12 * fo})`;
+        ctx.fillStyle = `rgba(${n.hue},${(0.12 + audioAlpha) * fo})`;
       }
       ctx.fill();
 
-      // Outer glow for hovered/playing
-      if ((glow > 0 || isPlaying) && fo > 0.5) {
+      // Outer glow — always show during audio, bigger with beat
+      if ((glow > 0 || isPlaying || nodeBeat > 0.3) && fo > 0.5) {
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.size + 18, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${n.hue},${0.04 * fo})`;
+        ctx.arc(n.x, n.y, n.size + 18 + nodeBeat * 12, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${n.hue},${(0.04 + nodeBeat * 0.06) * fo})`;
         ctx.fill();
       }
 
