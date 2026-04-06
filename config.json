@@ -3,12 +3,12 @@
   "tagline": "can't mute me.",
   "socials": {
     "instagram": "https://instagram.com/seankani",
-    "soundcloud": "https://soundcloud.com/kanisongs"
+    "soundcloud": "https://soundcloud.com/YOUR_SOUNDCLOUD"
   },
   "theme": {
-    "accent": "#6fd4e2",
-    "accent2": "#4052b0",
-    "background": "#ededed"
+    "accent": "#e3e3e3",
+    "accent2": "#ec4899",
+    "background": "#f4f0f0"
   },
   "featured": [
     0,
