@@ -143,18 +143,25 @@
   function buildNodes() {
     nodes = [];
     const filtered = getFilteredTracks();
-    const count = Math.min(filtered.length, isMobile() ? 25 : 40);
-    const clusters = 4;
-    const margin = isMobile() ? 60 : 100;
+    const count = Math.min(filtered.length, isMobile() ? 40 : 40);
+    const mobile = isMobile();
+    const clusters = mobile ? 5 : 4;
+    const margin = mobile ? 30 : 100;
 
     for (let i = 0; i < count; i++) {
       const cl = Math.floor(i / Math.ceil(count / clusters));
       const h = hash(filtered[i].title);
 
-      // Position based on cluster + hash
-      const clusterCx = margin + (W - margin * 2) * (cl + 0.5) / clusters;
-      const clusterCy = H * 0.5;
-      const spread = isMobile() ? 80 : 120;
+      // Spread nodes across full canvas
+      const cols = mobile ? 3 : clusters;
+      const rows = Math.ceil(clusters / cols);
+      const col = cl % cols;
+      const row = Math.floor(cl / cols);
+      const cellW = (W - margin * 2) / cols;
+      const cellH = (H - margin * 2) / Math.max(rows, 2);
+      const clusterCx = margin + cellW * (col + 0.5);
+      const clusterCy = margin + cellH * (row + 0.5);
+      const spread = mobile ? Math.min(cellW, cellH) * 0.42 : 120;
       const x = clusterCx + ((h % 200) - 100) / 100 * spread;
       const y = clusterCy + (((h >> 8) % 200) - 100) / 100 * spread;
 
@@ -177,7 +184,7 @@
 
       nodes.push({
         x, y, ox: x, oy: y,
-        size: isMobile() ? 7 + Math.abs(h % 5) : 5 + Math.abs(h % 6),
+        size: isMobile() ? 8 + Math.abs(h % 7) : 5 + Math.abs(h % 6),
         trackIndex: filtered[i].originalIndex,
         title: filtered[i].title,
         connections,
