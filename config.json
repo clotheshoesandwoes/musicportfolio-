@@ -6,9 +6,9 @@
     "soundcloud": "https://soundcloud.com/YOUR_SOUNDCLOUD"
   },
   "theme": {
-    "accent": "#e3e3e3",
-    "accent2": "#920c4f",
-    "background": "#4f1c1c"
+    "accent": "#e49c21",
+    "accent2": "#394ea2",
+    "background": "#aaa9bc"
   },
   "featured": [
     0,
