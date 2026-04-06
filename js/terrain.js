@@ -64,29 +64,51 @@
       playTrack(Math.floor(Math.random() * tracks.length));
     });
 
-    // On mobile, add a scrollable track list below the canvas
+    // On mobile: canvas takes 70%, compact collapsible track drawer at bottom
     if (isMobile()) {
-      canvas.style.height = '45%';
+      canvas.style.height = '70%';
       canvas.style.position = 'relative';
 
+      // Drawer
+      const drawer = document.createElement('div');
+      drawer.style.cssText = 'position:absolute;top:70%;left:0;right:0;bottom:0;background:#0a0a0a;border-top:1px solid #ffffff10;display:flex;flex-direction:column';
+
+      // Drawer handle + buttons
+      const handle = document.createElement('div');
+      handle.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 16px;flex-shrink:0';
+      handle.innerHTML = `
+        <span style="font-size:12px;color:#ffffff40;font-family:var(--font-mono)">TRACKS</span>
+        <button class="info-btn" style="font-size:11px;padding:4px 14px" id="mTerrainPlay">Play All</button>
+        <button class="info-btn secondary" style="font-size:11px;padding:4px 14px" id="mTerrainShuffle">Shuffle</button>
+        <button id="mTerrainExpand" style="margin-left:auto;background:none;border:none;color:#ffffff40;font-size:18px;cursor:pointer">▲</button>
+      `;
+      drawer.appendChild(handle);
+
       const list = document.createElement('div');
-      list.style.cssText = 'position:absolute;top:45%;left:0;right:0;bottom:0;overflow-y:auto;padding:12px 16px 20px;-webkit-overflow-scrolling:touch';
-      let html = '<div style="display:flex;gap:8px;margin-bottom:12px"><button class="info-btn" style="font-size:12px" id="mTerrainPlay">Play All</button><button class="info-btn secondary" style="font-size:12px" id="mTerrainShuffle">Shuffle</button></div>';
+      list.style.cssText = 'flex:1;overflow-y:auto;padding:0 16px 16px;-webkit-overflow-scrolling:touch';
+      let html = '';
       tracks.forEach((t, i) => {
         const badges = [];
         if (t.isNew) badges.push('<span class="track-badge-new">NEW</span>');
         if (t.isFeatured) badges.push('<span class="track-badge-featured">★</span>');
-        html += `<div class="sea-track" data-index="${i}" style="padding:10px 6px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name">${escapeHtml(t.title)}</span>${badges.join('')}</div>`;
+        html += `<div class="sea-track" data-index="${i}" style="padding:8px 4px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name" style="font-size:13px">${escapeHtml(t.title)}</span>${badges.join('')}</div>`;
       });
       list.innerHTML = html;
-      container.appendChild(list);
+      drawer.appendChild(list);
+      container.appendChild(drawer);
+
+      // Toggle expand
+      let expanded = false;
+      document.getElementById('mTerrainExpand').addEventListener('click', () => {
+        expanded = !expanded;
+        drawer.style.top = expanded ? '25%' : '70%';
+        canvas.style.height = expanded ? '25%' : '70%';
+        document.getElementById('mTerrainExpand').textContent = expanded ? '▼' : '▲';
+        resize();
+      });
 
       list.querySelectorAll('.sea-track').forEach(el => {
-        let clickTimer = null;
-        el.addEventListener('click', () => {
-          if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; showTrackDetail(parseInt(el.dataset.index)); }
-          else { clickTimer = setTimeout(() => { clickTimer = null; playTrack(parseInt(el.dataset.index)); }, 250); }
-        });
+        el.addEventListener('click', () => playTrack(parseInt(el.dataset.index)));
       });
       document.getElementById('mTerrainPlay').addEventListener('click', () => playTrack(0));
       document.getElementById('mTerrainShuffle').addEventListener('click', () => {

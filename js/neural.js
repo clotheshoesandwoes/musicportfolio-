@@ -46,42 +46,95 @@
     });
     container.appendChild(filters);
 
-    // On mobile, add a scrollable track list below the canvas
+    // On mobile: 70% canvas with pan/zoom, compact collapsible drawer
     if (isMobile()) {
-      canvas.style.height = '45%';
+      canvas.style.height = '70%';
       canvas.style.position = 'relative';
 
+      // Touch pan support for the canvas
+      let panX = 0, panY = 0, lastTouchX = 0, lastTouchY = 0, isPanning = false;
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          isPanning = true;
+          lastTouchX = e.touches[0].clientX;
+          lastTouchY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+      canvas.addEventListener('touchmove', (e) => {
+        if (isPanning && e.touches.length === 1) {
+          const dx = e.touches[0].clientX - lastTouchX;
+          const dy = e.touches[0].clientY - lastTouchY;
+          panX += dx;
+          panY += dy;
+          lastTouchX = e.touches[0].clientX;
+          lastTouchY = e.touches[0].clientY;
+          // Shift all node positions
+          nodes.forEach(n => { n.ox += dx; n.oy += dy; });
+        }
+        // Also update hover position for tap
+        if (e.touches.length === 1) {
+          const r = container.getBoundingClientRect();
+          mx = e.touches[0].clientX - r.left;
+          my = e.touches[0].clientY - r.top;
+        }
+      }, { passive: true });
+      canvas.addEventListener('touchend', () => { isPanning = false; });
+
+      // Tap to play on mobile
+      canvas.addEventListener('click', () => {
+        if (hoveredNode >= 0 && hoveredNode < nodes.length) {
+          playTrack(nodes[hoveredNode].trackIndex);
+        }
+      });
+
+      // Move filters to overlay on canvas
+      filters.style.cssText = 'position:absolute;bottom:calc(30% + 4px);left:12px;right:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;z-index:10';
+
+      // Drawer
+      const drawer = document.createElement('div');
+      drawer.style.cssText = 'position:absolute;top:70%;left:0;right:0;bottom:0;background:#0a0a0a;border-top:1px solid #ffffff10;display:flex;flex-direction:column';
+
+      const handle = document.createElement('div');
+      handle.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 16px;flex-shrink:0';
+      handle.innerHTML = `
+        <span style="font-size:12px;color:#ffffff40;font-family:var(--font-mono)">TRACKS</span>
+        <button class="info-btn" style="font-size:11px;padding:4px 14px" id="mNeuralPlay">Play All</button>
+        <button class="info-btn secondary" style="font-size:11px;padding:4px 14px" id="mNeuralShuffle">Shuffle</button>
+        <button id="mNeuralExpand" style="margin-left:auto;background:none;border:none;color:#ffffff40;font-size:18px;cursor:pointer">▲</button>
+      `;
+      drawer.appendChild(handle);
+
       const list = document.createElement('div');
-      list.style.cssText = 'position:absolute;top:45%;left:0;right:0;bottom:0;overflow-y:auto;padding:12px 16px 20px;-webkit-overflow-scrolling:touch';
-      let html = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
-      html += '<button class="info-btn" style="font-size:12px" id="mNeuralPlay">Play All</button>';
-      html += '<button class="info-btn secondary" style="font-size:12px" id="mNeuralShuffle">Shuffle</button>';
-      html += '</div>';
+      list.style.cssText = 'flex:1;overflow-y:auto;padding:0 16px 16px;-webkit-overflow-scrolling:touch';
+      let html = '';
       tracks.forEach((t, i) => {
         const badges = [];
         if (t.isNew) badges.push('<span class="track-badge-new">NEW</span>');
         if (t.isFeatured) badges.push('<span class="track-badge-featured">★</span>');
-        html += `<div class="sea-track" data-index="${i}" style="padding:10px 6px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name">${escapeHtml(t.title)}</span>${badges.join('')}</div>`;
+        html += `<div class="sea-track" data-index="${i}" style="padding:8px 4px"><div class="sea-dot" style="background:${getGradientColors(i)[0]};box-shadow:0 0 6px ${getGradientColors(i)[0]}40"></div><span class="sea-name" style="font-size:13px">${escapeHtml(t.title)}</span>${badges.join('')}</div>`;
       });
       list.innerHTML = html;
-      container.appendChild(list);
+      drawer.appendChild(list);
+      container.appendChild(drawer);
+
+      // Toggle expand
+      let expanded = false;
+      document.getElementById('mNeuralExpand').addEventListener('click', () => {
+        expanded = !expanded;
+        drawer.style.top = expanded ? '25%' : '70%';
+        canvas.style.height = expanded ? '25%' : '70%';
+        document.getElementById('mNeuralExpand').textContent = expanded ? '▼' : '▲';
+        resize();
+      });
 
       list.querySelectorAll('.sea-track').forEach(el => {
-        let clickTimer = null;
-        el.addEventListener('click', () => {
-          if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; showTrackDetail(parseInt(el.dataset.index)); }
-          else { clickTimer = setTimeout(() => { clickTimer = null; playTrack(parseInt(el.dataset.index)); }, 250); }
-        });
+        el.addEventListener('click', () => playTrack(parseInt(el.dataset.index)));
       });
       document.getElementById('mNeuralPlay').addEventListener('click', () => playTrack(0));
       document.getElementById('mNeuralShuffle').addEventListener('click', () => {
         state.shuffleMode = true;
         playTrack(Math.floor(Math.random() * tracks.length));
       });
-
-      // Move filters above list
-      filters.style.cssText = 'position:relative;display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:0 16px';
-      list.insertBefore(filters, list.firstChild.nextSibling);
     }
 
     // Mouse tracking
