@@ -834,6 +834,68 @@ input { font-family: var(--font-body); }
 }
 
 /* ===========================
+   Villa camera anchor bar (b029)
+   Horizontal strip of jump buttons over the 3D canvas
+   =========================== */
+.world-anchor-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(10, 10, 14, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  z-index: 50;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  pointer-events: auto;
+}
+.world-anchor-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #b0b0c8;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  padding: 7px 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.world-anchor-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.world-anchor-btn.active {
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+  color: #fff;
+  border-color: rgba(168, 85, 247, 0.6);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+}
+@media (max-width: 600px) {
+  .world-anchor-bar {
+    bottom: 10px;
+    gap: 3px;
+    padding: 4px 5px;
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .world-anchor-btn {
+    padding: 6px 9px;
+    font-size: 8px;
+    letter-spacing: 0.8px;
+  }
+}
+
+/* ===========================
    Villa popover card (b027)
    Anchored at click position over the 3D scene. NOT the side panel.
    =========================== */

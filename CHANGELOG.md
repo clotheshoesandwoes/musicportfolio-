@@ -1,5 +1,84 @@
 # CHANGELOG
 
+## b029 — 2026-04-07 — WORLD rebuild: 360° beach island, 4 interior rooms, 7-anchor jumper camera, day/night cycle
+
+User: "i want a cool house on the beach for us to explore that'd be like our WORLD". Then locked in: replace the villa scene (1A), day/night cycle (2C), camera anchor jumper (3C), with multiple interior rooms — "huge living room, a nice bedroom, a cool room with billiard tables bars etc, an indoor pool room with sauna, outdoor pool". This is the biggest single-build refactor since the b025 villa rebuild.
+
+### What got RIPPED
+- 12 cross-street neighbor villas + the helper that built them
+- Asphalt road, dashed yellow center line, near + far sidewalks
+- 6 streetlamps with poles + arms + emissive bulbs
+- Detached garage (8×3.5×8 box, roof slab, glowing door)
+- Driveway plane
+- 80-building Miami skyline + the 4-color shader material array
+- Hills (front + mid + back ridges, 6 boxes with stacked bumps)
+- Hill villas (9 elevated mansions on the ridges)
+- Big back grass plane
+- 12 boulevard palms in 2 rows along the street
+- Front beach band at z=32 (replaced with 360° wrap)
+
+That's roughly 250 lines of geometry construction gone.
+
+### What got ADDED
+- **360° beach** — single 200×200 sand plane wraps the property on all 4 sides. Sun-bleached `0xe8d090`. The existing ground/deck plane shrunk from 180×80 to 56×52 just-the-villa-footprint, raised slightly so it reads as an elevated patio surrounded by sand.
+- **600×600 ocean wrap** — old front-only ocean replaced. Square plane below the beach in every direction, so any camera angle reads horizon-to-horizon water beyond the sand.
+- **10 scattered organic palms** instead of the boulevard rows — random positions around the back/sides where the street used to be.
+- **Yellow Lambo relocated** to the east side of the deck (mirror of pink Lambo). Both supercars now flank the pool symmetrically.
+
+### NEW: Indoor pool atrium (b029)
+Glass-walled atrium attached to the back of the villa where the garage was. 16×8×12 footprint, three glass walls (existing windowMat — emissive glass), roof slab, pale tile floor. Inside: a smaller indoor pool (8×4 box reusing the pool shader, named `indoor_pool`), a wooden sauna box with a glowing door (named `sauna`), two indoor lounge chairs flanking the pool, and a potted palm in the corner with 6 fronds for the indoor-pool reference vibe.
+
+### NEW: Interior furniture (3 rooms inside the existing villa shell)
+No physical partitions added — the camera anchor framing sells each room as a distinct space. Furniture clusters placed in different parts of the villa interior:
+
+- **LIVING ROOM** (central ground floor) — Big L-sectional sofa in deep navy, glass coffee table with cyan emissive glow, big purple-emissive TV/screen on the back wall (named `living_tv`), deep red rug under the seating area.
+- **BEDROOM** (west wing upper floor) — Bed frame + mattress + 2 pillows + tall headboard, 2 nightstands flanking, an emissive lamp on one of them, dresser opposite the bed.
+- **BILLIARD/BAR** (east wing ground floor) — Pool table with green felt + dark wood frame + 4 legs + cue ball + colored ball, bar counter along the back wall with a darker bar top + 3 emissive liquor bottles + 3 bar stools, hot pink emissive neon sign above the counter.
+
+### NEW: Day/night cycle (60-second loop)
+- Shared `cycleUniform` object plumbed through sky shader and PS2 material.
+- Sky shader interpolates two full palettes by `uCycle`:
+  - **Sunset** (cycle=0): peach `0xff8060` horizon → coral `0xc04088` mid → soft lilac `0x402080` top
+  - **Night** (cycle=1): hot pink `0xff3090` → magenta `0xa01880` → indigo `0x180844`
+- Stars fade in only above `uCycle > 0.45`.
+- PS2 material gets a directional **sun term** that's strong at sunset and gone at night (`vec3(1.20, 0.75, 0.45)` warm light from `(0.5, 0.3, 0.2)`).
+- Hemispheric sky-fill colors also shift between sunset and night palettes.
+- Point light intensity multiplier ramps `0.35 → 1.15` from sunset to night — lanterns/pool/window glow brighter at night when the sun's gone.
+- Drive: `cycleUniform.value = 0.5 - 0.5 * cos(elapsed * Math.PI * 2 / 60)` — smooth ease in/out, 60s round trip, lingers at each extreme.
+
+### NEW: Camera anchor jumper system
+7 anchors, click any one to fly there. Each anchor = `{ name, label, cx, cy, cz, yaw, pitch, radius }`. Click → `flyToAnchor(idx)` saves the current state and sets `flyState`. `animate()` lerps center+yaw+pitch+radius from start to target over 1.4s using `easeInOutCubic`. Orbit input remains live throughout — the user can drag during the fly, but each frame the tween overrides until done.
+
+Anchors:
+1. **POOL** — front pool deck overview (default, matches old b026 starting view)
+2. **BEACH** — sitting on the sand at z=30, looking back at the villa
+3. **AERIAL** — drone shot from above looking down at the property
+4. **LIVING** — inside the central villa, framing the sofa + TV
+5. **BEDROOM** — west wing upper floor, framing the bed
+6. **BILLIARD** — east wing ground floor, framing the pool table + bar
+7. **INDOOR** — atrium behind the villa, framing the indoor pool + sauna
+
+The previous `CAM_CENTER_X/Y/Z` constants are now mutable `camCenterX/Y/Z` variables that the anchor system writes during fly tweens.
+
+DOM **anchor strip** rendered as a horizontal pill bar at the bottom of the canvas (`.world-anchor-bar`), one button per anchor. Active button has a purple gradient highlight. Mobile breakpoint wraps the buttons and shrinks them. The bar is appended to the villa container; click events `stopPropagation` so they don't dispatch as canvas clicks (which would try to open a villa card).
+
+### NEW: 6 interior props on propTracks
+Tracks 14-19 added: `living_tv`, `pool_table`, `bar_counter`, `bed`, `indoor_pool`, `sauna`. The b026 click→card system already raycast-walks parent chains by name, and the b026b yellow BoxHelper outline pass already finds anything in `propTracks` by traversing the scene — no changes needed there. Click any new interior prop → song card pops up.
+
+### Files modified
+- [js/world.js](js/world.js) — major surgery (~3124 lines, was ~2900). Most of init() restructured: rip pass, beach + ocean wrap, indoor atrium block, interior furniture clusters, day/night uniform, sky + PS2 shader updates, camera anchor system, DOM bar, fly tween in animate, destroy cleanup.
+- [style.css](style.css) — `.world-anchor-bar` + `.world-anchor-btn` (idle / hover / active) + mobile breakpoint
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b028a → b029`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### What's NOT in b029 (deferred)
+- Real interior partition walls between the rooms (camera framing sells the rooms anyway, walls would block the orbit camera)
+- WASD walking (user picked anchor jumper specifically — no walking needed)
+- Bonfire / hammock / beach umbrellas as new tracked props (existing umbrellas + chairs from b022 still on the beach)
+- Vertex-color gradient walls + procedural noise textures from the b028 plan (still in the bag for a polish pass)
+- Removing the yellow BoxHelper debug outlines (user said they're still helpful)
+
 ## b028a — 2026-04-07 — Hotfix: hemispheric sky fill (no more black hills) + Play keeps card open
 
 Two follow-ups to b028.
