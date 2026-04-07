@@ -361,6 +361,19 @@
     });
     // b025 — terracotta tile roof for the new Mediterranean villa
     const terracottaMat = makePS2Material({ color: 0xc05030 });
+    // b025 — lanternBaseMat + lanternGlowMat moved up here (were declared
+    // around line 980 inside the deck-lantern block). Used by: deck lanterns,
+    // villa wall sconces, bell tower bell rope, BBQ heat strip, fire pit
+    // glow, jet ski seats, garden urn glows, garden pathway lanterns. Must
+    // be declared before the villa block uses them in addSconce, otherwise
+    // TDZ — node --check passes but page crashes silently on init (b017
+    // lesson, b025 hotfix).
+    const lanternBaseMat = makePS2Material({ color: 0x2a241c });
+    const lanternGlowMat = makePS2Material({
+      color:       0xffd090,
+      emissive:    0xffd090,
+      emissiveAmt: 2.6,
+    });
 
     // =====================================================================
     // VILLA — MEDITERRANEAN REBUILD (b025)
@@ -975,14 +988,9 @@
     // -----------------------------------------------------
     // Deck lanterns — small warm-glow lanterns on the pool deck
     // (b010 — replaces the old sodium streetlamp)
+    // (b025 — lanternBaseMat + lanternGlowMat declarations moved up to
+    //  the top of the material section so the villa sconces can use them)
     // -----------------------------------------------------
-    const lanternBaseMat = makePS2Material({ color: 0x2a241c });  // dark base
-    const lanternGlowMat = makePS2Material({
-      color:       0xffd090,
-      emissive:    0xffd090,
-      emissiveAmt: 2.6,
-    });
-
     function addDeckLantern(x, z) {
       // Tiny base
       const base = new THREE.Mesh(

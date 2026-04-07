@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## b025a — 2026-04-07 — Hotfix: TDZ on lanternGlowMat (villa wouldn't load)
+
+b025 villa rebuilt fine but the page hung on init — never finished loading the villa view. Diagnosis: classic TDZ trap, same pattern as b017. The new `addSconce` helper inside the villa block uses `lanternGlowMat`, but `lanternGlowMat` was declared at line 980 (inside the deck-lantern block) — way AFTER the villa block runs (~line 870). When `addSconce` was called for the first villa wall sconce, `lanternGlowMat` was in the temporal dead zone → `ReferenceError: Cannot access 'lanternGlowMat' before initialization` → init crashed silently → page never finished loading.
+
+`node --check` does NOT catch TDZ errors. Same lesson as b017 (cylindrical tower used `windowMat` before its declaration), b025 (`windowMat` got moved up correctly but I forgot to do the same for `lanternGlowMat`).
+
+### Fix
+Moved `lanternBaseMat` and `lanternGlowMat` declarations from line 980 (inside the deck-lantern block) up to the top of the material section, right after `terracottaMat`. Now they're declared once at the top alongside `windowMat` and available to the villa block. The deck-lantern block keeps its `addDeckLantern` function but no longer redeclares the materials.
+
+### Future-proofing
+Updated the comment in VISION.md / CLAUDE.md context: any material used by code in MORE than one block (sconces in villa block + deck lanterns block, windowMat in villa + yacht + tiki + BBQ + showroom + neighbor villas, etc.) needs to be declared at the top of the material section, not inside the block where it was first used. The "declare it where it's used" pattern only works if it's used in exactly one place.
+
+### Files modified
+- [js/world.js](js/world.js) — moved `lanternBaseMat` + `lanternGlowMat` decls up, removed dupes from deck-lantern block (~10 lines net)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b025 → b025a`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b025 — 2026-04-07 — VILLA REBUILD: Mediterranean U-shaped mansion with bell tower
 
 User feedback after b024: "house honestly looks ugly... like a bunch of shapes glued together." Right call. The b010-b019 modernist stack (1 lower + 2 cantilevered upper boxes + cylindrical tower + LED strips + wood louvers + forward balcony + rooftop hot tub + spiral stairs) had no coherent architectural language — it was 7 distinct volumes with surface decoration patched on top. No amount of cornice/sconce/mullion fix was going to save the bones.
