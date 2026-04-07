@@ -53,7 +53,7 @@
 
     // Scene + heavy night fog
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x1a0a3e, 0.022);
+    scene.fog = new THREE.FogExp2(0x2a1845, 0.015);
 
     // Camera
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 200);
@@ -68,9 +68,9 @@
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        topColor:    { value: new THREE.Color(0x05071a) },
-        midColor:    { value: new THREE.Color(0x1a0a3e) },
-        bottomColor: { value: new THREE.Color(0x4a1a5e) },
+        topColor:    { value: new THREE.Color(0x0c1135) },
+        midColor:    { value: new THREE.Color(0x2a1055) },
+        bottomColor: { value: new THREE.Color(0x8a2575) },
       },
       vertexShader: `
         varying vec3 vDir;
@@ -115,7 +115,7 @@
     // -----------------------------------------------------
     const lampPos   = new THREE.Vector3(7.5, 5.0, 4.0);
     const lampColor = new THREE.Color(0xff8c42);  // sodium orange
-    const lampRange = 18;
+    const lampRange = 25;
     const poolPos   = new THREE.Vector3(0, 0.4, 0);
     const poolColor = new THREE.Color(0x1de9c5);  // turquoise
     const poolRange = 12;
@@ -132,8 +132,8 @@
           uPoolPos:     { value: poolPos },
           uPoolColor:   { value: poolColor },
           uPoolRange:   { value: poolRange },
-          uFogColor:    { value: new THREE.Color(0x1a0a3e) },
-          uFogDensity:  { value: 0.022 },
+          uFogColor:    { value: new THREE.Color(0x2a1845) },
+          uFogDensity:  { value: 0.015 },
         },
         vertexShader: `
           varying vec3 vNormal;
@@ -175,7 +175,7 @@
 
           void main() {
             // Ambient (cool blue night)
-            vec3 ambient = vec3(0.10, 0.10, 0.22);
+            vec3 ambient = vec3(0.18, 0.16, 0.30);
             vec3 col = uColor * ambient;
 
             // Sodium streetlamp — warm point falloff
@@ -212,7 +212,7 @@
     // -----------------------------------------------------
     // Ground (concrete patio)
     // -----------------------------------------------------
-    const groundMat = makePS2Material({ color: 0x14141c });
+    const groundMat = makePS2Material({ color: 0x2a2632 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80, 6, 6), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0;
@@ -231,7 +231,7 @@
     scene.add(pool);
 
     // Pool rim (slightly raised concrete lip)
-    const rimMat = makePS2Material({ color: 0x2a2630 });
+    const rimMat = makePS2Material({ color: 0x3e3a48 });
     const rim = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.18, 5.6), rimMat);
     rim.position.set(0, 0.05, 0);
     scene.add(rim);
@@ -239,13 +239,13 @@
     // -----------------------------------------------------
     // Palm tree (low-poly silhouette)
     // -----------------------------------------------------
-    const trunkMat = makePS2Material({ color: 0x0e0814 });
+    const trunkMat = makePS2Material({ color: 0x1c1228 });
     const trunkGeo = new THREE.CylinderGeometry(0.18, 0.32, 6.5, 5);
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.set(-7.5, 3.25, 2.5);
     scene.add(trunk);
 
-    const frondMat = makePS2Material({ color: 0x180a24 });
+    const frondMat = makePS2Material({ color: 0x2a1140 });
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI * 2;
       const frond = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.7, 1, 1), frondMat);
