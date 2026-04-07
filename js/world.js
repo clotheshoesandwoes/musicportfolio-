@@ -27,6 +27,10 @@
   const ZOOM_SPEED = 0.025;      // radius per wheel delta
   let materials = [];
   let timeUniforms = [];
+  // b029 — Day/night cycle uniform shared across sky + PS2 shaders.
+  // MUST live at IIFE level (not inside init) so animate() can write to
+  // it from the rAF loop. animate() can't see init() local consts.
+  const cycleUniform = { value: 0 };
   let THREE_lib = null;
   const LOW_W = 854;
   const LOW_H = 480;
@@ -88,11 +92,8 @@
     camera.position.set(0, 12, 26);
     camera.lookAt(0, 4, -2);
 
-    // b029 — Day/night cycle uniform shared across sky + PS2 shaders.
-    // Drive in animate() from elapsed time, oscillates 0..1..0 over 60s.
-    // 0 = sunset (warm peach/orange/coral palette, sun term active)
-    // 1 = night  (hot pink/magenta/indigo palette, point lights brighter)
-    const cycleUniform = { value: 0 };
+    // b029 — cycleUniform lives at IIFE level (see top of file). It must be
+    // outside init() so animate() can write to it from the rAF loop.
 
     // b026 — click→card system: raycaster + prop→track lookup
     // Each entry maps a prop's THREE.Object3D `.name` to a track index in

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## b029a — 2026-04-07 — Hotfix: cycleUniform was scoped wrong, animate() threw on first frame, canvas stayed black
+
+User: "i can click buttons but cant see a thing". The DOM anchor bar was rendering and the click handlers worked, but the 3D canvas was just the dark purple clear color (`0x2a0a35`). Diagnosis: `cycleUniform` was declared `const` INSIDE `init()`, but `animate()` lives at IIFE level outside `init()` — closure-wise, animate's reference to `cycleUniform` resolved to undefined and threw `ReferenceError` on the very first rAF tick. The rAF chain died immediately, no scene was ever rendered, the canvas just held the cleared background.
+
+This is the same scoping rule the existing `materials` / `timeUniforms` arrays already follow — they live at IIFE top-level so animate() can read them. I missed it for cycleUniform.
+
+### Fix
+Moved `const cycleUniform = { value: 0 }` from inside `init()` (where I'd put it next to the click→card raycaster setup) to the IIFE top level, right next to `let materials` / `let timeUniforms`. Added a comment explaining why it must live there. Replaced the old in-init declaration with a pointer comment.
+
+### Files modified
+- [js/world.js](js/world.js) — `cycleUniform` moved to IIFE scope
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b029 → b029a`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b029 — 2026-04-07 — WORLD rebuild: 360° beach island, 4 interior rooms, 7-anchor jumper camera, day/night cycle
 
 User: "i want a cool house on the beach for us to explore that'd be like our WORLD". Then locked in: replace the villa scene (1A), day/night cycle (2C), camera anchor jumper (3C), with multiple interior rooms — "huge living room, a nice bedroom, a cool room with billiard tables bars etc, an indoor pool room with sauna, outdoor pool". This is the biggest single-build refactor since the b025 villa rebuild.
