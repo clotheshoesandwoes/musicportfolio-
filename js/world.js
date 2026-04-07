@@ -337,6 +337,14 @@
     const roofMat        = makePS2Material({ color: 0xe0dcd0 });   // thin slab, slightly darker
     const stoneMat       = makePS2Material({ color: 0x8a847a });   // stacked natural stone
     const podiumMat      = makePS2Material({ color: 0x6f6960 });   // b018 — darker travertine plinth under the villa
+    const woodSlatMat    = makePS2Material({ color: 0x6a4a30 });   // b019 — warm wood for louver slats over upper glass
+    const railMat        = makePS2Material({ color: 0x141014 });   // b019 — dark metal balcony rails / planter trim
+    const ledMat         = makePS2Material({                       // b019 — cyan LED accent strips under roof slabs
+      color:       0x80f0ff,
+      emissive:    0x80f0ff,
+      emissiveAmt: 1.6,
+    });
+    const topiaryMat     = makePS2Material({ color: 0x2a4a25 });   // b019 — clipped topiary cone (matches shrub green)
     const coveMat        = makePS2Material({                       // recessed cove light
       color:       0xffd090,
       emissive:    0xffd090,
@@ -478,6 +486,37 @@
     upper2Roof.position.set(upper2X, upper2Y + upper2H / 2 + 0.07, upper2Z);
     scene.add(upper2Roof);
 
+    // -------------------------------------------------------------------
+    // b019 — LED accent strips under each roof slab edge (cyan emissive
+    // lines that read as architectural lighting from the camera angle)
+    // -------------------------------------------------------------------
+    function addLedStrip(cx, cy, cz, lenX, lenZ) {
+      // Two strips: one on the front (+z) edge, one on the bottom of the
+      // overhang. Just the front edge is enough — that's what's visible.
+      if (lenX > 0) {
+        const strip = new THREE.Mesh(
+          new THREE.BoxGeometry(lenX, 0.05, 0.08),
+          ledMat
+        );
+        strip.position.set(cx, cy, cz);
+        scene.add(strip);
+      }
+      if (lenZ > 0) {
+        const strip = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 0.05, lenZ),
+          ledMat
+        );
+        strip.position.set(cx, cy, cz);
+        scene.add(strip);
+      }
+    }
+    // Lower roof — front edge strip
+    addLedStrip(villaCx, lowerH - 0.02, villaCz + lowerD / 2 + 0.25, lowerW + 0.4, 0);
+    // Upper roof — front edge strip (the dramatic cantilever)
+    addLedStrip(upperX, upperY + upperH / 2 - 0.02, upperZ + upperD / 2 + 1.15, upperW + 2.6, 0);
+    // Second upper roof — front edge strip
+    addLedStrip(upper2X, upper2Y + upper2H / 2 - 0.02, upper2Z + upper2D / 2 + 0.95, upper2W + 1.6, 0);
+
     // Rooftop terrace wall — low parapet around the first upper volume
     // roof on the side NOT covered by upper2 (the +x and front sides)
     {
@@ -605,6 +644,174 @@
     const backDoor = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.8, 0.12), windowMat);
     backDoor.position.set(villaCx, 1.4, lowerBackZ + wallT + 0.05);
     scene.add(backDoor);
+
+    // -------------------------------------------------------------------
+    // b019 — Wood louver slats across the front of the first upper volume
+    // (vertical wood strips IN FRONT of the glass band — the glow shows
+    // through the gaps. Classic modern Miami villa screen detail.)
+    // -------------------------------------------------------------------
+    {
+      const slatCount = 14;
+      const slatW = 0.18;
+      const slatH = upperH - 0.5;
+      const slatD = 0.10;
+      const slatY = upperY;
+      const slatZ = upperFrontZ + 0.20;  // 0.2 in front of the glass plane
+      // Spread across the front of the upper, leaving 0.8 margin on each side
+      const span = upperW - 1.6;
+      for (let i = 0; i < slatCount; i++) {
+        const t = (i + 0.5) / slatCount;
+        const sx = upperX - upperW / 2 + 0.8 + t * span;
+        const slat = new THREE.Mesh(
+          new THREE.BoxGeometry(slatW, slatH, slatD),
+          woodSlatMat
+        );
+        slat.position.set(sx, slatY, slatZ);
+        scene.add(slat);
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // b019 — Forward balcony with rails on the front of the first upper
+    // (cantilevers further out over the deck, gives the cantilever even
+    // more drama and adds a usable terrace level).
+    // -------------------------------------------------------------------
+    {
+      const balconyD = 1.6;
+      const balconyZ = upperFrontZ + balconyD / 2;
+      // Sits just above the lower roof slab (lowerH+0.22 = 6.22) so it
+      // reads as a separate floor between the lower roof and the upper.
+      const balconyY = lowerH + 0.32;
+      // Floor slab
+      const balconyFloor = new THREE.Mesh(
+        new THREE.BoxGeometry(upperW, 0.14, balconyD),
+        villaMat
+      );
+      balconyFloor.position.set(upperX, balconyY, balconyZ);
+      scene.add(balconyFloor);
+      // Top rail running the full length of the balcony front
+      const railY = balconyY + 1.0;
+      const railZ = balconyZ + balconyD / 2 - 0.05;
+      const topRail = new THREE.Mesh(
+        new THREE.BoxGeometry(upperW, 0.08, 0.08),
+        railMat
+      );
+      topRail.position.set(upperX, railY, railZ);
+      scene.add(topRail);
+      // Posts every ~1.6 along the balcony front
+      const postCount = 18;
+      for (let i = 0; i < postCount; i++) {
+        const t = (i + 0.5) / postCount;
+        const px = upperX - upperW / 2 + t * upperW;
+        const post = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 1.0, 0.08),
+          railMat
+        );
+        post.position.set(px, balconyY + 0.5, railZ);
+        scene.add(post);
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // b019 — Rooftop hot tub on the rooftop terrace (inside the parapet
+    // wall on the east half of the first upper roof, where it's protected)
+    // -------------------------------------------------------------------
+    {
+      const tubX = upperX + 5;
+      const tubY = upperY + upperH / 2 + 0.16;  // on top of upperRoof slab
+      const tubZ = upperZ;
+      // Travertine rim
+      const tubRim = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.85, 1.85, 0.18, 20),
+        rimMat
+      );
+      tubRim.position.set(tubX, tubY + 0.09, tubZ);
+      scene.add(tubRim);
+      // Water (reuse poolMat for the cyan glow + caustics)
+      const tubWater = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 1.6, 0.20, 20),
+        poolMat
+      );
+      tubWater.position.set(tubX, tubY + 0.18, tubZ);
+      scene.add(tubWater);
+    }
+
+    // -------------------------------------------------------------------
+    // b019 — Spiral exterior staircase on the cylindrical tower (half
+    // helix on the front-west side, the part facing AWAY from the villa)
+    // -------------------------------------------------------------------
+    {
+      // The tower constants are local to the tower block, but we have all
+      // the pieces here: lowerLeftX, lowerFrontZ. Recompute the same vals.
+      const towerR = 3.0;
+      const towerH = lowerH + 2.5;
+      const towerX = lowerLeftX - towerR + 0.4;
+      const towerZ = lowerFrontZ - towerR + 0.6;
+      const stepCount = 12;
+      const startAngle = Math.PI / 2;     // facing +z (south, the camera side)
+      const endAngle   = 3 * Math.PI / 2; // facing -z (north, the back)
+      const radius     = towerR + 0.55;
+      for (let i = 0; i < stepCount; i++) {
+        const t = i / (stepCount - 1);
+        const angle = startAngle + t * (endAngle - startAngle);
+        const sx = towerX + Math.cos(angle) * radius;
+        const sz = towerZ + Math.sin(angle) * radius;
+        const sy = 0.4 + t * (towerH - 1.2);
+        const step = new THREE.Mesh(
+          new THREE.BoxGeometry(0.85, 0.14, 0.55),
+          stoneMat
+        );
+        step.position.set(sx, sy, sz);
+        // Tangent to the tower so each step faces outward correctly
+        step.rotation.y = -angle + Math.PI / 2;
+        scene.add(step);
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // b019 — Grand entrance: stone steps from deck up to podium top in
+    // front of the door, plus two big planters with topiary cones flanking.
+    // -------------------------------------------------------------------
+    {
+      const doorX = villaCx - 6.995;
+      // 4 steps from y=0 (deck) up to y=0.8 (podium top)
+      // Each step is 3.0 wide × 0.2 tall × 0.5 deep
+      for (let i = 0; i < 4; i++) {
+        const stepY = 0.10 + i * 0.20;
+        const stepZ = 0.25 + (3 - i) * 0.55;  // step 0 (lowest) is furthest forward
+        const step = new THREE.Mesh(
+          new THREE.BoxGeometry(3.0, 0.20, 0.55),
+          rimMat
+        );
+        step.position.set(doorX, stepY, stepZ);
+        scene.add(step);
+      }
+      // Planter boxes flanking the steps
+      function addPlanter(px) {
+        const planter = new THREE.Mesh(
+          new THREE.BoxGeometry(1.0, 1.0, 1.0),
+          podiumMat
+        );
+        planter.position.set(px, 0.5, 1.4);
+        scene.add(planter);
+        // Dark metal trim band around the top
+        const trim = new THREE.Mesh(
+          new THREE.BoxGeometry(1.04, 0.06, 1.04),
+          railMat
+        );
+        trim.position.set(px, 1.0, 1.4);
+        scene.add(trim);
+        // Topiary cone on top
+        const cone = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.05, 0.55, 1.6, 8),
+          topiaryMat
+        );
+        cone.position.set(px, 1.83, 1.4);
+        scene.add(cone);
+      }
+      addPlanter(doorX - 2.4);
+      addPlanter(doorX + 2.4);
+    }
 
     // -----------------------------------------------------
     // Palms — helper + scattered around the property

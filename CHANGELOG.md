@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## b019 — 2026-04-07 — House upgrades: wood slats, LED strips, balcony, hot tub, spiral stairs, grand entrance
+
+User said "work our house pls" after b018. Six features added to make the villa read as architecture instead of a stack of plaster boxes.
+
+### New materials
+- `woodSlatMat` — warm wood `0x6a4a30` for louver slats
+- `railMat` — dark metal `0x141014` for balcony rails + planter trim
+- `ledMat` — cyan emissive `0x80f0ff` (emissiveAmt 1.6) for LED accent strips
+- `topiaryMat` — clipped topiary green `0x2a4a25` for the entry cones
+
+### 1. Wood louver slats on the upper volume
+14 vertical wood slats (0.18 × 4.0 × 0.10 each) running across the front of the first upper volume, 0.20 in front of the existing glass band. The interior glow shows through the gaps between slats. Classic modern Miami villa screen detail.
+
+### 2. LED accent strips under all 3 roof slabs
+New `addLedStrip()` helper. Cyan emissive lines (0.05 × 0.08 cross-section) inset 0.05 from the front edge of each roof slab, just below the slab bottom. Reads as architectural accent lighting along the cantilever edges.
+
+### 3. Forward balcony with rails on the first upper
+1.6-deep balcony slab cantilevering from the upper volume's front face, sitting just above the lower roof at y=6.32. 18 thin metal posts plus a continuous top rail. Gives the cantilever even more drama.
+
+### 4. Rooftop hot tub on the terrace
+Small circular jacuzzi (r=1.6) on top of the first upper roof at (upperX+5, upper2Y... well, upperRoof top + 0.16, upperZ). Travertine rim, reuses poolMat for the cyan glow. Sits inside the existing rooftop parapet wall on the east half of the terrace.
+
+### 5. Spiral exterior staircase on the cylindrical tower
+12-step half helix wrapping the front-west side of the tower (angles PI/2 to 3*PI/2 — front to back via west, AVOIDING the side embedded in the villa wall). Each step is a small stone box, rotated tangent to the tower. Goes from y=0.4 at the front up to y≈7.7 at the back.
+
+### 6. Grand entrance — stairs + planters + topiary
+- 4 stone steps (3.0 wide × 0.20 tall × 0.55 deep) descending from the podium top (y=0.8) to the deck (y=0), positioned in front of the front door at x=-6.995
+- Two big planter boxes (1.0³ darker stone) flanking the steps at x±2.4 from the door, with metal trim bands and 1.6-tall topiary cones (CylinderGeometry pointing up) on top
+
+### Files modified
+- [js/world.js](js/world.js) — 4 new materials, 6 new mesh blocks (~210 lines added)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b018 → b019`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Known issue (deferred to b020)
+The b018 hill rework looks like ONE giant flat dark plateau from elevated camera angles — all the hills are the same color and overlap into a continuous mass. Will fix in a follow-up by adding height variation, color variation, and silhouette breaks.
+
 ## b018 — 2026-04-07 — Villa glow nerf, stone podium, Lambo de-shrubbed, hill rework, back grass plane
 
 User feedback after b017 deploy: "mansion looks super ugly, car covered in shrubs, background missing, no grass or elevation for homes behind the main one." This build addresses all four.
