@@ -1469,7 +1469,13 @@
     // 5 isolated boxes. Plus a big grass plane filling the void behind
     // the cross-street mansions.
     // -----------------------------------------------------
-    const hillMat = makePS2Material({ color: 0x2a3a25 });  // dark grassy green
+    // b020 — three hill mat variants for color variation (was 1 mat).
+    // Adjacent hills now alternate between base/light so they stop merging
+    // into one dark plateau, and the back ridge uses a cool hazy tone for
+    // atmospheric perspective.
+    const hillMat  = makePS2Material({ color: 0x2a3a25 });  // base dark grassy green (also used by grass plane)
+    const hillMat2 = makePS2Material({ color: 0x36482b });  // lighter mid-tone — ridge alternation
+    const hillMat3 = makePS2Material({ color: 0x223540 });  // cool hazy distance — back ridge
 
     // Big grass plane filling the void from past the far sidewalk to the
     // back of the hills — fixes the "everything behind the mansions
@@ -1482,20 +1488,37 @@
     backGrass.position.set(0, 0.04, -100);
     scene.add(backGrass);
 
-    function addHill(cx, cy, cz, w, h, d) {
-      const hill = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hillMat);
+    // b020 — addHill now takes a mat + a seed that drives 1-2 deterministic
+    // "bump" caps stacked on top of the main box. The bumps break the flat
+    // top silhouette so neighbors don't read as one continuous plateau from
+    // elevated camera angles.
+    function addHill(cx, cy, cz, w, h, d, mat, seed) {
+      const hill = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       hill.position.set(cx, h / 2 + cy, cz);
       scene.add(hill);
+
+      const bumpCount = 1 + (seed % 2);
+      for (let i = 0; i < bumpCount; i++) {
+        const s  = seed + i * 7;
+        const bw = w * (0.34 + ((s * 3) % 5) * 0.05);
+        const bh = h * (0.18 + ((s * 5) % 4) * 0.05);
+        const bd = d * (0.55 + ((s * 11) % 4) * 0.06);
+        const bx = cx + (((s * 13) % 5) - 2) * w * 0.11;
+        const bz = cz + (((s * 17) % 5) - 2) * d * 0.10;
+        const bump = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat);
+        bump.position.set(bx, h + bh / 2, bz);
+        scene.add(bump);
+      }
     }
-    // Front ridge — wide, overlapping mounds right behind the mansions
-    addHill(-55, 0, -85, 60, 14, 24);
-    addHill(  0, 0, -92, 90, 20, 28);
-    addHill( 55, 0, -85, 60, 15, 24);
-    // Mid ridge — taller, deeper
-    addHill(-30, 0, -105, 70, 24, 20);
-    addHill( 30, 0, -105, 70, 22, 20);
-    // Back ridge — the tallest, the silhouette behind everything
-    addHill(  0, 0, -120, 120, 28, 24);
+    // Front ridge — alternating mats so adjacent mounds are distinguishable
+    addHill(-55, 0, -85, 60, 14, 24, hillMat2, 1);
+    addHill(  0, 0, -92, 90, 20, 28, hillMat,  3);
+    addHill( 55, 0, -85, 60, 15, 24, hillMat2, 5);
+    // Mid ridge — taller, deeper, alternated
+    addHill(-30, 0, -105, 70, 24, 20, hillMat,  7);
+    addHill( 30, 0, -105, 70, 22, 20, hillMat2, 9);
+    // Back ridge — the tallest, hazy distance tone
+    addHill(  0, 0, -120, 120, 28, 24, hillMat3, 11);
 
     // Houses ON the hills — elevated villas perched on the slopes
     // (rebuild a quick neighbor villa helper that takes a y offset)

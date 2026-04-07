@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## b020 — 2026-04-07 — Hill plateau fix: color variation + silhouette breaks
+
+Fixes the b019 deferred issue: from elevated camera angles the b018 hills read as one giant flat dark plateau because all 6 mounds used the same dark-green mat and all had perfectly flat tops at the same height.
+
+### New hill materials
+- `hillMat2` — lighter mid-tone green `0x36482b` for ridge alternation
+- `hillMat3` — cool hazy green/blue `0x223540` for the back ridge (atmospheric perspective)
+
+The original `hillMat` (`0x2a3a25`) stays on the back grass plane + two middle hills, so adjacent mounds now alternate between base and lighter tones and no longer merge.
+
+### `addHill` signature change
+Now takes `(cx, cy, cz, w, h, d, mat, seed)`. The `seed` drives 1-2 deterministic "bump" caps stacked on top of the main box — smaller sub-boxes at slight x/z offsets and varied heights. Breaks the flat-top silhouette so ridge lines are no longer a single straight line when viewed from above.
+
+Each bump's dimensions/offsets are derived from modular arithmetic on the seed — no RNG, no per-reload variation, scene stays consistent.
+
+### Hill assignments (6 hills × 2 ridges + 1 back)
+- Front ridge: `hillMat2` → `hillMat` → `hillMat2` (light/dark/light alternation)
+- Mid ridge: `hillMat` → `hillMat2`
+- Back ridge: `hillMat3` (hazy cool tone, pops against everything in front)
+
+Hill bodies themselves (position, w/h/d) unchanged from b018 — only mat and bump caps are new. Hill villa positions on top also unchanged (they still sit on the original flat main-box tops, which are still there, just now with small decorative bumps alongside them).
+
+### Files modified
+- [js/world.js](js/world.js) — 2 new hillMat variants, `addHill` bump logic, 6 call sites updated with mat + seed args (~30 lines changed)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b019 → b020`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b019 — 2026-04-07 — House upgrades: wood slats, LED strips, balcony, hot tub, spiral stairs, grand entrance
 
 User said "work our house pls" after b018. Six features added to make the villa read as architecture instead of a stack of plaster boxes.
