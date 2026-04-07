@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## b015 — 2026-04-07 — Pink Lambo rotated 45° + small shrub landscaping next to it
+
+User confirmed b014's camera + layout works on both desktop and mobile. Asked for the Pink Lambo to be rotated 45° "diagonal with the pool" with the hood pointing in a specific direction (showed me a top-down screenshot with an arrow), and to have a shrub near it for landscaping. (Architecture rework still queued for b016.)
+
+### addCar refactor
+- `addCar(cx, cz, bodyColorHex)` → `addCar(cx, cz, bodyColorHex, rotY = 0)`
+- All car part meshes now built at relative coordinates inside a `THREE.Group`, then the group is positioned + rotated. Yellow Lambo call site unchanged (rotY defaults to 0).
+
+### Pink Lambo
+- Position stays at `(-14, 5)` (alongside the pool's left edge, between villa left wall x=-16 and pool left edge x=-11)
+- Rotation: `Math.PI / 4` (+45° around Y, CCW from above) — hood now points diagonally toward the +x +z direction (toward the pool's front-right and the camera). The user wants the lambo "diagonal to the pool axis," and this is the natural reading.
+
+### Shrubs (NEW)
+- New `shrubMat` (`0x2a4a25` — dark green leafy)
+- New `addShrub(x, z, size)` helper using `IcosahedronGeometry` (matches the boulder helper's silhouette but green)
+- 2 shrubs placed next to the pink Lambo: one at `(-15.5, 2.5)` size 0.85 (between villa wall and lambo, near the back of the lambo), one at `(-14, 1.5)` size 0.55 (smaller front shrub)
+
+### Files modified
+- [js/world.js](js/world.js) — addCar Group refactor + rotY param + pink Lambo rotation + shrub helper + 2 shrub placements
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b014 → b015`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Risk
+- I'm guessing on the rotation direction (+45° vs -45°) based on a quick read of the user's arrow screenshot. If the hood points the wrong way after deploy, swap to `-Math.PI / 4` next.
+- The lambo position stays on the LEFT side of the pool. If the user's arrow screenshot showed it on the RIGHT side, the position needs to flip too — that's a follow-up.
+
 ## b014 — 2026-04-07 — Camera overhaul (drag/zoom/pinch) + layout flip (beach side vs street side) + bigger pool
 
 User feedback after b013: camera was stuck on a fixed pivot with no zoom (was hover-based), villa was just a square box, pool was small and squarish, ocean was on BOTH sides (front AND back), red car parked on something weird, cars too far off. Picked Option A (camera + layout fix only, save full architecture rework for b015). Camera = drag/zoom/pinch (no WASD walking yet).

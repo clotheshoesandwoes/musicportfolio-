@@ -580,9 +580,10 @@
     }
 
     // -----------------------------------------------------
-    // Lambo — yellow wedge supercar parked on the driveway
+    // Lambo — wedge supercar. b015: built into a Group so we can rotate it
+    // around its own center via the rotY parameter (CCW radians around Y).
     // -----------------------------------------------------
-    function addCar(cx, cz, bodyColorHex) {
+    function addCar(cx, cz, bodyColorHex, rotY = 0) {
       const bodyMat = makePS2Material({
         color:       bodyColorHex,
         emissive:    bodyColorHex,
@@ -601,20 +602,22 @@
         emissiveAmt: 1.8,
       });
 
-      // Main body — long along z, low and wide
+      const g = new THREE.Group();
+
+      // Main body — long along z, low and wide (hood at +z end)
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.55, 4.4), bodyMat);
-      body.position.set(cx, 0.55, cz);
-      scene.add(body);
+      body.position.set(0, 0.55, 0);
+      g.add(body);
 
       // Hood wedge (smaller box on top toward the front)
       const hood = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.22, 1.7), bodyMat);
-      hood.position.set(cx, 0.93, cz + 1.1);
-      scene.add(hood);
+      hood.position.set(0, 0.93, 1.1);
+      g.add(hood);
 
       // Cabin — slightly back from center
       const cab = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 1.8), cabMat);
-      cab.position.set(cx, 1.05, cz - 0.4);
-      scene.add(cab);
+      cab.position.set(0, 1.05, -0.4);
+      g.add(cab);
 
       // Wheels — 4 dark squat boxes at the corners
       const wheelOffsets = [
@@ -625,31 +628,51 @@
       ];
       wheelOffsets.forEach(([dx, dz]) => {
         const w = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.55, 0.78), wheelMat);
-        w.position.set(cx + dx, 0.27, cz + dz);
-        scene.add(w);
+        w.position.set(dx, 0.27, dz);
+        g.add(w);
       });
 
       // Headlights (front, +z end)
       [-0.55, 0.55].forEach(dx => {
         const h = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.16, 0.08), headlightMat);
-        h.position.set(cx + dx, 0.78, cz + 2.22);
-        scene.add(h);
+        h.position.set(dx, 0.78, 2.22);
+        g.add(h);
       });
 
       // Taillights (rear, -z end)
       [-0.55, 0.55].forEach(dx => {
         const t = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.08), taillightMat);
-        t.position.set(cx + dx, 0.78, cz - 2.22);
-        scene.add(t);
+        t.position.set(dx, 0.78, -2.22);
+        g.add(t);
       });
+
+      g.position.set(cx, 0, cz);
+      g.rotation.y = rotY;
+      scene.add(g);
     }
 
     // b014 — Yellow Lambo parked in the driveway, just in front of the
     // garage door (which now faces -z toward the street).
     addCar(garageCx, garageCz - garageD / 2 - 2.8, 0xf5d518);
-    // Pink Lambo — parked on the pool deck, alongside the pool's left edge
-    // (between villa left wall x=-16 and pool left edge x=-11)
-    addCar(-14.0, 5.0, 0xff2d95);
+    // b015 — Pink Lambo parked at a 45° angle on the pool deck, hood
+    // pointing diagonally away from the pool toward the front of the
+    // property. Tucked next to a small shrub for landscaping flair.
+    addCar(-14.0, 5.0, 0xff2d95, Math.PI / 4);
+
+    // Small shrub next to the pink Lambo (b015)
+    const shrubMat = makePS2Material({ color: 0x2a4a25 });
+    function addShrub(x, z, size) {
+      const s = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(size, 0),
+        shrubMat
+      );
+      s.position.set(x, size * 0.55, z);
+      s.rotation.set(x * 0.13, z * 0.21, x * 0.07);
+      scene.add(s);
+    }
+    // Behind/beside the pink Lambo, on the corner between villa wall and pool
+    addShrub(-15.5, 2.5, 0.85);
+    addShrub(-14.0, 1.5, 0.55);
 
     // -----------------------------------------------------
     // Lagoon — small secondary water with sand, island, mini palm
