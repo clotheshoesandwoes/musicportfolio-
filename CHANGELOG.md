@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## b016 — 2026-04-07 — Villa architecture rework (asymmetric stack + cylindrical tower + 7 columns + rooftop terrace), pool jacuzzi, hills + houses on hills, Lambo rotation flipped
+
+User feedback after b015: Lambo rotated wrong way, still want a shrub cluster around it, the city background is flat (no grass/elevation/houses on hills), and — the recurring complaint — "the house is just a square right now, want crazy cool miami architecture." Also wanted a cool pool shape. This build hits all of it.
+
+### Pink Lambo rotation flipped
+- `Math.PI / 4 → -Math.PI / 4` — hood now points toward (-x, +z), the front-left of the property instead of the front-right.
+
+### Beefier shrub cluster around Lambo
+- Was 2 small shrubs at `(-15.5, 2.5)` size 0.85 and `(-14, 1.5)` size 0.55
+- Now 6 shrubs at varying sizes (0.55–1.10) clustered tightly: `(-16, 3)`, `(-15, 1.5)`, `(-13, 1.0)`, `(-12, 2.5)`, `(-16.5, 6.5)`, `(-15, 7.5)`
+- Lambo now reads as "parked in landscaping" not "lone car next to two pebbles"
+
+### Villa architecture rework — the big one
+**Asymmetric stacked upper volumes** (replaces b013/b014's single centered upper volume):
+- **First upper volume:** `BoxGeometry(28, 4.5, 12)` (was `22 × 4.5 × 12`), shifted +4 on x (`upperX = villaCx + 4`), hangs `2.8` forward over the deck (was `1.8`). The first upper now cantilevers more dramatically AND extends asymmetrically to the east side.
+- **Upper roof slab:** thinner (0.16 vs 0.20), wider overhang (+3 each side x, +2.5 z) — the floating slab look is more pronounced.
+- **NEW Second upper volume (third floor box):** `BoxGeometry(14, 3.5, 8)` shifted -6 on x (`upper2X = -6`), pulled back slightly (`upper2Z = -10.5`), sitting on top of the first upper. This creates a stepped pyramid where each level shifts in the opposite direction — the asymmetric stack reads as architecture instead of "stacked boxes."
+- **NEW Second upper roof slab:** thinnest yet (0.14), the topmost floating slab.
+- **NEW Rooftop terrace wall** — low parapet (`0.9 high`) on top of the first upper volume on the east + front edges (the parts not covered by the second upper). Reads as a usable rooftop terrace at the asymmetric corner.
+- **NEW FTG glass on the second upper** — front face of the third floor box gets its own glass.
+
+**NEW Cylindrical corner tower (the rotunda):**
+- `CylinderGeometry(3, 3, 8.5, 16)` — round 2-story body
+- Position: `(lowerLeftX - towerR + 0.4, *, lowerFrontZ - towerR + 0.6) ≈ (-18.6, *, -3.4)` — embedded into the villa west wall, straddling the front line. On the OPPOSITE corner from the upper cantilever (which extends east) for asymmetry.
+- Glass cylinder band wrapping the upper 55% of the body (`CylinderGeometry(... 1, true)` open on top/bottom, the round room view)
+- Roof cap disc on top (slightly oversized for an overhang)
+- This is the single biggest move toward "not just a square" — a curved element on the corner breaks all the right-angle reading.
+
+**Beefier stone columns:**
+- Was 5 columns: `1.4 × lowerH × 0.7` at `x = ±13.5, ±6.75, 0`
+- Now 7 columns: `1.6 × (lowerH + 0.5) × 0.85` at `x = ±14, ±9.33, ±4.66, 0`
+- Taller (extend 0.5 above lower roof), wider, deeper. More prominent stone reading.
+
+**FTG glass repositioned** — 6 glass panes between the 7 columns instead of 4 between 5. Pane width 3.0 each.
+
+**Front door** — moved from `x=-10.125` to `x=-6.995` (slotted between the columns at -9.33 and -4.66 for a more central entrance).
+
+### Pool — circular jacuzzi attached
+- I tried an L-shaped extension first but it collided with a deck lantern + path light. Reverted to: keep the main 22×6 rectangular pool, add a circular jacuzzi at the east end.
+- `CylinderGeometry(2.4, 2.4, 0.20, 24)` at `(13.5, 0.10, 5)` — radius 2.4, slightly inside the pool's east rim so they read as connected
+- Matching travertine rim cylinder at radius 2.7
+
+### Hills + houses on hills (depth fix for the back)
+b014's back side felt flat — road, sidewalk, mansions, skyline all at y=0. b016 adds rising terrain:
+- New `hillMat` (dark grassy green `0x2a3a25`) and `addHill(cx, cy, cz, w, h, d)` helper
+- 5 hill mounds in two rows behind the cross-street mansions:
+  - First row: `(-60, *, -90)` 50×5×18, `(0, *, -98)` 70×8×20, `(60, *, -90)` 50×6×18
+  - Second row (deeper, taller): `(-30, *, -115)` 45×11×16, `(30, *, -115)` 45×12×16
+- New `addHillVilla(cx, cy, cz, scale)` helper — simplified neighbor villa (just lower volume + roof slab + 1 glow window) with a custom y offset for placing on hills
+- 7 elevated villas perched on the hills at varying y heights (5, 6, 8, 11, 12)
+- Result: depth perception in the back, "homes on hills" reading like a real coastal city silhouette
+
+### Files modified
+- [js/world.js](js/world.js) — pink Lambo rotation, shrubs, addCar already refactored in b015 (no more touch needed), full villa upper volume rewrite, cylindrical tower, taller columns, glass repositioning, door move, pool jacuzzi addition, hills + addHill helper, hill villas + addHillVilla helper
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b015 → b016`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### What's NOT in this build
+- Cars driving on the road (user said "eventually would be cool but not needed now")
+- L-shape pool (collided with too many props, deferred — circular jacuzzi alone delivers the shape change)
+- Click → song-card system (still on deck, becomes b017 now)
+- Walking/WASD (later)
+
+### Risks I want to flag
+- **Cylindrical tower at the west corner** — embedded slightly into the villa west wall (`lowerLeftX - towerR + 0.4`). If it reads as "weird intersection" instead of "round tower attached to corner," I'll move it fully outboard.
+- **Asymmetric upper stack** — first upper shifted east, second upper shifted west. This is the biggest stylistic move. If it reads as "messy" instead of "intentionally asymmetric," I dial back the offsets.
+- **Rooftop terrace wall** — only 0.9 high, might be invisible from the default camera angle. May need to bump up.
+- **Hills** — using flat-top boxes for "hills" is the cheapest possible terrain. They might look like "boxes" instead of "hills." If so, b017 could use a sloped geometry (BufferGeometry with vertex y displacement) for actual rolling hills.
+- **Mesh count** — this is the biggest scene yet. If mobile drops frames, I'll cull the deep-distance hill villas and second-row hills.
+
 ## b015 — 2026-04-07 — Pink Lambo rotated 45° + small shrub landscaping next to it
 
 User confirmed b014's camera + layout works on both desktop and mobile. Asked for the Pink Lambo to be rotated 45° "diagonal with the pool" with the hood pointing in a specific direction (showed me a top-down screenshot with an arrow), and to have a shrub near it for landscaping. (Architecture rework still queued for b016.)
