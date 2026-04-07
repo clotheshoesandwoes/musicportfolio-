@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## b034b — 2026-04-07 — Polish pass on b034: lagoon reads as water, smooth ring road, fuller pines
+
+User: "how do we make it less choppy less ugly". Three concrete causes:
+
+1. **Lagoon was invisible as water.** It was using `oceanMat`, which is dusk purple `0x2a0a55`/`0xc04098` — visually identical to the surrounding pink/purple beach in this lighting. Switched the lagoon to `poolMat` (cyan glow + caustic bands + the `vTopMask` 3.6× brightness boost) and changed it from a thin Plane to a `BoxGeometry(60, 0.20, 140)` so the top face triggers `vTopMask`. Added a travertine `lagoonRim` slab around it as a clean shoreline cut.
+
+2. **Loop road looked like 16 detached tiles.** Replaced the 16 tangent `BoxGeometry` segments with a single `RingGeometry(15.5, 20.5, 64, 1)` mesh — one smooth annulus, no polygon seams. Added a thin `RingGeometry(17.9, 18.1)` stripe ring on top for the center line. Approach + garage spur roads are still straight box segments since they're linear.
+
+3. **Pines were too small/dark to register at distance.** Pines now use a dedicated `forestMat` with `emissive 0x4a8030` + `emissiveAmt 0.30` so they hold up against the dusk fog. Tree height multiplied by 1.7, cone count 3 → 4 with bigger base radii (1.6→2.4), trunk thicker.
+
+Also bumped road segment y `0.05 → 0.06` and dash y `0.07 → 0.10` for clearer z separation, and moved the garage-spur road from x=40 to x=46 so it lines up with the new garage position at `(32, -28)`.
+
+### Files modified
+- [js/world.js](js/world.js) — lagoon material/geometry + rim, ring road via `RingGeometry`, `addPineTree` rewrite + new `forestMat`, road y bumps
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b034 → b034b`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b034 — 2026-04-07 — Map reshape: lagoon, forest, loop road, bigger garden + garage
 
 User pinned three annotated screenshots: west = water, east + south = forest, loop driveway threading through forest in front of the house, and the garden + garage need to be bigger.

@@ -2552,15 +2552,29 @@
     // -----------------------------------------------------
 
     // ----- Lagoon — west side water -----
-    // Centered at x=-78, sized 60×140. Sits at y=0.03, just above the
-    // beach plane (y=0.02) so the sand reads as shoreline up to its edge.
-    const lagoon = new THREE.Mesh(new THREE.PlaneGeometry(60, 140, 12, 24), oceanMat);
-    lagoon.rotation.x = -Math.PI / 2;
-    lagoon.position.set(-78, 0.03, 0);
+    // b034b — switched from oceanMat (dusk purple, blends into the beach)
+    // to poolMat (cyan glow, vTopMask ripples) so it actually reads as
+    // water at a glance. BoxGeometry with thin slab so the top face gets
+    // the brighter `mix(0.8, 3.6, vTopMask)` boost.
+    const lagoon = new THREE.Mesh(
+      new THREE.BoxGeometry(60, 0.20, 140, 24, 1, 56),
+      poolMat
+    );
+    lagoon.position.set(-78, 0.10, 0);
     scene.add(lagoon);
+    // Sand rim around the lagoon for a clean shoreline cut
+    const lagoonRim = new THREE.Mesh(
+      new THREE.BoxGeometry(64, 0.16, 144),
+      rimMat
+    );
+    lagoonRim.position.set(-78, 0.05, 0);
+    scene.add(lagoonRim);
 
     // ----- Loop driveway road (east, threaded through the forest) -----
-    const asphaltMat = makePS2Material({ color: 0x18181f });
+    // b034b — single RingGeometry mesh for the loop instead of 16 tangent
+    // boxes. One smooth ring, no polygon seams. Approach roads are still
+    // short box segments since they're straight.
+    const asphaltMat = makePS2Material({ color: 0x1a1a22 });
     const stripeMat  = makePS2Material({
       color:       0xfff080,
       emissive:    0xfff080,
@@ -2569,16 +2583,16 @@
 
     function addRoadSegment(x, z, len, rotY) {
       const seg = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.05, len), asphaltMat);
-      seg.position.set(x, 0.05, z);
+      seg.position.set(x, 0.06, z);
       seg.rotation.y = rotY;
       scene.add(seg);
-      // dashed center stripe (3 small bars)
+      // dashed center stripe (3 small bars), lifted to avoid z-fighting
       for (let k = -1; k <= 1; k++) {
-        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.06, len * 0.18), stripeMat);
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, len * 0.18), stripeMat);
         const offset = k * len * 0.30;
         dash.position.set(
           x + Math.sin(rotY) * offset,
-          0.07,
+          0.10,
           z + Math.cos(rotY) * offset
         );
         dash.rotation.y = rotY;
@@ -2586,41 +2600,58 @@
       }
     }
 
-    // Loop ring centered at (62, 5), radius 18 — 16 short tangent segments
-    const ringCx = 62, ringCz = 5, ringR = 18;
-    const ringSegments = 16;
-    for (let i = 0; i < ringSegments; i++) {
-      const a = (i / ringSegments) * Math.PI * 2;
-      const sx = ringCx + Math.cos(a) * ringR;
-      const sz = ringCz + Math.sin(a) * ringR;
-      addRoadSegment(sx, sz, 7.5, a + Math.PI / 2);
-    }
+    // Loop ring centered at (62, 5), inner=15.5 outer=20.5 → 5-wide road
+    const ringCx = 62, ringCz = 5;
+    const ringRoad = new THREE.Mesh(
+      new THREE.RingGeometry(15.5, 20.5, 64, 1),
+      asphaltMat
+    );
+    ringRoad.rotation.x = -Math.PI / 2;
+    ringRoad.position.set(ringCx, 0.06, ringCz);
+    scene.add(ringRoad);
+    // Center stripe — thin RingGeometry on top of the road
+    const ringStripe = new THREE.Mesh(
+      new THREE.RingGeometry(17.9, 18.1, 64, 1),
+      stripeMat
+    );
+    ringStripe.rotation.x = -Math.PI / 2;
+    ringStripe.position.set(ringCx, 0.10, ringCz);
+    scene.add(ringStripe);
 
     // Approach road from the villa front entry to the loop's west edge
     addRoadSegment(28, 5, 16, Math.PI / 2);
     addRoadSegment(40, 5, 8,  Math.PI / 2);
 
     // Garage spur — short connector from the showroom front to the loop
-    addRoadSegment(40, -18, 14, 0);
+    addRoadSegment(46, -18, 14, 0);
 
     // ----- Forest — pine cones + extra palms east + north -----
+    // b034b — bigger trees + brighter emissive needles so they read at
+    // distance against the dusk fog. Trees use a dedicated forestMat
+    // (brighter than shrubMat which gets eaten by fog).
+    const forestMat = makePS2Material({
+      color:       0x4a8030,
+      emissive:    0x4a8030,
+      emissiveAmt: 0.30,
+    });
     function addPineTree(x, z, h) {
-      const trunkH = h * 0.32;
+      h *= 1.7;
+      const trunkH = h * 0.30;
       const t = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.22, 0.34, trunkH, 5),
+        new THREE.CylinderGeometry(0.30, 0.45, trunkH, 5),
         trunkMat
       );
       t.position.set(x, trunkH / 2, z);
       scene.add(t);
-      // 3 stacked tapering cones (icosa cones via CylinderGeometry top=0)
-      const cones = 3;
+      // 4 stacked tapering cones for fuller silhouette
+      const cones = 4;
       for (let i = 0; i < cones; i++) {
-        const baseR = 1.6 - i * 0.42;
-        const ch    = h * 0.34;
-        const cy    = trunkH + i * (h * 0.22) + ch / 2;
+        const baseR = 2.4 - i * 0.45;
+        const ch    = h * 0.32;
+        const cy    = trunkH + i * (h * 0.20) + ch / 2;
         const cone = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.0, baseR, ch, 6),
-          shrubMat
+          new THREE.CylinderGeometry(0.0, baseR, ch, 7),
+          forestMat
         );
         cone.position.set(x, cy, z);
         scene.add(cone);
