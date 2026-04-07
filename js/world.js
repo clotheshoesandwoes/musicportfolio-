@@ -1469,13 +1469,15 @@
     // 5 isolated boxes. Plus a big grass plane filling the void behind
     // the cross-street mansions.
     // -----------------------------------------------------
-    // b020 — three hill mat variants for color variation (was 1 mat).
-    // Adjacent hills now alternate between base/light so they stop merging
-    // into one dark plateau, and the back ridge uses a cool hazy tone for
-    // atmospheric perspective.
+    // b020/b021 — hill mat variants for color variation (was 1 mat).
+    // b021 hotfix: b020's mid-tone (0x36482b) was only ~15% brighter than
+    // base — invisible after FogExp2 ate it. Pushed mat2 way brighter and
+    // re-tinted mat3 toward the dusk-pink sky for actual atmospheric
+    // perspective (cool blue was the wrong direction against a magenta
+    // sky). Bump caps also bumped up in size.
     const hillMat  = makePS2Material({ color: 0x2a3a25 });  // base dark grassy green (also used by grass plane)
-    const hillMat2 = makePS2Material({ color: 0x36482b });  // lighter mid-tone — ridge alternation
-    const hillMat3 = makePS2Material({ color: 0x223540 });  // cool hazy distance — back ridge
+    const hillMat2 = makePS2Material({ color: 0x607a38 });  // bright mid-tone — ridge alternation, survives the fog
+    const hillMat3 = makePS2Material({ color: 0x6a4858 });  // rose-tinted distance — back ridge atmospheric perspective
 
     // Big grass plane filling the void from past the far sidewalk to the
     // back of the hills — fixes the "everything behind the mansions
@@ -1497,13 +1499,14 @@
       hill.position.set(cx, h / 2 + cy, cz);
       scene.add(hill);
 
-      const bumpCount = 1 + (seed % 2);
+      // b021 — bumps ~1.6× larger than b020 so silhouette breaks read at zoom
+      const bumpCount = 2 + (seed % 2);
       for (let i = 0; i < bumpCount; i++) {
         const s  = seed + i * 7;
-        const bw = w * (0.34 + ((s * 3) % 5) * 0.05);
-        const bh = h * (0.18 + ((s * 5) % 4) * 0.05);
-        const bd = d * (0.55 + ((s * 11) % 4) * 0.06);
-        const bx = cx + (((s * 13) % 5) - 2) * w * 0.11;
+        const bw = w * (0.50 + ((s * 3) % 5) * 0.06);
+        const bh = h * (0.30 + ((s * 5) % 4) * 0.08);
+        const bd = d * (0.65 + ((s * 11) % 4) * 0.07);
+        const bx = cx + (((s * 13) % 5) - 2) * w * 0.13;
         const bz = cz + (((s * 17) % 5) - 2) * d * 0.10;
         const bump = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat);
         bump.position.set(bx, h + bh / 2, bz);

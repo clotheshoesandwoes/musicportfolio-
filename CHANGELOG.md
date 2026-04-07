@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## b021 — 2026-04-07 — Hill hotfix v2: brighter mats, sky-tinted back ridge, bigger bumps
+
+b020's hill fix didn't visually land. User screenshots showed the hills still reading as one dark mass at default zoom. Two reasons:
+1. `hillMat2` (`0x36482b`) was only ~15% brighter than the base — completely eaten by the heavy indigo `FogExp2` at z=-85 to -120. The "alternation" was invisible.
+2. `hillMat3` was cool blue. Atmospheric perspective in a dusk-pink sky should pull distant terrain TOWARD the sky color (warm rose), not away from it.
+
+### Changes
+- `hillMat2`: `0x36482b → 0x607a38` (much brighter green, survives the fog)
+- `hillMat3`: `0x223540 → 0x6a4858` (rose-tinted, atmospheric perspective against the magenta sky)
+- Bump caps `~1.6× larger`: width factor `0.34→0.50`, height factor `0.18→0.30`, depth factor `0.55→0.65`. Also bumped `bumpCount` from `1+(seed%2)` to `2+(seed%2)` so every hill gets at least 2 cap boxes.
+
+### Files modified
+- [js/world.js](js/world.js) — 3 mat color literals + 6 bump-multiplier numbers + bumpCount base (~10 lines changed)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b020 → b021`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b020 — 2026-04-07 — Hill plateau fix: color variation + silhouette breaks
 
 Fixes the b019 deferred issue: from elevated camera angles the b018 hills read as one giant flat dark plateau because all 6 mounds used the same dark-green mat and all had perfectly flat tops at the same height.
