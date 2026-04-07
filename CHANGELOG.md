@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## b022 — 2026-04-07 — Beach + grounds scenery batch (yachts, pier, tiki bar, fire pit, BBQ, statues)
+
+User requested two scenery zones after the b021 hill fix: beach/ocean stuff and villa grounds stuff. Seven new prop types added in one build.
+
+### Beach / ocean
+- **3 yachts** in the front ocean at varying x/z/scale: `(-18, 62)` `(25, 78)` `(-40, 92)`. Each is a Group of 5 boxes — hull, lower deckhouse, warm window strip, upper bridge, mast. Reuses `villaMat` (white plaster), `windowMat` (warm glow), `railMat` (mast).
+- **3 jet skis** closer to shore at `(-6, 50)` `(18, 54)` `(-22, 58)` with varied rotations. Each = hull + accent seat (warm or cyan emissive) + handlebar.
+- **Pier** at `x=8`, length `z=30 → 66`. Wood deck (`woodSlatMat`) + underdeck pilings + railing posts every 2.5m + continuous top rails + warm lantern at the tip. Positioned to clear the existing beach chairs at `(±12, 40)`.
+- **Tiki bar** at `(-34, 36)` — far west on the beach, away from the villa. 4 wood corner posts, two stacked thatched roof slabs, bar counter with lighter top, warm under-roof glow, 3 stools. Two palms flank it.
+- **3 surfboards** leaning against the tiki bar at varied rotations — white, warm-emissive, cyan-emissive.
+
+### Villa grounds
+- **Fire pit + 5-seat circle** at `(-22, 18)` (west of pool deck). Stone ring (`CylinderGeometry`) + inner glow disc (`lanternGlowMat`) + 3 small log boxes inside + 5 chair stubs (wood seat + cream cushion) arranged on a `r=3.2` circle.
+- **Outdoor BBQ bar** at `(17, 9)` (east of jacuzzi). L-shaped stone counter with lighter rim-mat top slabs + dark grill body + warm heat-strip + 3 bottle stand-ins on the counter.
+- **3 garden statues** on the front lawn between deck and beach: obelisk at `(26, 22)`, pedestal+sphere at `(-28, 24)`, abstract stacked-cubes at `(0, 26)`. Three different `addStatue` types (`obelisk` / `sphere` / `abstract`) all use `stoneMat` (sphere uses lighter `rimMat` for contrast).
+
+### Click→card system prep
+Per the new project memory, exterior props are valid click→card targets — not just interior furniture. Every prop in this build is added as a `THREE.Group` (or named mesh for the pier) with a `name` field set (`'yacht'`, `'jetski'`, `'tikibar'`, `'firepit'`, `'bbqbar'`, `'statue_obelisk'`, etc.) so the eventual raycaster can wire them up without a refactor.
+
+### Files modified
+- [js/world.js](js/world.js) — 7 helper functions + their call sites inserted between the boulevard palms and the skyline section (~265 lines added)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b021 → b022`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b021 — 2026-04-07 — Hill hotfix v2: brighter mats, sky-tinted back ridge, bigger bumps
 
 b020's hill fix didn't visually land. User screenshots showed the hills still reading as one dark mass at default zoom. Two reasons:

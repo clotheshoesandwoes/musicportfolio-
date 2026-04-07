@@ -1571,6 +1571,272 @@
     addPalm( 50, -48, 5.2);
 
     // -----------------------------------------------------
+    // b022 — Beach + grounds scenery batch
+    // Yachts, jet skis, pier, tiki bar w/ surfboards, fire pit,
+    // BBQ bar, garden statues. All exterior, all named groups so
+    // the click→card system can wire them up later.
+    // -----------------------------------------------------
+
+    // ----- Yachts on the front ocean -----
+    function addYacht(x, z, scale, rotY) {
+      const g = new THREE.Group();
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(8 * scale, 1.2 * scale, 2.6 * scale), villaMat);
+      hull.position.y = 0.6 * scale;
+      g.add(hull);
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(4.5 * scale, 1.0 * scale, 2.0 * scale), villaMat);
+      deck.position.set(-0.4 * scale, 1.7 * scale, 0);
+      g.add(deck);
+      const win = new THREE.Mesh(new THREE.BoxGeometry(4.0 * scale, 0.4 * scale, 2.05 * scale), windowMat);
+      win.position.set(-0.4 * scale, 1.65 * scale, 0);
+      g.add(win);
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(2.4 * scale, 0.8 * scale, 1.6 * scale), villaMat);
+      bridge.position.set(0.2 * scale, 2.6 * scale, 0);
+      g.add(bridge);
+      const mast = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 1.8 * scale, 0.12 * scale), railMat);
+      mast.position.set(-1.6 * scale, 3.5 * scale, 0);
+      g.add(mast);
+      g.position.set(x, 0.5, z);
+      g.rotation.y = rotY;
+      g.name = 'yacht';
+      scene.add(g);
+    }
+    addYacht(-18, 62, 1.0,   0.30);
+    addYacht( 25, 78, 1.15, -0.40);
+    addYacht(-40, 92, 0.85,  0.15);
+
+    // ----- Jet skis closer to shore -----
+    function addJetSki(x, z, rotY, accentMat) {
+      const g = new THREE.Group();
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.45, 0.95), villaMat);
+      hull.position.y = 0.5;
+      g.add(hull);
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.28, 0.7), accentMat);
+      seat.position.set(0.0, 0.86, 0);
+      g.add(seat);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.42, 0.7), railMat);
+      handle.position.set(0.85, 1.0, 0);
+      g.add(handle);
+      g.position.set(x, 0.0, z);
+      g.rotation.y = rotY;
+      g.name = 'jetski';
+      scene.add(g);
+    }
+    addJetSki( -6, 50,  0.50, lanternGlowMat);
+    addJetSki( 18, 54, -0.60, ledMat);
+    addJetSki(-22, 58,  0.20, lanternGlowMat);
+
+    // ----- Pier from beach into ocean (east of center, clears beach chairs at x=12) -----
+    function addPier(x, zNear, zFar, w) {
+      const length = zFar - zNear;
+      const cz = (zNear + zFar) / 2;
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, length), woodSlatMat);
+      deck.position.set(x, 0.65, cz);
+      deck.name = 'pierDeck';
+      scene.add(deck);
+      // Pilings under the deck
+      const pileCount = Math.floor(length / 4);
+      for (let i = 0; i <= pileCount; i++) {
+        const pz = zNear + (i / pileCount) * length;
+        for (const xs of [-1, 1]) {
+          const piling = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.4, 0.3), woodSlatMat);
+          piling.position.set(x + xs * (w / 2 - 0.2), 0.0, pz);
+          scene.add(piling);
+        }
+      }
+      // Posts + top rail
+      const postCount = Math.floor(length / 2.5);
+      for (let i = 0; i <= postCount; i++) {
+        const pz = zNear + (i / postCount) * length;
+        for (const xs of [-1, 1]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7, 0.12), railMat);
+          post.position.set(x + xs * (w / 2 - 0.1), 1.15, pz);
+          scene.add(post);
+        }
+      }
+      for (const xs of [-1, 1]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, length), railMat);
+        rail.position.set(x + xs * (w / 2 - 0.1), 1.45, cz);
+        scene.add(rail);
+      }
+      // End-of-pier warm lantern
+      const tipLight = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), lanternGlowMat);
+      tipLight.position.set(x, 1.7, zFar - 0.5);
+      scene.add(tipLight);
+    }
+    addPier(8, 30, 66, 3.0);
+
+    // ----- Tiki bar + surfboards (far west on the beach, away from villa) -----
+    const tikiX = -34, tikiZ = 36;
+    function addTikiBar(cx, cz) {
+      const g = new THREE.Group();
+      // 4 corner posts
+      for (const dx of [-1.8, 1.8]) {
+        for (const dz of [-1.8, 1.8]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.32, 3.6, 0.32), woodSlatMat);
+          post.position.set(dx, 1.8, dz);
+          g.add(post);
+        }
+      }
+      // Two stacked thatched roof slabs
+      const roof1 = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.4, 5.4), daybedWoodMat);
+      roof1.position.set(0, 3.8, 0);
+      g.add(roof1);
+      const roof2 = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.3, 4.2), daybedWoodMat);
+      roof2.position.set(0, 4.15, 0);
+      g.add(roof2);
+      // Bar counter (front face) + lighter top slab
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.0, 0.8), woodSlatMat);
+      counter.position.set(0, 0.5, -1.6);
+      g.add(counter);
+      const counterTop = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.08, 0.85), rimMat);
+      counterTop.position.set(0, 1.04, -1.6);
+      g.add(counterTop);
+      // Warm under-roof glow
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 3.2), windowMat);
+      glow.position.set(0, 3.50, 0);
+      g.add(glow);
+      // 3 stools at the bar
+      for (const dx of [-1.2, 0, 1.2]) {
+        const stool = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.5), railMat);
+        stool.position.set(dx, 0.45, -2.4);
+        g.add(stool);
+      }
+      g.position.set(cx, 0, cz);
+      g.name = 'tikibar';
+      scene.add(g);
+    }
+    addTikiBar(tikiX, tikiZ);
+    // Palms flanking the tiki bar
+    addPalm(tikiX - 4.5, tikiZ + 0.5, 6.4);
+    addPalm(tikiX + 4.5, tikiZ - 0.5, 6.0);
+
+    // Surfboards leaning against the tiki bar (3 colors)
+    function addSurfboard(x, z, rotY, colorMat) {
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.6, 0.1), colorMat);
+      board.position.set(x, 1.2, z);
+      board.rotation.y = rotY;
+      board.rotation.z = -0.32;
+      board.name = 'surfboard';
+      scene.add(board);
+    }
+    addSurfboard(tikiX - 2.4, tikiZ + 2.0,  0.30, villaMat);
+    addSurfboard(tikiX - 1.9, tikiZ + 2.0, -0.50, lanternGlowMat);
+    addSurfboard(tikiX + 2.4, tikiZ + 2.0,  0.70, ledMat);
+
+    // ----- Fire pit + outdoor seating circle (west of pool deck) -----
+    function addFirePit(cx, cz) {
+      const g = new THREE.Group();
+      // Stone ring
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.55, 0.5, 12), stoneMat);
+      ring.position.set(0, 0.25, 0);
+      g.add(ring);
+      // Inner glow disc
+      const fireGlow = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.42, 10), lanternGlowMat);
+      fireGlow.position.set(0, 0.45, 0);
+      g.add(fireGlow);
+      // 3 small log boxes
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        const log = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.16, 0.16), woodSlatMat);
+        log.position.set(Math.cos(a) * 0.35, 0.55, Math.sin(a) * 0.35);
+        log.rotation.y = a;
+        g.add(log);
+      }
+      g.position.set(cx, 0, cz);
+      g.name = 'firepit';
+      scene.add(g);
+      // 5 chair stubs around the pit
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + 0.4;
+        const sx = cx + Math.cos(a) * 3.2;
+        const sz = cz + Math.sin(a) * 3.2;
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.45, 0.95), daybedWoodMat);
+        seat.position.set(sx, 0.225, sz);
+        seat.rotation.y = -a;
+        scene.add(seat);
+        const cush = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.18, 0.85), daybedCushionMat);
+        cush.position.set(sx, 0.55, sz);
+        cush.rotation.y = -a;
+        scene.add(cush);
+      }
+    }
+    addFirePit(-22, 18);
+
+    // ----- Outdoor BBQ / bar near the pool (east of jacuzzi) -----
+    function addBBQBar(cx, cz) {
+      const g = new THREE.Group();
+      // L-shaped counter
+      const c1 = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.0, 0.8), stoneMat);
+      c1.position.set(0, 0.5, 0);
+      g.add(c1);
+      const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 2.0), stoneMat);
+      c2.position.set(1.1, 0.5, 1.0);
+      g.add(c2);
+      // Lighter counter tops
+      const top1 = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.08, 0.85), rimMat);
+      top1.position.set(0, 1.04, 0);
+      g.add(top1);
+      const top2 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 2.05), rimMat);
+      top2.position.set(1.1, 1.04, 1.0);
+      g.add(top2);
+      // Grill body + heat strip
+      const grill = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.3, 0.6), railMat);
+      grill.position.set(-0.5, 1.25, 0);
+      g.add(grill);
+      const heat = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.06, 0.5), lanternGlowMat);
+      heat.position.set(-0.5, 1.43, 0);
+      g.add(heat);
+      // Bottles on the counter (warm-glow stand-ins)
+      for (let i = 0; i < 3; i++) {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.5, 0.18), windowMat);
+        b.position.set(0.8 + i * 0.3, 1.34, -0.2);
+        g.add(b);
+      }
+      g.position.set(cx, 0, cz);
+      g.name = 'bbqbar';
+      scene.add(g);
+    }
+    addBBQBar(17, 9);
+
+    // ----- Garden statues (3 — front lawn between deck and beach) -----
+    function addStatue(cx, cz, type) {
+      const g = new THREE.Group();
+      if (type === 'obelisk') {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 1.2), stoneMat);
+        base.position.y = 0.2;
+        g.add(base);
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.7, 4.0, 0.7), stoneMat);
+        shaft.position.y = 2.4;
+        g.add(shaft);
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.5, 0.8, 4), stoneMat);
+        cap.position.y = 4.8;
+        cap.rotation.y = Math.PI / 4;
+        g.add(cap);
+      } else if (type === 'sphere') {
+        const ped = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 1.0), stoneMat);
+        ped.position.y = 0.8;
+        g.add(ped);
+        const sph = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0), rimMat);
+        sph.position.y = 2.3;
+        g.add(sph);
+      } else if (type === 'abstract') {
+        for (let i = 0; i < 4; i++) {
+          const sz = 0.95 - i * 0.13;
+          const b = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, sz), stoneMat);
+          b.position.y = 0.5 + i * 0.85;
+          b.rotation.y = i * 0.7;
+          g.add(b);
+        }
+      }
+      g.position.set(cx, 0, cz);
+      g.name = 'statue_' + type;
+      scene.add(g);
+    }
+    addStatue( 26, 22, 'obelisk');
+    addStatue(-28, 24, 'sphere');
+    addStatue(  0, 26, 'abstract');
+
+    // -----------------------------------------------------
     // Distant skyline dots (neon lights on the horizon)
     // -----------------------------------------------------
     const skylineColors = [0xff2d95, 0x00d4ff, 0xffaa55, 0xa44fff];
