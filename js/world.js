@@ -409,6 +409,197 @@
     addPalm( 7.5, -4.5, 6.2);
 
     // -----------------------------------------------------
+    // Streetlamp mesh — gives the sodium light a visible source
+    // -----------------------------------------------------
+    {
+      const poleMat = makePS2Material({ color: 0x0e0a0e });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 5.5, 5), poleMat);
+      pole.position.set(lampPos.x, 2.75, lampPos.z);
+      scene.add(pole);
+
+      const bulbMat = makePS2Material({
+        color:       0xffaa55,
+        emissive:    0xffaa55,
+        emissiveAmt: 2.4,
+      });
+      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), bulbMat);
+      bulb.position.set(lampPos.x, lampPos.y, lampPos.z);
+      scene.add(bulb);
+
+      const shadeMat = makePS2Material({ color: 0x1e1418 });
+      const shade = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.14, 0.75), shadeMat);
+      shade.position.set(lampPos.x, lampPos.y + 0.34, lampPos.z);
+      scene.add(shade);
+    }
+
+    // -----------------------------------------------------
+    // Garage — attached one-story wing on the +X side of villa
+    // -----------------------------------------------------
+    const garageW = 5.0, garageH = 2.8, garageD = 6.5;
+    const garageCx = villaCx + lowerW / 2 + garageW / 2 - 0.05;
+    {
+      const garage = new THREE.Mesh(new THREE.BoxGeometry(garageW, garageH, garageD), villaMat);
+      garage.position.set(garageCx, garageH / 2, 0);
+      scene.add(garage);
+
+      // Garage roof slab (slight overhang)
+      const garageRoof = new THREE.Mesh(
+        new THREE.BoxGeometry(garageW + 0.7, 0.28, garageD + 0.7),
+        roofMat
+      );
+      garageRoof.position.set(garageCx, garageH + 0.14, 0);
+      scene.add(garageRoof);
+
+      // Glowing garage door on the +Z face (camera side)
+      const garageDoor = new THREE.Mesh(
+        new THREE.BoxGeometry(garageW - 0.6, garageH - 0.5, 0.12),
+        windowMat
+      );
+      garageDoor.position.set(garageCx, (garageH - 0.5) / 2 + 0.05, garageD / 2 + 0.06);
+      scene.add(garageDoor);
+    }
+
+    // -----------------------------------------------------
+    // Lambo — yellow wedge supercar parked on the driveway
+    // -----------------------------------------------------
+    function addCar(cx, cz, bodyColorHex) {
+      const bodyMat = makePS2Material({
+        color:       bodyColorHex,
+        emissive:    bodyColorHex,
+        emissiveAmt: 0.18,
+      });
+      const cabMat       = makePS2Material({ color: 0x080810 });
+      const wheelMat     = makePS2Material({ color: 0x050505 });
+      const headlightMat = makePS2Material({
+        color:       0xfff8e0,
+        emissive:    0xfff8e0,
+        emissiveAmt: 2.4,
+      });
+      const taillightMat = makePS2Material({
+        color:       0xff1a30,
+        emissive:    0xff2030,
+        emissiveAmt: 1.8,
+      });
+
+      // Main body — long along z, low and wide
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.55, 4.4), bodyMat);
+      body.position.set(cx, 0.55, cz);
+      scene.add(body);
+
+      // Hood wedge (smaller box on top toward the front)
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.22, 1.7), bodyMat);
+      hood.position.set(cx, 0.93, cz + 1.1);
+      scene.add(hood);
+
+      // Cabin — slightly back from center
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 1.8), cabMat);
+      cab.position.set(cx, 1.05, cz - 0.4);
+      scene.add(cab);
+
+      // Wheels — 4 dark squat boxes at the corners
+      const wheelOffsets = [
+        [-0.97,  1.6],
+        [ 0.97,  1.6],
+        [-0.97, -1.6],
+        [ 0.97, -1.6],
+      ];
+      wheelOffsets.forEach(([dx, dz]) => {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.55, 0.78), wheelMat);
+        w.position.set(cx + dx, 0.27, cz + dz);
+        scene.add(w);
+      });
+
+      // Headlights (front, +z end)
+      [-0.55, 0.55].forEach(dx => {
+        const h = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.16, 0.08), headlightMat);
+        h.position.set(cx + dx, 0.78, cz + 2.22);
+        scene.add(h);
+      });
+
+      // Taillights (rear, -z end)
+      [-0.55, 0.55].forEach(dx => {
+        const t = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.08), taillightMat);
+        t.position.set(cx + dx, 0.78, cz - 2.22);
+        scene.add(t);
+      });
+    }
+
+    // Yellow Lambo parked in front of the garage door
+    addCar(garageCx, 6.0, 0xf5d518);
+
+    // -----------------------------------------------------
+    // Greenery — hedges + scattered bushes
+    // -----------------------------------------------------
+    const hedgeMat = makePS2Material({ color: 0x1a3a25 });
+
+    // Long hedge along the back of the property
+    {
+      const h = new THREE.Mesh(new THREE.BoxGeometry(28, 0.85, 0.85), hedgeMat);
+      h.position.set(8, 0.42, -8.5);
+      scene.add(h);
+    }
+    // Side hedge on the -X edge
+    {
+      const h = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.85, 14), hedgeMat);
+      h.position.set(-13, 0.42, -1);
+      scene.add(h);
+    }
+    // Front hedge between pool and camera
+    {
+      const h = new THREE.Mesh(new THREE.BoxGeometry(10, 0.7, 0.7), hedgeMat);
+      h.position.set(0, 0.35, 7.6);
+      scene.add(h);
+    }
+
+    function addBush(x, z, size) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.7, size), hedgeMat);
+      b.position.set(x, size * 0.35, z);
+      scene.add(b);
+    }
+    addBush(-5,  -7.0, 0.9);
+    addBush(-3,  -8.0, 1.1);
+    addBush(15,  -6.0, 1.0);
+    addBush(17,  -6.5, 0.8);
+    addBush( 2,   7.0, 0.85);
+    addBush(-1,   7.6, 0.7);
+    addBush(14,   6.8, 0.9);
+    addBush(26,   3.0, 0.85);
+
+    // -----------------------------------------------------
+    // Colored path lights — small accent bulbs on thin poles
+    // -----------------------------------------------------
+    function addPathLight(x, z, colorHex) {
+      const poleMat = makePS2Material({ color: 0x080808 });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 4), poleMat);
+      pole.position.set(x, 0.275, z);
+      scene.add(pole);
+
+      const bulbMat = makePS2Material({
+        color:       colorHex,
+        emissive:    colorHex,
+        emissiveAmt: 2.4,
+      });
+      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.20, 0.22), bulbMat);
+      bulb.position.set(x, 0.62, z);
+      scene.add(bulb);
+    }
+
+    // Around the pool deck
+    addPathLight(-5,   3.5, 0x00d4ff); // cyan
+    addPathLight(-5,  -3.5, 0xff2d95); // magenta
+    addPathLight( 5,   3.5, 0xa44fff); // purple
+    addPathLight( 5,  -3.5, 0xffaa55); // warm
+    // Driveway / garage path
+    addPathLight(15,   5.5, 0x00d4ff);
+    addPathLight(19,   7.5, 0xa44fff);
+    addPathLight(25,   6.0, 0xff2d95);
+    // Property entry side
+    addPathLight(-11,  5.0, 0x00d4ff);
+    addPathLight(-11,  0.0, 0xa44fff);
+    addPathLight(-11, -5.0, 0xff2d95);
+    addPathLight( 27,  0.0, 0xffaa55);
+
+    // -----------------------------------------------------
     // Ocean — far plane beyond the property
     // -----------------------------------------------------
     const oceanMat = new THREE.ShaderMaterial({
