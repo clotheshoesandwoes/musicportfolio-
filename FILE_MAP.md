@@ -1,6 +1,6 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b012
+**Build:** b013
 **Updated:** 2026-04-07
 
 ## Architecture
@@ -29,7 +29,7 @@ Vanilla JS, no build step. Multi-view single-page site.
 - [js/terrain.js](js/terrain.js) — Terrain view, 2D canvas, audio-reactive peaks (not surveyed)
 - [js/deepsea.js](js/deepsea.js) — Deep Sea view, scrolling depth track list (not surveyed)
 - [js/neural.js](js/neural.js) (~382 lines) — Neural view, 2D canvas node graph, audio-reactive nodes/connections, filter pills, mobile-tap-to-play
-- [js/world.js](js/world.js) **(b010)** — Villa view, Three.js 3D scene, PS2+ shaders (finer 320x180 vertex jitter + 854x480 low-res render target + faint scanlines), "sun just dipped" dusk Miami palette. b010 villa redesign: 2-story stacked white box villa with cantilevered upper floor, stacked stone column accents on the lower front, floor-to-ceiling glass walls, recessed warm cove lighting under the cantilever overhang, long infinity-edge pool running parallel to the villa front, white travertine deck, three pool-side daybeds (wood base + cream cushion), four warm deck lanterns at the pool front edge, low-poly icosahedron boulders replacing the old hedges/bushes, 4 palms, ocean horizon plane, distant neon skyline dots, custom water shader (tile lines + ripple displacement + caustic bands, brighter cyan glow), 3-light shader (warm deck lantern + cyan pool glow + warm interior window light)
+- [js/world.js](js/world.js) **(b013)** — Villa view, Three.js 3D scene, PS2+ shaders (finer 320x180 vertex jitter + 854x480 low-res render target + faint scanlines), "sun just dipped" dusk Miami palette. b013 villa expansion: villa is roughly 2× b010 in every dimension. Lower volume (32×6×18) is now a HOLLOW SHELL — interior travertine floor + 3 solid walls (back, left, right) + interior ceiling + 5 stacked-stone columns + 4 FTG glass panes on the open front face. Upper volume (22×4.5×12) is the cantilever, hangs 1.8 forward over the deck. Recessed warm cove lighting under the upper. Front door + new back door opening on the rear wall. Long infinity-edge cyan pool, white travertine deck, daybeds, deck lanterns, boulders. Front-of-pool extends into front beach + front ocean (no more b010 hard cutout). Back-of-house: 12 neighbor villas, 12 palms, 100-building Miami skyline (60 back + 40 front for the city silhouette wraparound). Custom water shader, 3-light shader (warm deck lantern + cyan pool glow + warm interior window light, window range bumped to 32 for the bigger interior).
 
 ### audio/
 WAV originals — local-only, gitignored, never deployed.
@@ -52,8 +52,10 @@ Stored in [js/helpers.js](js/helpers.js) as `window.BUILD_NUMBER`. Bump every co
 - Sky dome uses a separate gradient shader — "sun just dipped" palette (warm pink/orange horizon → lavender mid → deep indigo zenith) + sparse zenith-only stars
 - Pool has its own water shader with tile-line UV grid, moving caustic bands, vertex ripple displacement on the top face, and a 3.6× brightness boost on the top face for the strong cyan glow
 - Ocean is a single shader plane far from the patio with horizontal/vertical sin ripples
-- Distant skyline = ~32 emissive box "dots" with 4 shared materials (4 neon colors)
-- Villa architecture (b010): two stacked white plaster boxes — 20×4×11 lower volume + 13×3.5×7 upper volume hanging 1.0 forward over the pool deck (the cantilever signature). Three stacked-stone columns on the lower front face break up the white plaster. FTG glass between/under columns. A recessed cove light strip glows down from the underside of the upper cantilever onto the deck.
-- Camera orbits a centerpoint at (0, *, -2) — just in front of the villa — at radius 20, default position (-2, 5, 16) looking back at the cantilever in 3/4 view
+- Distant skyline = ~100 emissive box "dots" with 4 shared materials (4 neon colors): 60 back at z=-90 + 40 front at z=140. Every 4th-to-5th building is a taller "high-rise" box for the city silhouette feel.
+- Villa architecture (b013): two stacked white plaster boxes — 32×6×18 lower volume + 22×4.5×12 upper volume hanging 1.8 forward over the pool deck (the cantilever signature). **Lower volume is a HOLLOW SHELL** (4 walls + interior floor + interior ceiling), front face open by design, walkable interior space. 5 stacked-stone columns at the lower front (x=±13.5/±6.75/0). 4 FTG glass panes between the columns. Front door at x=-10.125 (leftmost gap), new back door on the rear wall facing the Miami neighborhood. Recessed cove light strip on the underside of the upper cantilever. Interior is empty for now, ready for prop click-targets in b014 (piano, records, etc.).
+- Front of pool: pool → boulders/lanterns → deck → front beach (z=30) → front ocean (z=90) → horizon. No more hard cutout.
+- Back of house: 12 neighbor villas in 3 z-bands, scattered palms, dense skyline. Beach behind villa pushed to z=-42 with bigger footprint.
+- Camera orbits a centerpoint at (0, *, -2) — just in front of the villa — at radius 26 (was 20), default position (-3, 6, 22) looking back at the cantilever in 3/4 view, base y 8.5, lookAt y 4.0. Camera far plane raised 250 → 320 to render the new front skyline.
 - `timeUniforms[]` array — every shader that needs `uTime` is registered here so `animate()` can update them all from a single rAF timestamp
-- Still no walking, no tracks, no audio reactivity (b011 = click→card system is on deck)
+- Still no walking, no tracks, no audio reactivity. b014 = click→card system on deck (each interior prop becomes a song trigger). b015 likely = walking/WASD movement.

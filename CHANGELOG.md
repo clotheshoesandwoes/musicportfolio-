@@ -1,5 +1,89 @@
 # CHANGELOG
 
+## b013 — 2026-04-07 — Villa expanded ~2× w/ hollow interior shell, front beach + front ocean, denser Miami back
+
+User feedback after b010 deployed: front of pool just hard-cuts off into void, behind the house feels empty (not the rich Miami neighborhood vibe), and the house itself is too small to populate with interior props (piano + decor + future song-card click targets). User picked option C (both exterior expansion AND interior rebuild in one build), camera stays orbit for now (walking is a future build), each future prop will become a click→song-card trigger.
+
+### Villa — roughly 2× in every dimension
+- Lower volume `20 × 4 × 11` → `32 × 6 × 18`
+- Upper cantilever `13 × 3.5 × 7` → `22 × 4.5 × 12`, hangs forward `1.0` → `1.8` over the pool deck
+- Stone columns `3 → 5` across the wider front face (x = -13.5, -6.75, 0, 6.75, 13.5)
+- FTG glass panes `2 → 4`, filling the gaps between columns
+- Cove light strip stays under the upper cantilever, scaled to the wider span
+- Front door moved to leftmost column gap (x=-10.125)
+
+### Lower volume is now a HOLLOW SHELL (the big architectural change)
+b010's lower volume was a single solid `BoxGeometry`. b013 cracks it open so the camera (eventually + a person walking the scene) can see/visit interior space, and so future builds can populate the interior with click-target props.
+
+The new lower volume = 6 separate meshes:
+- **Interior floor** — `PlaneGeometry` of warm travertine plaster at y=0.02
+- **Back wall** — `BoxGeometry(32, 6, 0.35)` at the rear, solid white plaster
+- **Left wall** — `BoxGeometry(0.35, 6, 18)` solid
+- **Right wall** — `BoxGeometry(0.35, 6, 18)` solid
+- **Interior ceiling** — `PlaneGeometry` warm plaster at y=5.99 facing down
+- **Front face** = the 5 stone columns + 4 glass panes (open by design)
+
+The lower roof slab still sits on top as the exterior cap. Walls are 0.35 thick. New `villaInteriorMat` (slightly warmer plaster than exterior) and `floorInteriorMat` (warm travertine).
+
+### NEW: Back door
+Glowing rectangle on the rear wall facing the Miami neighborhood. Position: `(0, 1.3, lowerBackZ + wallT + 0.05)`. Same `windowMat` as the other glowing openings.
+
+### Lighting uniform: bigger interior needs more reach
+- `windowPos.y` `3.5 → 4.5` (lifted to match the taller interior)
+- `windowRange` `22 → 32` (the warm interior glow now has to fill 32m wide × 18m deep room instead of 20×11)
+
+### Front beach + front ocean — fixes b010's hard cutout
+The b010 ground plane was `120 × 80` and abruptly ended past the pool deck. b013:
+- Ground plane shrunk to `80 × 40` centered at `(0, 0, -2)` — just covers the immediate villa+pool zone
+- **NEW front beach** — `PlaneGeometry(120, 24)` at `(0, 0.03, 30)` using `beachMat`
+- **NEW front ocean** — `PlaneGeometry(260, 90)` at `(0, -0.02, 90)` using a clone of the existing back-ocean shader. Same fog uniforms = visually consistent with the back ocean.
+- Result: looking forward past the pool you see deck → sand → ocean → fog → horizon, no abrupt edge
+
+### Back beach pushed back + bigger
+- Back beach center `(0, 0.04, -30)` → `(0, 0.04, -42)` (moved further from the bigger villa)
+- Back beach size `50 × 30` → `80 × 36`
+
+### Back-of-house — denser Miami neighborhood
+- Neighbor villas `5 → 12`, organized in 3 z-bands (close, mid, deep distance) and pushed outboard of the new bigger villa walls
+- Scattered palms `+8` extra palms through the neighborhood zone (z range -38 to +10, x range ±18 to ±30)
+- Distant skyline `32 → 100` total buildings: 60 back row at z=-90 + 40 front row at z=140 (city wraps around the bay). Every 4th-to-5th building is a taller "high-rise" box (wider footprint, 2.5–5.0 tall) for proper city silhouette.
+
+### Collision fixes (consequence of the bigger villa)
+The new villa walls (x = ±16, z = -19 to -1) swallowed several b010 props. All moved out:
+- **Lagoon** `(-14, *, -3)` → `(-22, *, 4)` — pushed left + forward, well clear
+- **Pink Lambo** `(-11, *, 9)` → `(-22, *, 5)` — pushed outboard left of the new villa front
+- **2 boulders** at `(-11.5, -3)` and `(11.5, -3)` were inside villa interior — moved to villa front corners at `x=±18.5`
+- **Pool deck path lights** at `(±8.5, -1.2)` were inside villa interior — removed (front-of-pool lights at `(±10.5, 8.8)` retained)
+- **Driveway path lights** `(8/15/16/8, -3/-8)` were inside villa — moved outboard to right side `(20-22, 3 to -15)`
+- **Side path lights** `(-12, 5/0/-8)` were inside villa — moved outboard to left side `(-20 to -22, 3 to -15)`
+- **Beach approach path lights** `(±12, -16)` were inside villa — moved behind villa to `(±10, -22)`
+- **Garage** auto-follows from `villaCx + lowerW/2 + ...` so it now sits at `garageCx ≈ 18.95` (was `12.95`), still flush with villa right wall — yellow Lambo position auto-follows
+
+### Camera — wider orbit for the bigger house
+- `CAM_RADIUS` `20 → 26`
+- Initial camera position `(-2, 5, 16)` → `(-3, 6, 22)` (pulled back, slightly higher)
+- Camera y `7.5 + pitch * 13` → `8.5 + pitch * 14` (slightly higher base, slightly more pitch range)
+- Camera lookAt y `3.2 + pitch * 3` → `4.0 + pitch * 3` (target the bigger upper volume)
+- Camera **far plane** `250 → 320` so the new front skyline at z=140 is actually visible
+
+### Files modified
+- [js/world.js](js/world.js) — every section above (villa rebuild, ground, front beach, front ocean, back beach, neighbor villas, palms, skyline, collision fixes, camera, lighting uniform)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b012 → b013`
+- [FILE_MAP.md](FILE_MAP.md) — build bump, villa view design notes rewritten for the bigger architecture
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### What's NOT in this build
+- **No interior props** — leaving the interior shell empty per the user's instruction. They'll spec the props (piano, records, cigarette box, etc.) before I commit to interior layout.
+- **No walking / WASD** — orbit camera stays. b015 candidate.
+- **Click → song card system** — the actual interactivity layer. b014, on deck after this lands and the user eyeballs the new layout.
+- **Raycaster + click targets on the cars/lanterns/etc.** — no objects are clickable yet. They will be in b014.
+
+### Risks I want to flag
+- **Hollow shell readability:** with the front face open, looking at the villa from the camera-default angle should show actual interior depth instead of a flat wall. If the lighting doesn't carry far enough into the interior or the floor doesn't read clearly, I may need to add a subtle interior accent light or brighten `floorInteriorMat`.
+- **Cantilever proportions:** the upper hangs 1.8 forward now (was 1.0). At the bigger scale this should look more dramatic, but if it reads as "the upper volume is a separate floating slab" instead of "cantilevered second story," I'll back off the overhang.
+- **Front skyline at z=140 may pop into the camera frustum suddenly** when orbiting. If it does, I'll move it further back or add fog density adjustment.
+- **Performance:** mesh count went up significantly (12 neighbors × 6 meshes each = 72 + 100 skyline buildings + 8 extra palms × 10 fronds + the hollow villa's 6 wall pieces). PS2+ render is still 854×480 so total fragment shading is still manageable, but this is the most mesh-heavy build yet. If mobile starts coughing, the front skyline + back deep-distance villas are the first to cull.
+
 ## b012 — 2026-04-07 — CORS hotfix for R2 audio (b011 was broken — audio output zeros)
 
 After b011 force-pushed, the deploy completed in seconds (the migration worked) but audio playback was completely silent. Console showed:
