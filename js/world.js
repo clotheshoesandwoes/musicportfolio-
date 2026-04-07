@@ -2194,7 +2194,8 @@
     // benches, 2 pergola archways with bougainvillea drape, 6 pathway
     // lanterns, 8 marble urn planters. Density > size. ~85 meshes.
     function addGarden(cx, cz) {
-      const gw = 22, gd = 18;
+      // b034 — gw 22→30, gd 18→24 (footprint expansion)
+      const gw = 30, gd = 24;
       const halfW = gw / 2, halfD = gd / 2;
 
       // ----- 1. Bright lawn plane (the actual grass, finally) -----
@@ -2493,9 +2494,9 @@
     }
     addGarden(-32, 13);
 
-    // ----- East lot: supercar showroom -----
+    // ----- East lot: supercar showroom (b034 — enlarged + relocated NE) -----
     function addCarShowroom(cx, cz) {
-      const sw = 14, sd = 10, sh = 4;
+      const sw = 28, sd = 16, sh = 5;
       // Stage floor (lighter stone slab)
       const floor = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.18, sd), rimMat);
       floor.position.set(cx, 0.09, cz);
@@ -2532,12 +2533,126 @@
       const ledMid = new THREE.Mesh(new THREE.BoxGeometry(sw - 0.6, 0.08, 0.1), ledMat);
       ledMid.position.set(cx, 0.21, cz);
       scene.add(ledMid);
-      // 3 cars in a row, facing forward (toward camera)
-      addCar(cx - 4.2, cz + 0.5, 0xff2050, 0);  // red
-      addCar(cx,        cz + 0.5, 0x2080ff, 0);  // blue
-      addCar(cx + 4.2, cz + 0.5, 0xffaa00, 0);  // orange
+      // b034 — 6 cars in 2 rows of 3, facing forward
+      addCar(cx - 8.5, cz + 3.0, 0xff2050, 0);  // red
+      addCar(cx,        cz + 3.0, 0x2080ff, 0);  // blue
+      addCar(cx + 8.5, cz + 3.0, 0xffaa00, 0);  // orange
+      addCar(cx - 8.5, cz - 2.5, 0x10ff80, 0);  // mint
+      addCar(cx,        cz - 2.5, 0xff10c0, 0);  // hot pink
+      addCar(cx + 8.5, cz - 2.5, 0xffffff, 0);  // pearl white
     }
-    addCarShowroom(32, 13);
+    addCarShowroom(32, -28);
+
+    // -----------------------------------------------------
+    // b034 — LAGOON (west water) + LOOP ROAD + FOREST
+    // West side of property: a private lagoon (water plane reusing the
+    // ocean shader, sat above the beach sand). East side: a forested
+    // grove with a circular driveway loop and a connector approach
+    // road from the villa.
+    // -----------------------------------------------------
+
+    // ----- Lagoon — west side water -----
+    // Centered at x=-78, sized 60×140. Sits at y=0.03, just above the
+    // beach plane (y=0.02) so the sand reads as shoreline up to its edge.
+    const lagoon = new THREE.Mesh(new THREE.PlaneGeometry(60, 140, 12, 24), oceanMat);
+    lagoon.rotation.x = -Math.PI / 2;
+    lagoon.position.set(-78, 0.03, 0);
+    scene.add(lagoon);
+
+    // ----- Loop driveway road (east, threaded through the forest) -----
+    const asphaltMat = makePS2Material({ color: 0x18181f });
+    const stripeMat  = makePS2Material({
+      color:       0xfff080,
+      emissive:    0xfff080,
+      emissiveAmt: 0.6,
+    });
+
+    function addRoadSegment(x, z, len, rotY) {
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.05, len), asphaltMat);
+      seg.position.set(x, 0.05, z);
+      seg.rotation.y = rotY;
+      scene.add(seg);
+      // dashed center stripe (3 small bars)
+      for (let k = -1; k <= 1; k++) {
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.06, len * 0.18), stripeMat);
+        const offset = k * len * 0.30;
+        dash.position.set(
+          x + Math.sin(rotY) * offset,
+          0.07,
+          z + Math.cos(rotY) * offset
+        );
+        dash.rotation.y = rotY;
+        scene.add(dash);
+      }
+    }
+
+    // Loop ring centered at (62, 5), radius 18 — 16 short tangent segments
+    const ringCx = 62, ringCz = 5, ringR = 18;
+    const ringSegments = 16;
+    for (let i = 0; i < ringSegments; i++) {
+      const a = (i / ringSegments) * Math.PI * 2;
+      const sx = ringCx + Math.cos(a) * ringR;
+      const sz = ringCz + Math.sin(a) * ringR;
+      addRoadSegment(sx, sz, 7.5, a + Math.PI / 2);
+    }
+
+    // Approach road from the villa front entry to the loop's west edge
+    addRoadSegment(28, 5, 16, Math.PI / 2);
+    addRoadSegment(40, 5, 8,  Math.PI / 2);
+
+    // Garage spur — short connector from the showroom front to the loop
+    addRoadSegment(40, -18, 14, 0);
+
+    // ----- Forest — pine cones + extra palms east + north -----
+    function addPineTree(x, z, h) {
+      const trunkH = h * 0.32;
+      const t = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.34, trunkH, 5),
+        trunkMat
+      );
+      t.position.set(x, trunkH / 2, z);
+      scene.add(t);
+      // 3 stacked tapering cones (icosa cones via CylinderGeometry top=0)
+      const cones = 3;
+      for (let i = 0; i < cones; i++) {
+        const baseR = 1.6 - i * 0.42;
+        const ch    = h * 0.34;
+        const cy    = trunkH + i * (h * 0.22) + ch / 2;
+        const cone = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0, baseR, ch, 6),
+          shrubMat
+        );
+        cone.position.set(x, cy, z);
+        scene.add(cone);
+      }
+    }
+
+    // East forest — wraps the loop, avoids garage at (32, -28) and the
+    // showroom interior. Loop interior stays clear (drivable).
+    const forestPines = [
+      // Outer ring east of the loop
+      [86, -32, 5.2], [90,  -8, 6.0], [92,  16, 5.0], [88, 36, 5.6], [80, 50, 5.0],
+      [94, -22, 4.6], [96,   4, 5.4], [98,  24, 4.4],
+      // Northeast band (between garage and back edge)
+      [56, -50, 5.4], [70, -54, 5.0], [78, -46, 5.6], [44, -52, 4.8],
+      // Far north
+      [20, -62, 5.0], [  2, -68, 5.4], [-18, -64, 5.2], [-36, -60, 4.8],
+      // Southeast forest (in front, far +z)
+      [50,  72, 5.2], [66,  68, 5.6], [80,  60, 5.0], [38,  78, 4.8],
+      [22,  82, 5.4], [  4,  78, 5.0], [-18,  74, 5.2], [-36,  72, 4.8],
+    ];
+    forestPines.forEach(([x, z, h]) => addPineTree(x, z, h));
+
+    // Mix in tall palms for variety
+    addPalm( 74, -16, 6.2);
+    addPalm( 82,   8, 5.8);
+    addPalm( 76,  30, 6.0);
+    addPalm( 50, -42, 5.6);
+    addPalm( 10, -58, 6.0);
+    addPalm(-26, -56, 5.4);
+    addPalm( 56,  60, 5.8);
+    addPalm( 30,  74, 6.2);
+    addPalm(-10,  70, 5.6);
 
     // b029 — Distant Miami skyline REMOVED. The new WORLD vibe is private
     // beach island, no inland city visible on the horizon. Just open ocean

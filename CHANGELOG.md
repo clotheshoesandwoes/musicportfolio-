@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## b034 — 2026-04-07 — Map reshape: lagoon, forest, loop road, bigger garden + garage
+
+User pinned three annotated screenshots: west = water, east + south = forest, loop driveway threading through forest in front of the house, and the garden + garage need to be bigger.
+
+### Changes
+- **Lagoon (west water)** — new plane reusing `oceanMat` at `(-78, 0.03, 0)`, 60×140. Sits just above the beach sand (y=0.02) so the existing sand reads as shoreline up to its edge. No new shader, no fog mismatch.
+- **Forest** — new `addPineTree(x, z, h)` helper: stone-style trunk + 3 stacked tapering cones using existing `trunkMat` / `shrubMat`. 24 pines + 9 extra tall palms scattered east of the loop, north of the garage, and along the far southern edge. Loop interior stays clear (drivable).
+- **Loop driveway** — new `asphaltMat` + `stripeMat`, `addRoadSegment(x, z, len, rotY)` helper that lays a 5-wide asphalt slab plus 3 dashed center stripes. 16-segment ring at `(62, 5)` radius 18, plus a villa→loop approach (2 segments at z=5) and a garage spur at z=-18.
+- **Garden expansion** — `addGarden` `gw 22→30, gd 18→24`. Hedges, paths, corner topiaries auto-scale via `halfW`/`halfD`.
+- **Garage** — `addCarShowroom` enlarged: `sw 14→28`, `sd 10→16`, `sh 4→5`. Cars `3 → 6` (2 rows of 3, new mint/pink/pearl colors next to the existing red/blue/orange). Relocated from `(32, 13)` to `(32, -28)` so it sits NE of the villa as drawn.
+
+### Files modified
+- [js/world.js](js/world.js) — `addGarden` size bump, `addCarShowroom` size + cars + position, new lagoon/road/forest block after the showroom call
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b033 → b034`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b033 — 2026-04-07 — Raise interior camera heights + 24-bit depth texture + rug y-offset
 
 User: "billiard view is terrible cuz im midget level so i cant see anything in the room same for bedroom same for living. constant z fighting when zooming or moving camera around is it cuz everything is on the same plane axis?"
