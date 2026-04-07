@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## b017 — 2026-04-07 — Hotfix: tower block referenced windowMat before declaration
+
+b016 deployed but the villa view crashed on init with:
+```
+Uncaught (in promise) ReferenceError: Cannot access 'windowMat' before initialization
+    at Object.init (world.js:520:9)
+```
+
+The cylindrical tower block (added in b016) referenced `windowMat` for its glass band, but I had placed the tower code BEFORE the `const windowMat = makePS2Material(...)` declaration. ES `const` has a temporal dead zone, so accessing it before the declaration line throws.
+
+Fix: moved the tower block to immediately after `windowMat` is declared (still in the same villa section, just a few lines later in source order). No logic change.
+
+### Files modified
+- [js/world.js](js/world.js) — moved cylindrical tower block past `windowMat` declaration
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b016 → b017`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Lesson
+I should have run the site locally (or at least mentally traced the declaration order) before pushing b016. node --check passes the file syntactically but doesn't catch temporal-dead-zone runtime errors. Going forward, when I add a new block that references existing materials, I'll grep for the `const` declaration line and verify the new code is below it.
+
 ## b016 — 2026-04-07 — Villa architecture rework (asymmetric stack + cylindrical tower + 7 columns + rooftop terrace), pool jacuzzi, hills + houses on hills, Lambo rotation flipped
 
 User feedback after b015: Lambo rotated wrong way, still want a shrub cluster around it, the city background is flat (no grass/elevation/houses on hills), and — the recurring complaint — "the house is just a square right now, want crazy cool miami architecture." Also wanted a cool pool shape. This build hits all of it.

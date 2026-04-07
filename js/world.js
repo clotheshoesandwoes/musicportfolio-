@@ -496,9 +496,17 @@
     cove.position.set(upperX, lowerH + 0.28, coveZ - 0.3);
     scene.add(cove);
 
+    // Glowing glass — single warm material reused on all openings
+    const windowMat = makePS2Material({
+      color:       0xffd090,
+      emissive:    0xffc880,
+      emissiveAmt: 2.0,
+    });
+
     // -------------------------------------------------------------------
     // Cylindrical corner tower (b016) — round 2-story rotunda at the
-    // front-east corner of the lower volume. Breaks all the right angles.
+    // west front corner of the lower volume. Breaks all the right angles.
+    // (must be declared AFTER windowMat — b016a hotfix)
     // -------------------------------------------------------------------
     {
       const towerR = 3.0;
@@ -529,13 +537,6 @@
       towerCap.position.set(towerX, towerH + 0.09, towerZ);
       scene.add(towerCap);
     }
-
-    // Glowing glass — single warm material reused on all openings
-    const windowMat = makePS2Material({
-      color:       0xffd090,
-      emissive:    0xffc880,
-      emissiveAmt: 2.0,
-    });
 
     // ---- Floor-to-ceiling glass on the front of the lower volume ----
     // b016 — 6 panes filling the 6 gaps between the 7 columns
