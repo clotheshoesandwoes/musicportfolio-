@@ -35,7 +35,12 @@ const mobileProgress = document.getElementById('mobileProgress');
 function loadTrack(index) {
   state.currentTrack = index;
   const track = tracks[index];
-  playerAudio.src = 'audio-mp3/' + encodeURIComponent(track.file);
+  // b011 — audio served from Cloudflare R2 (config.audioBase). Falls back
+  // to local audio-mp3/ folder if config.json hasn't loaded yet.
+  const base = (typeof siteConfig !== 'undefined' && siteConfig && siteConfig.audioBase)
+    ? siteConfig.audioBase
+    : 'audio-mp3/';
+  playerAudio.src = base + encodeURIComponent(track.file);
   playerTitle.textContent = track.title;
   playerArt.style.background = getGradient(index);
   document.title = track.title + ' | Kani';

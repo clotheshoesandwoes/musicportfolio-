@@ -251,7 +251,10 @@ function escapeHtml(str) {
 function loadTrack(index) {
     currentIndex = index;
     const track = tracks[index];
-    audio.src = "audio-mp3/" + encodeURIComponent(track.file);
+    // b011 — audio served from Cloudflare R2 (admin page doesn't load config.json,
+    // so the URL is hardcoded here; if you change buckets, update both this line
+    // and config.json's audioBase field)
+    audio.src = "https://pub-5556ef4db74d499ba3f535afccf8c7be.r2.dev/" + encodeURIComponent(track.file);
     playerTitle.textContent = track.title;
     playerThumb.style.background = getGradient(index);
     playerBar.classList.add("visible");

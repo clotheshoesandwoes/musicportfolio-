@@ -12,7 +12,21 @@
       "Bash(git pull:*)",
       "Bash(node -e ':*)",
       "Bash(node --check js/world.js)",
-      "Bash(node --check js/helpers.js)"
+      "Bash(node --check js/helpers.js)",
+      "Bash(git rev-list:*)",
+      "Bash(git cat-file:*)",
+      "Read(//c/Users/B4TTL/musicportfolio/**)",
+      "Bash(git count-objects:*)",
+      "Bash(wrangler --version)",
+      "Bash(git filter-repo:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(pip --version)",
+      "Bash(pip install:*)",
+      "Bash(python -m pip show git-filter-repo)",
+      "Bash(python -c \"import shutil; print\\(shutil.which\\('git-filter-repo'\\)\\)\")",
+      "Bash('/c/Users/B4TTL/AppData/Local/Programs/Python/Python313/Scripts/git-filter-repo.EXE' --version)",
+      "Bash(npm install:*)",
+      "Bash(wrangler r2:*)"
     ]
   }
 }
