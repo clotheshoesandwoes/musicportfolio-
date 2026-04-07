@@ -1,5 +1,66 @@
 # CHANGELOG
 
+## b009 — 2026-04-06 — Villa = default view, dusk lighting, layout restructured (beach behind house), beach chairs
+
+User feedback after b008: scene felt like deep night, wanted dusk; default view should be Villa not Neural; the camera angle felt like "street view" — wanted the beach to be BEHIND the house in the camera's view, not on the side. Also wanted beach chairs + umbrellas. This is the layout option **B** from the previous turn — full property restructure along the Z axis.
+
+### Default view = Villa
+- [js/app.js:304](js/app.js#L304) — `switchView('neural')` → `switchView('villa')`
+- [index.html](index.html) — moved `.active` class from the Neural tab to the Villa tab in both desktop and mobile tab bars
+
+### Dusk lighting (less deep night, more magic hour)
+- Sky `topColor` `#1a1e4a` → `#2a2060` (warmer purple)
+- Sky `midColor` `#6a1f95` → `#8a2585` (more pink)
+- Sky `bottomColor` `#c8358f` → `#ff4090` (vibrant pink horizon)
+- Shader ambient `(0.22, 0.20, 0.36)` → `(0.36, 0.30, 0.44)` — much brighter floor
+- Scene fog `(0x3a1a55, 0.014)` → `(0x55265e, 0.009)` — lighter color, less aggressive density
+- Pool / ocean / PS2 shader fog uniforms updated to match
+- Renderer clear color `#140828` → `#251040`
+
+### Property layout restructure (the big one)
+Old layout had pool at `(0,0,0)`, villa at `(12,0,0)`, beach at `(-38,0,0)` — house was to the right of the pool, beach to the left, all spread along the X axis. From the default camera angle this felt like "looking down the street" — beach off to one side, house off to the other.
+
+New layout puts everything along the Z axis so depth tells the story:
+- **Pool** moved from `(0,0,0)` to `(0,0,4)` — closer to camera, foreground
+- **Villa center** `villaCx 12 → 0`, `villaCz 0 → -10` — house now directly behind the pool, mid-ground
+- **Garage** auto-follows via `garageCx = villaCx + lowerW/2 + ...` (now at `~11.45`, `z=-10`); garage door + roof now use `villaCz` instead of hardcoded `0`
+- **Yellow Lambo** position now derived from `garageCx` + `villaCz + garageD/2 + 2.5`
+- **Pink Lambo** moved to `(-7, 0.55, 5)` — left of the new pool position
+- **Lagoon** moved from `(-7, ?, -2)` to `(-8, ?, 0)` — between pool and house, on the left side
+- **Beach** moved from `(-38.5, 0.04, 0)` (left of property) to `(0, 0.04, -30)` (BEHIND the house). Dimensions `43×60` → `50×30`. Background of the camera's default view.
+- **Side ocean removed** — was on the left, no longer needed
+- **Back ocean** pushed deeper: `(0,-0.02,-50)` → `(0,-0.02,-75)`, width `220` → `260`
+- **Lighting positions updated** — `lampPos` `(7.5, 5, 4)` → `(6, 5, -1)` (between pool and house); `windowPos` `(11.5, 3.5, 0)` → `(0, 3.5, -10)` (inside the new house position); `poolPos` `(0, 0.4, 0)` → `(0, 0.4, 4)` (matches new pool); `windowRange` `14` → `16`
+- **Bushes** all repositioned for the new layout — 4 around the front patio (in front of the new pool, at z=10-11), 4 around the new garage area (right side, z=-2 to -8)
+- **Path lights** all repositioned — 4 around the pool deck shifted to z=4 ± 3.5; 4 along the driveway between pool and garage; 3 along the left side of the house; 2 new "beach approach" lights at `(±12, -16)` lighting the path from the patio to the beach
+- **Neighbor villas** moved from all-on-the-right to flanking the property — 2 on the left at z=-8 / 5, 2 on the right at the same z, 1 further back-left at z=-25
+
+### Beach chairs + umbrellas (NEW)
+- New `addBeachChair(x, z, rotY)` helper — Group of: seat (boxgeometry tilted-back) + 4 dark wooden legs
+- New `addBeachUmbrella(x, z, colorHex)` helper — pole (cylinder) + crossed canopy boxes (octagonal-ish), slightly emissive so the canopy reads against the dusk sky
+- 2 lounger sets (umbrella + 2 chairs each) at `(-7, -25)` and `(7, -25)` with pink and orange umbrellas
+- 2 solo chairs further back on the sand at `(±2, -34)`
+
+### Camera recentered for the new layout
+- `CAM_CENTER_X` `4` → `0` (looks straight down the property axis now)
+- `CAM_CENTER_Z` `0` → `-3` (orbits around the gap between pool and house)
+- `CAM_RADIUS` `22` → `24` (slightly more breathing room)
+- `camera.position.y` `7 + pitch*12` → `8 + pitch*13` (slightly higher base)
+
+### Files modified
+- [js/world.js](js/world.js) — fog/sky/ambient/clear color, lampPos/windowPos/poolPos, pool & rim positions, villaCx/villaCz, garage z hardcodes → villaCz, car positions, lagoon position, bushes, path lights, beach + back ocean, neighbor villas, NEW beach chair + umbrella helpers and placements, camera constants
+- [js/app.js](js/app.js) — boot calls `switchView('villa')` instead of neural
+- [index.html](index.html) — `active` class moved from Neural tab to Villa tab (desktop + mobile)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b008` → `b009`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### What's NOT in this build
+- Penthouse is **still in** — kept it because the villa is going to be fully redesigned in `b011` from your reference photos anyway. If you want it gone now, say so and I'll add a 2-line removal in `b010`.
+- The interactive click → song card system (raycaster, hover glow, `makeInteractive()`) — that's `b010`, on deck after this lands and you've eyeballed the new layout.
+
+---
+
 ## b008 — 2026-04-06 — Bigger millionaire mansion, beach + side ocean, neighbor villas
 
 User feedback after b007: villa felt like a "regular suburb home", wanted "Miami millionaire home from the movies"; lots of unrendered background void around the property; wanted a beach on one side and other distant homes for context.

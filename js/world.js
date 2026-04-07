@@ -48,10 +48,10 @@
     renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(1);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
-    renderer.setClearColor(0x140828, 1);
+    renderer.setClearColor(0x251040, 1);
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x3a1a55, 0.014);
+    scene.fog = new THREE.FogExp2(0x55265e, 0.009);
 
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 250);
     camera.position.set(3, 4.5, 14);
@@ -64,9 +64,9 @@
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        topColor:    { value: new THREE.Color(0x1a1e4a) },
-        midColor:    { value: new THREE.Color(0x6a1f95) },
-        bottomColor: { value: new THREE.Color(0xc8358f) },
+        topColor:    { value: new THREE.Color(0x2a2060) },
+        midColor:    { value: new THREE.Color(0x8a2585) },
+        bottomColor: { value: new THREE.Color(0xff4090) },
         moonDir:     { value: new THREE.Vector3(0.35, 0.35, -0.75).normalize() },
       },
       vertexShader: `
@@ -120,15 +120,15 @@
     // -----------------------------------------------------
     // Light constants — passed manually as shader uniforms
     // -----------------------------------------------------
-    const lampPos     = new THREE.Vector3(7.5, 5.0, 4.0);
+    const lampPos     = new THREE.Vector3(6.0, 5.0, -1.0);  // between pool and house
     const lampColor   = new THREE.Color(0xff8c42);  // sodium orange
     const lampRange   = 28;
-    const poolPos     = new THREE.Vector3(0, 0.4, 0);
+    const poolPos     = new THREE.Vector3(0, 0.4, 4);  // pool moved forward
     const poolColor   = new THREE.Color(0x2af0d0);  // turquoise
     const poolRange   = 14;
-    const windowPos   = new THREE.Vector3(11.5, 3.5, 0);
+    const windowPos   = new THREE.Vector3(0, 3.5, -10);  // inside the new house
     const windowColor = new THREE.Color(0xffe6c8);  // warm interior, paler
-    const windowRange = 14;
+    const windowRange = 16;
 
     // -----------------------------------------------------
     // PS2 material factory — vertex jitter + 3-light shader
@@ -148,8 +148,8 @@
           uWindowPos:    { value: windowPos },
           uWindowColor:  { value: windowColor },
           uWindowRange:  { value: windowRange },
-          uFogColor:     { value: new THREE.Color(0x3a1a55) },
-          uFogDensity:   { value: 0.014 },
+          uFogColor:     { value: new THREE.Color(0x55265e) },
+          uFogDensity:   { value: 0.009 },
         },
         vertexShader: `
           varying vec3 vNormal;
@@ -198,7 +198,7 @@
           }
 
           void main() {
-            vec3 ambient = vec3(0.22, 0.20, 0.36);
+            vec3 ambient = vec3(0.36, 0.30, 0.44);
             vec3 col = uColor * ambient;
             col += pointLight(uLampPos,   uLampColor,   uLampRange,   uColor);
             col += pointLight(uPoolPos,   uPoolColor,   uPoolRange,   uColor);
@@ -231,8 +231,8 @@
         uTime:        { value: 0 },
         uBaseColor:   { value: new THREE.Color(0x0fb5b5) },
         uBrightColor: { value: new THREE.Color(0x8effe8) },
-        uFogColor:    { value: new THREE.Color(0x3a1a55) },
-        uFogDensity:  { value: 0.014 },
+        uFogColor:    { value: new THREE.Color(0x55265e) },
+        uFogDensity:  { value: 0.009 },
       },
       vertexShader: `
         uniform float uTime;
@@ -285,13 +285,13 @@
     timeUniforms.push(poolMat.uniforms.uTime);
 
     const pool = new THREE.Mesh(new THREE.BoxGeometry(8, 0.18, 5, 12, 1, 8), poolMat);
-    pool.position.set(0, 0.09, 0);
+    pool.position.set(0, 0.09, 4);
     scene.add(pool);
 
     // Pool concrete rim
     const rimMat = makePS2Material({ color: 0x4a4555 });
     const rim = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.2, 5.6), rimMat);
-    rim.position.set(0, 0.05, 0);
+    rim.position.set(0, 0.05, 4);
     scene.add(rim);
 
     // -----------------------------------------------------
@@ -303,8 +303,8 @@
     const balconyMat = makePS2Material({ color: 0x6a6676 });
     const railMat    = makePS2Material({ color: 0x2a2632 });
 
-    const villaCx = 12;
-    const villaCz = 0;
+    const villaCx = 0;
+    const villaCz = -10;
 
     // Lower main volume — bigger and more imposing
     const lowerW = 17, lowerH = 4.0, lowerD = 10;
@@ -457,7 +457,7 @@
     const garageCx = villaCx + lowerW / 2 + garageW / 2 - 0.05;
     {
       const garage = new THREE.Mesh(new THREE.BoxGeometry(garageW, garageH, garageD), villaMat);
-      garage.position.set(garageCx, garageH / 2, 0);
+      garage.position.set(garageCx, garageH / 2, villaCz);
       scene.add(garage);
 
       // Garage roof slab (slight overhang)
@@ -465,7 +465,7 @@
         new THREE.BoxGeometry(garageW + 0.8, 0.3, garageD + 0.8),
         roofMat
       );
-      garageRoof.position.set(garageCx, garageH + 0.15, 0);
+      garageRoof.position.set(garageCx, garageH + 0.15, villaCz);
       scene.add(garageRoof);
 
       // Glowing garage door on the +Z face (camera side)
@@ -473,7 +473,7 @@
         new THREE.BoxGeometry(garageW - 0.7, garageH - 0.6, 0.12),
         windowMat
       );
-      garageDoor.position.set(garageCx, (garageH - 0.6) / 2 + 0.05, garageD / 2 + 0.06);
+      garageDoor.position.set(garageCx, (garageH - 0.6) / 2 + 0.05, villaCz + garageD / 2 + 0.06);
       scene.add(garageDoor);
     }
 
@@ -542,17 +542,17 @@
       });
     }
 
-    // Yellow Lambo parked in front of the (bigger) garage door
-    addCar(garageCx, 7.0, 0xf5d518);
-    // Pink Lambo parked next to the pool on the front-left
-    addCar(-7.0, 4.0, 0xff2d95);
+    // Yellow Lambo parked in front of the garage door (z just past the door)
+    addCar(garageCx, villaCz + garageD / 2 + 2.5, 0xf5d518);
+    // Pink Lambo parked next to the new pool on the front-left
+    addCar(-7.0, 5.0, 0xff2d95);
 
     // -----------------------------------------------------
     // Lagoon — small secondary water with sand, island, mini palm
     // -----------------------------------------------------
     {
-      const lagoonCx = -7;
-      const lagoonCz = -2;
+      const lagoonCx = -8;
+      const lagoonCz = 0;
 
       // Sand ring (warm tan, slightly raised)
       const sandMat = makePS2Material({ color: 0xc0a878 });
@@ -622,14 +622,16 @@
       b.position.set(x, size * 0.35, z);
       scene.add(b);
     }
-    addBush(-5,  -7.0, 0.9);
-    addBush(-3,  -8.0, 1.1);
-    addBush(30,  -6.0, 1.0);
-    addBush(32,  -7.0, 0.8);
-    addBush( 2,   7.0, 0.85);
-    addBush(-1,   7.6, 0.7);
-    addBush(33,   7.0, 0.9);
-    addBush(36,   3.0, 0.85);
+    // Around the front patio (between pool and camera)
+    addBush(-6,  10.0, 0.9);
+    addBush(-3,  11.0, 1.1);
+    addBush( 4,  10.5, 0.85);
+    addBush( 7,  11.0, 0.7);
+    // Right side, around the new garage area
+    addBush(15,  -2.0, 1.0);
+    addBush(17,  -8.0, 0.8);
+    addBush(18,   3.0, 0.9);
+    addBush(20,  -5.0, 0.85);
 
     // -----------------------------------------------------
     // Colored path lights — small accent bulbs + ground spot puddle
@@ -685,23 +687,23 @@
       scene.add(spot);
     }
 
-    // Around the pool deck
-    addPathLight(-5,   3.5, 0x00d4ff); // cyan
-    addPathLight(-5,  -3.5, 0xff2d95); // magenta
-    addPathLight( 5,   3.5, 0xa44fff); // purple
-    addPathLight( 5,  -3.5, 0xffaa55); // warm
-    // Driveway / garage path (moved past the bigger garage)
-    addPathLight(28,   5.5, 0x00d4ff);
-    addPathLight(30,   7.5, 0xa44fff);
-    addPathLight(34,   6.0, 0xff2d95);
-    addPathLight(35,   0.0, 0xffaa55);
-    // Property entry side
+    // Around the pool deck (pool is now at z=4)
+    addPathLight(-5,   7.5, 0x00d4ff); // cyan, front-left of pool
+    addPathLight(-5,   0.5, 0xff2d95); // magenta, back-left of pool
+    addPathLight( 5,   7.5, 0xa44fff); // purple, front-right of pool
+    addPathLight( 5,   0.5, 0xffaa55); // warm, back-right of pool
+    // Driveway between the pool area and the new garage
+    addPathLight( 8,  -3.0, 0x00d4ff);
+    addPathLight(15,  -3.0, 0xa44fff);
+    addPathLight( 8,  -8.0, 0xff2d95);
+    addPathLight(16,  -8.0, 0xffaa55);
+    // Left side of property (along the side of the house)
     addPathLight(-12,  5.0, 0x00d4ff);
     addPathLight(-12,  0.0, 0xa44fff);
-    addPathLight(-12, -5.0, 0xff2d95);
-    // Beach approach (where the patio meets the sand)
-    addPathLight(-15,  8.0, 0x00d4ff);
-    addPathLight(-25,  0.0, 0xa44fff);
+    addPathLight(-12, -8.0, 0xff2d95);
+    // Beach approach — path that leads from the side of the house to the beach
+    addPathLight(-12, -16.0, 0x00d4ff);
+    addPathLight( 12, -16.0, 0xa44fff);
 
     // -----------------------------------------------------
     // Ocean — far plane beyond the property
@@ -709,10 +711,10 @@
     const oceanMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime:       { value: 0 },
-        uColor:      { value: new THREE.Color(0x14082e) },
-        uHighlight:  { value: new THREE.Color(0x5a2080) },
-        uFogColor:   { value: new THREE.Color(0x3a1a55) },
-        uFogDensity: { value: 0.014 },
+        uColor:      { value: new THREE.Color(0x1a0a3e) },
+        uHighlight:  { value: new THREE.Color(0x7a2895) },
+        uFogColor:   { value: new THREE.Color(0x55265e) },
+        uFogDensity: { value: 0.009 },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -751,28 +753,88 @@
     materials.push(oceanMat);
     timeUniforms.push(oceanMat.uniforms.uTime);
 
-    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(220, 70, 40, 12), oceanMat);
+    // Back ocean — pushed further back (was z=-50, beach is now at z=-30)
+    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(260, 70, 40, 12), oceanMat);
     ocean.rotation.x = -Math.PI / 2;
-    ocean.position.set(0, -0.02, -50);
+    ocean.position.set(0, -0.02, -75);
     scene.add(ocean);
 
-    // Side ocean — extends the ocean to the LEFT of the property
-    // (reuses the same shader/material as the back ocean)
-    const sideOcean = new THREE.Mesh(new THREE.PlaneGeometry(60, 90, 30, 18), oceanMat);
-    sideOcean.rotation.x = -Math.PI / 2;
-    sideOcean.position.set(-90, -0.05, 0);
-    scene.add(sideOcean);
-
     // -----------------------------------------------------
-    // Beach — sand stretching from property's left edge to the side ocean
+    // Beach — sand BEHIND the house, between house back and ocean
     // -----------------------------------------------------
+    const beachMat = makePS2Material({ color: 0xc0a878 });
+    const beachCx = 0;
+    const beachCz = -30;
+    const beachW  = 50;
+    const beachD  = 30;
     {
-      const beachMat = makePS2Material({ color: 0xc0a878 });
-      const beach = new THREE.Mesh(new THREE.PlaneGeometry(43, 60, 16, 16), beachMat);
+      const beach = new THREE.Mesh(new THREE.PlaneGeometry(beachW, beachD, 20, 12), beachMat);
       beach.rotation.x = -Math.PI / 2;
-      beach.position.set(-38.5, 0.04, 0);
+      beach.position.set(beachCx, 0.04, beachCz);
       scene.add(beach);
     }
+
+    // -----------------------------------------------------
+    // Beach chairs + umbrellas on the sand
+    // -----------------------------------------------------
+    const chairMat = makePS2Material({ color: 0xe0d8b8 });
+    const chairLegMat = makePS2Material({ color: 0x4a3a2a });
+
+    function addBeachChair(x, z, rotY) {
+      const g = new THREE.Group();
+      // Seat
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 1.8), chairMat);
+      seat.position.y = 0.35;
+      g.add(seat);
+      // Tilted backrest
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.9), chairMat);
+      back.position.set(0, 0.62, 0.75);
+      back.rotation.x = -0.45;
+      g.add(back);
+      // 4 legs
+      const legPositions = [[-0.3, -0.85], [0.3, -0.85], [-0.3, 0.85], [0.3, 0.85]];
+      legPositions.forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.32, 0.06), chairLegMat);
+        leg.position.set(lx, 0.16, lz);
+        g.add(leg);
+      });
+      g.position.set(x, 0.05, z);
+      g.rotation.y = rotY;
+      scene.add(g);
+    }
+
+    function addBeachUmbrella(x, z, colorHex) {
+      const poleMat = makePS2Material({ color: 0x1a1a1a });
+      const canopyMat = makePS2Material({
+        color:       colorHex,
+        emissive:    colorHex,
+        emissiveAmt: 0.4,
+      });
+      // Pole
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 5), poleMat);
+      pole.position.set(x, 1.25, z);
+      scene.add(pole);
+      // Canopy — wide flat octagonal-ish shape via two crossed boxes
+      const canopy1 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.14, 1.4), canopyMat);
+      canopy1.position.set(x, 2.4, z);
+      scene.add(canopy1);
+      const canopy2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.14, 2.4), canopyMat);
+      canopy2.position.set(x, 2.42, z);
+      scene.add(canopy2);
+    }
+
+    // 2 lounger setups + a couple of solo chairs
+    addBeachUmbrella(-7, -25, 0xff5fa0);
+    addBeachChair  (-8, -27, 0.1);
+    addBeachChair  (-6, -27, -0.1);
+
+    addBeachUmbrella( 7, -25, 0xffa040);
+    addBeachChair  ( 8, -27, 0.1);
+    addBeachChair  ( 6, -27, -0.1);
+
+    // Couple of solo chairs further out
+    addBeachChair  (-2, -34,  0.0);
+    addBeachChair  ( 2, -34,  0.0);
 
     // -----------------------------------------------------
     // Neighbor villas — distant homes on the right side
@@ -812,12 +874,12 @@
       scene.add(nuglow);
     }
 
-    // 5 neighbor villas spread across the right side at varying scales
-    addNeighborVilla(40,   8, 1.0);
-    addNeighborVilla(48,  -2, 1.1);
-    addNeighborVilla(46, -14, 0.9);
-    addNeighborVilla(58,   5, 1.2);
-    addNeighborVilla(55, -18, 1.0);
+    // 5 neighbor villas flanking the property along its sides
+    addNeighborVilla(-28,  -8, 1.0);
+    addNeighborVilla( 28,  -8, 1.1);
+    addNeighborVilla(-32,   5, 0.9);
+    addNeighborVilla( 32,   5, 1.2);
+    addNeighborVilla(-30, -25, 1.0);
 
     // -----------------------------------------------------
     // Distant skyline dots (neon lights on the horizon)
@@ -928,10 +990,11 @@
     mouseY = ((t.clientY - r.top) / r.height) * 2 - 1;
   }
 
-  // Orbit around the visual center between pool and villa
-  const CAM_CENTER_X = 4;
-  const CAM_CENTER_Z = 0;
-  const CAM_RADIUS = 22;
+  // Orbit around the visual center of the new layout
+  // (pool at z=4, villa at z=-10, beach at z=-30 — center between pool and villa)
+  const CAM_CENTER_X = 0;
+  const CAM_CENTER_Z = -3;
+  const CAM_RADIUS = 24;
 
   function animate(now) {
     if (destroyed || !renderer) return;
@@ -950,7 +1013,7 @@
 
     camera.position.x = CAM_CENTER_X + Math.sin(yaw) * CAM_RADIUS;
     camera.position.z = CAM_CENTER_Z + Math.cos(yaw) * CAM_RADIUS;
-    camera.position.y = 7.0 + pitch * 12;
+    camera.position.y = 8.0 + pitch * 13;
     camera.lookAt(CAM_CENTER_X, 2.8 + pitch * 3, CAM_CENTER_Z);
 
     // Pass 1 — render scene to low-res target
