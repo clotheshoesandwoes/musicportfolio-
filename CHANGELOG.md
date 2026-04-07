@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## b023 — 2026-04-07 — Flanking lots: garden + supercar showroom, pool palm bug fix
+
+User feedback after b022 deploy: 1) "two palm trees in the pool lol" — long-standing bug. 2) "two other less impressive mansions should be where the two circles exist. or maybe a huge garden on 1 side and something rich and cool on the other." Picked option B (garden + showroom — more variety than yet more mansions next to the existing cross-street row).
+
+### Bug fix: 4 misplaced palms
+The 4 "courtyard" palms in [js/world.js:840-843](js/world.js#L840) were placed pre-b013 when the villa was much smaller and there was no pool yet. After villa expansion (b013) + pool expansion (b014/b016), they ended up in invalid spots:
+- `(-9, 4)` — INSIDE the pool (pool spans `x ∈ [-11, 11], z ∈ [2, 8]`)
+- `(4, 5.5)` — INSIDE the pool
+- `(-7, -5)` — INSIDE the villa lower volume (`z ∈ [-19, -1]`)
+- `(7.5, -4.5)` — INSIDE the villa lower volume
+
+Relocated to frame the front entry approach, in 2 pairs:
+- Close pair (z=16): `(-14, 16)` `(14, 16)`
+- Far pair (z=24): `(-12, 24)` `(12, 24)`
+
+### West lot: formal garden at `(-32, 13)`
+14×16 footprint. Hedge perimeter on all 4 sides (`shrubMat`, 0.7 tall). Light stone cross paths down the middle (`rimMat`). Central fountain — stone basin + cyan water disc (reuses `poolMat`'s shader) + spout pillar with flat cap. 4 topiary cones in the corners (`topiaryMat` from b019). 8 small flower-bed boxes alternating warm/cyan/warm-emissive around the fountain in an ellipse.
+
+### East lot: supercar showroom at `(32, 13)`
+14×10 footprint, 4m tall. Stage floor (`rimMat` slab), white plaster roof + 4 corner posts (`villaMat`). Glass back wall + glass left/right walls (`windowMat`) — front face open toward camera so the cars are visible. Cyan LED accent strip along the front edge + a centerline LED strip on the floor (`ledMat`). 3 cars in a row using the existing `addCar` helper: red, blue, orange.
+
+### Files modified
+- [js/world.js](js/world.js) — palm relocation (4 lines), `addGarden` + `addCarShowroom` helpers + their call sites (~115 lines added)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b022 → b023`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Deferred
+- Hills are still reading dark/fogged after b021. User said "tinker and bug fix later." Will revisit after more scenery is in place — likely needs an emissive boost on the hill mats and/or a hint of rim lighting against the sky, since the fundamental issue is the heavy `FogExp2` killing all color contrast at z=-85 to -120.
+
 ## b022 — 2026-04-07 — Beach + grounds scenery batch (yachts, pier, tiki bar, fire pit, BBQ, statues)
 
 User requested two scenery zones after the b021 hill fix: beach/ocean stuff and villa grounds stuff. Seven new prop types added in one build.

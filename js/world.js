@@ -837,10 +837,15 @@
       }
     }
 
-    addPalm(-9.0,  4.0, 6.8);
-    addPalm(-7.0, -5.0, 6.0);
-    addPalm( 4.0,  5.5, 5.4);
-    addPalm( 7.5, -4.5, 6.2);
+    // b023 — pool/villa palms relocated. Original positions
+    // (-9, 4) and (4, 5.5) were INSIDE the pool (x ∈ [-11,11], z ∈ [2,8]),
+    // and (-7, -5) and (7.5, -4.5) were INSIDE the villa lower volume
+    // (z ∈ [-19,-1]). Pool grew in b014 + villa grew in b013 and these
+    // never got repositioned. Now framing the front entry approach.
+    addPalm(-14.0, 16.0, 6.8);
+    addPalm(-12.0, 24.0, 6.0);
+    addPalm( 14.0, 16.0, 5.4);
+    addPalm( 12.0, 24.0, 6.2);
 
     // -----------------------------------------------------
     // Deck lanterns — small warm-glow lanterns on the pool deck
@@ -1835,6 +1840,121 @@
     addStatue( 26, 22, 'obelisk');
     addStatue(-28, 24, 'sphere');
     addStatue(  0, 26, 'abstract');
+
+    // -----------------------------------------------------
+    // b023 — Two flanking lots either side of the villa
+    // West: formal garden (hedges + fountain + topiary + paths)
+    // East: glass-walled supercar showroom with 3 cars on display
+    // -----------------------------------------------------
+
+    // ----- West lot: formal garden -----
+    function addGarden(cx, cz) {
+      const gw = 14, gd = 16;
+      const hedgeH = 0.7, hedgeT = 0.5;
+      // Hedge perimeter (4 sides)
+      const hF = new THREE.Mesh(new THREE.BoxGeometry(gw, hedgeH, hedgeT), shrubMat);
+      hF.position.set(cx, hedgeH / 2, cz + gd / 2);
+      scene.add(hF);
+      const hB = new THREE.Mesh(new THREE.BoxGeometry(gw, hedgeH, hedgeT), shrubMat);
+      hB.position.set(cx, hedgeH / 2, cz - gd / 2);
+      scene.add(hB);
+      const hL = new THREE.Mesh(new THREE.BoxGeometry(hedgeT, hedgeH, gd), shrubMat);
+      hL.position.set(cx - gw / 2, hedgeH / 2, cz);
+      scene.add(hL);
+      const hR = new THREE.Mesh(new THREE.BoxGeometry(hedgeT, hedgeH, gd), shrubMat);
+      hR.position.set(cx + gw / 2, hedgeH / 2, cz);
+      scene.add(hR);
+
+      // Light stone cross paths
+      const pathLong = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.06, gd - 0.5), rimMat);
+      pathLong.position.set(cx, 0.07, cz);
+      scene.add(pathLong);
+      const pathCross = new THREE.Mesh(new THREE.BoxGeometry(gw - 0.5, 0.06, 2.0), rimMat);
+      pathCross.position.set(cx, 0.07, cz);
+      scene.add(pathCross);
+
+      // Central fountain — stone basin + cyan water + spout
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.5, 16), stoneMat);
+      basin.position.set(cx, 0.25, cz);
+      scene.add(basin);
+      const water = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.08, 16), poolMat);
+      water.position.set(cx, 0.52, cz);
+      scene.add(water);
+      const spout = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.1, 0.25), stoneMat);
+      spout.position.set(cx, 1.05, cz);
+      scene.add(spout);
+      const spoutCap = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.5), rimMat);
+      spoutCap.position.set(cx, 1.65, cz);
+      scene.add(spoutCap);
+
+      // Topiary cones at the 4 corners
+      for (const dx of [-gw / 2 + 1.5, gw / 2 - 1.5]) {
+        for (const dz of [-gd / 2 + 1.5, gd / 2 - 1.5]) {
+          const t = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.7, 1.8, 8), topiaryMat);
+          t.position.set(cx + dx, 0.9, cz + dz);
+          scene.add(t);
+        }
+      }
+
+      // Flower beds — 8 small colored boxes around the central fountain
+      const flowerColors = [windowMat, lanternGlowMat, ledMat];
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const fr = 4.6;
+        const fx = cx + Math.cos(a) * fr;
+        const fz = cz + Math.sin(a) * fr * (gd / gw);
+        const flower = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), flowerColors[i % 3]);
+        flower.position.set(fx, 0.2, fz);
+        scene.add(flower);
+      }
+    }
+    addGarden(-32, 13);
+
+    // ----- East lot: supercar showroom -----
+    function addCarShowroom(cx, cz) {
+      const sw = 14, sd = 10, sh = 4;
+      // Stage floor (lighter stone slab)
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.18, sd), rimMat);
+      floor.position.set(cx, 0.09, cz);
+      scene.add(floor);
+      // Roof slab
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.3, sd), villaMat);
+      roof.position.set(cx, sh + 0.15, cz);
+      scene.add(roof);
+      // 4 corner posts
+      for (const dx of [-sw / 2 + 0.2, sw / 2 - 0.2]) {
+        for (const dz of [-sd / 2 + 0.2, sd / 2 - 0.2]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, sh, 0.45), villaMat);
+          post.position.set(cx + dx, sh / 2, cz + dz);
+          scene.add(post);
+        }
+      }
+      // Glass back wall (faces away from camera, toward street side)
+      const back = new THREE.Mesh(new THREE.BoxGeometry(sw - 0.5, sh - 0.6, 0.1), windowMat);
+      back.position.set(cx, sh / 2 + 0.2, cz - sd / 2 + 0.05);
+      scene.add(back);
+      // Glass left wall
+      const lw = new THREE.Mesh(new THREE.BoxGeometry(0.1, sh - 0.6, sd - 0.5), windowMat);
+      lw.position.set(cx - sw / 2 + 0.05, sh / 2 + 0.2, cz);
+      scene.add(lw);
+      // Glass right wall
+      const rw = new THREE.Mesh(new THREE.BoxGeometry(0.1, sh - 0.6, sd - 0.5), windowMat);
+      rw.position.set(cx + sw / 2 - 0.05, sh / 2 + 0.2, cz);
+      scene.add(rw);
+      // LED accent strip along the front edge (open side)
+      const ledFront = new THREE.Mesh(new THREE.BoxGeometry(sw - 0.4, 0.1, 0.12), ledMat);
+      ledFront.position.set(cx, 0.22, cz + sd / 2 - 0.1);
+      scene.add(ledFront);
+      // LED strip along the floor centerline
+      const ledMid = new THREE.Mesh(new THREE.BoxGeometry(sw - 0.6, 0.08, 0.1), ledMat);
+      ledMid.position.set(cx, 0.21, cz);
+      scene.add(ledMid);
+      // 3 cars in a row, facing forward (toward camera)
+      addCar(cx - 4.2, cz + 0.5, 0xff2050, 0);  // red
+      addCar(cx,        cz + 0.5, 0x2080ff, 0);  // blue
+      addCar(cx + 4.2, cz + 0.5, 0xffaa00, 0);  // orange
+    }
+    addCarShowroom(32, 13);
 
     // -----------------------------------------------------
     // Distant skyline dots (neon lights on the horizon)
