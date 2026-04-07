@@ -526,6 +526,54 @@
 
     // Yellow Lambo parked in front of the garage door
     addCar(garageCx, 6.0, 0xf5d518);
+    // Pink Lambo parked next to the pool, visible from default camera
+    addCar(4.0, 5.0, 0xff2d95);
+
+    // -----------------------------------------------------
+    // Lagoon — small secondary water with sand, island, mini palm
+    // -----------------------------------------------------
+    {
+      const lagoonCx = -7;
+      const lagoonCz = -2;
+
+      // Sand ring (warm tan, slightly raised)
+      const sandMat = makePS2Material({ color: 0xc0a878 });
+      const sand = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.05, 3.8), sandMat);
+      sand.position.set(lagoonCx, 0.025, lagoonCz);
+      scene.add(sand);
+
+      // Lagoon water — reuse the pool water shader for tile/caustic look
+      const lagoonWater = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 2.6, 8, 1, 8), poolMat);
+      lagoonWater.position.set(lagoonCx, 0.10, lagoonCz);
+      scene.add(lagoonWater);
+
+      // Island in the middle of the lagoon
+      const island = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.18, 0.85), sandMat);
+      island.position.set(lagoonCx, 0.13, lagoonCz);
+      scene.add(island);
+
+      // Mini palm on the island (smaller than the regular palms)
+      const miniHeight = 2.6;
+      const miniTrunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.13, miniHeight, 5),
+        trunkMat
+      );
+      miniTrunk.position.set(lagoonCx, 0.22 + miniHeight / 2, lagoonCz);
+      scene.add(miniTrunk);
+      const miniFronds = 7;
+      for (let i = 0; i < miniFronds; i++) {
+        const a = (i / miniFronds) * Math.PI * 2;
+        const f = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.3, 1, 1), frondMat);
+        f.position.set(
+          lagoonCx + Math.cos(a) * 0.62,
+          0.22 + miniHeight - 0.05,
+          lagoonCz + Math.sin(a) * 0.62
+        );
+        f.rotation.y = -a;
+        f.rotation.z = -0.7;
+        scene.add(f);
+      }
+    }
 
     // -----------------------------------------------------
     // Greenery — hedges + scattered bushes
@@ -566,8 +614,35 @@
     addBush(26,   3.0, 0.85);
 
     // -----------------------------------------------------
-    // Colored path lights — small accent bulbs on thin poles
+    // Colored path lights — small accent bulbs + ground spot puddle
     // -----------------------------------------------------
+    function makeGroundSpotMat(colorHex) {
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: new THREE.Color(colorHex) } },
+        transparent: true,
+        depthWrite: false,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          varying vec2 vUv;
+          void main() {
+            vec2 c = vUv - 0.5;
+            float d = length(c) * 2.0;
+            float a = smoothstep(1.0, 0.0, d);
+            gl_FragColor = vec4(uColor * 1.6, a * 0.55);
+          }
+        `,
+      });
+      materials.push(mat);
+      return mat;
+    }
+
     function addPathLight(x, z, colorHex) {
       const poleMat = makePS2Material({ color: 0x080808 });
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 4), poleMat);
@@ -582,6 +657,13 @@
       const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.20, 0.22), bulbMat);
       bulb.position.set(x, 0.62, z);
       scene.add(bulb);
+
+      // Ground spot puddle — circular emissive disc on the patio
+      const spot = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.8), makeGroundSpotMat(colorHex));
+      spot.rotation.x = -Math.PI / 2;
+      spot.position.set(x, 0.025, z);
+      spot.renderOrder = 1;
+      scene.add(spot);
     }
 
     // Around the pool deck
