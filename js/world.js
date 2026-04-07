@@ -70,10 +70,14 @@
     renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(1);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
-    renderer.setClearColor(0x1a1238, 1);
+    // b028 — richer pink-magenta clear color, was muddy indigo 0x1a1238
+    renderer.setClearColor(0x2a0a35, 1);
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x40285a, 0.009);
+    // b028 — fog density slashed 0.009 → 0.003 and color shifted from
+    // muddy purple 0x40285a to a richer magenta 0x6a1850. The old fog was
+    // eating saturation across the whole scene and making it look pastel.
+    scene.fog = new THREE.FogExp2(0x6a1850, 0.003);
 
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 320);
     // Initial position will be overwritten by animate() on first frame, but
@@ -114,10 +118,11 @@
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        // "Sun just dipped" palette — pink/orange horizon, lavender mid, deep indigo zenith
-        topColor:    { value: new THREE.Color(0x0a0a3a) },
-        midColor:    { value: new THREE.Color(0x9a3070) },
-        bottomColor: { value: new THREE.Color(0xff7050) },
+        // b028 — saturation pump. Hot pink horizon, deep magenta mid, rich
+        // indigo zenith. Was 0x0a0a3a / 0x9a3070 / 0xff7050.
+        topColor:    { value: new THREE.Color(0x180844) },
+        midColor:    { value: new THREE.Color(0xc02888) },
+        bottomColor: { value: new THREE.Color(0xff4090) },
       },
       vertexShader: `
         varying vec3 vDir;
@@ -164,15 +169,18 @@
     // -----------------------------------------------------
     // Light constants — passed manually as shader uniforms
     // -----------------------------------------------------
-    const lampPos     = new THREE.Vector3(0, 0.6, 9.5);  // middle deck lantern (b014)
-    const lampColor   = new THREE.Color(0xffc080);  // warm lantern, not sodium
-    const lampRange   = 22;  // bigger reach for the wider deck
-    const poolPos     = new THREE.Vector3(0, 0.4, 5);  // bigger pool centerpoint (b014)
-    const poolColor   = new THREE.Color(0x40fff0);  // brighter cyan glow
-    const poolRange   = 26;  // bigger reach for the bigger pool
-    const windowPos   = new THREE.Vector3(0, 4.5, -10);  // inside the bigger villa
-    const windowColor = new THREE.Color(0xffd090);  // richer warm interior
-    const windowRange = 18;  // b018 — was 32, the entire scene was washed out by interior glow
+    // b028 — brighter, more saturated, tighter falloff. Hard pools of light
+    // instead of a uniform glow. Colors are full-blown saturated, ranges
+    // shrunk so the unlit areas read as actually unlit (more contrast).
+    const lampPos     = new THREE.Vector3(0, 0.6, 9.5);
+    const lampColor   = new THREE.Color(0xffaa50);  // hotter orange
+    const lampRange   = 14;                          // was 22
+    const poolPos     = new THREE.Vector3(0, 0.4, 5);
+    const poolColor   = new THREE.Color(0x30ffe8);   // saturated cyan
+    const poolRange   = 18;                          // was 26
+    const windowPos   = new THREE.Vector3(0, 4.5, -10);
+    const windowColor = new THREE.Color(0xffc070);   // richer warm
+    const windowRange = 12;                          // was 18
 
     // -----------------------------------------------------
     // PS2 material factory — vertex jitter + 3-light shader
@@ -192,12 +200,13 @@
           uWindowPos:    { value: windowPos },
           uWindowColor:  { value: windowColor },
           uWindowRange:  { value: windowRange },
-          uFogColor:     { value: new THREE.Color(0x40285a) },
-          uFogDensity:   { value: 0.009 },
+          uFogColor:     { value: new THREE.Color(0x6a1850) },
+          uFogDensity:   { value: 0.003 },
         },
         vertexShader: `
           varying vec3 vNormal;
           varying vec3 vWorldPos;
+          varying vec3 vViewDir;
           varying float vFogDepth;
           void main() {
             vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
@@ -211,6 +220,7 @@
             gl_Position = clip;
             vNormal = normalize(mat3(modelMatrix) * normal);
             vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+            vViewDir = normalize(cameraPosition - vWorldPos);
           }
         `,
         fragmentShader: `
@@ -230,24 +240,37 @@
           uniform float uFogDensity;
           varying vec3 vNormal;
           varying vec3 vWorldPos;
+          varying vec3 vViewDir;
           varying float vFogDepth;
 
+          // b028 — brighter pool of light. ndl term weighted heavier so lit
+          // surfaces really pop, unlit ones go nearly black instead of just
+          // dimmer. Bumped fall^2 to fall^1.7 to make the falloff feel less
+          // mathematical and more cinematic.
           vec3 pointLight(vec3 lp, vec3 lc, float lr, vec3 base) {
             vec3 d = lp - vWorldPos;
             float dist = length(d);
             float fall = max(0.0, 1.0 - dist / lr);
-            fall *= fall;
+            fall = pow(fall, 1.7);
             float ndl = max(dot(vNormal, normalize(d)), 0.0);
-            return base * lc * fall * (0.30 + ndl * 0.70);
+            return base * lc * fall * (0.18 + ndl * 1.05);
           }
 
           void main() {
-            vec3 ambient = vec3(0.28, 0.24, 0.40);
+            // b028 — darker, cooler ambient so pools of light pop
+            vec3 ambient = vec3(0.22, 0.16, 0.34);
             vec3 col = uColor * ambient;
             col += pointLight(uLampPos,   uLampColor,   uLampRange,   uColor);
             col += pointLight(uPoolPos,   uPoolColor,   uPoolRange,   uColor);
             col += pointLight(uWindowPos, uWindowColor, uWindowRange, uColor);
             col += uEmissive * uEmissiveAmt;
+
+            // b028 — RIM LIGHT. Hot pink Fresnel against the sky. The single
+            // biggest "I am playing a PS2 game" tell. ~3 lines of GLSL.
+            float rim = 1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0);
+            rim = pow(rim, 2.4);
+            col += vec3(1.00, 0.30, 0.65) * rim * 0.55;
+
             float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
             col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
             gl_FragColor = vec4(col, 1.0);
@@ -279,8 +302,8 @@
         uTime:        { value: 0 },
         uBaseColor:   { value: new THREE.Color(0x18d8d0) },
         uBrightColor: { value: new THREE.Color(0xa8fff0) },
-        uFogColor:    { value: new THREE.Color(0x40285a) },
-        uFogDensity:  { value: 0.009 },
+        uFogColor:    { value: new THREE.Color(0x6a1850) },
+        uFogDensity:  { value: 0.003 },
       },
       vertexShader: `
         uniform float uTime;
@@ -1373,10 +1396,10 @@
     const oceanMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime:       { value: 0 },
-        uColor:      { value: new THREE.Color(0x1a0a3e) },
-        uHighlight:  { value: new THREE.Color(0x9a3a85) },
-        uFogColor:   { value: new THREE.Color(0x40285a) },
-        uFogDensity: { value: 0.009 },
+        uColor:      { value: new THREE.Color(0x2a0a55) },
+        uHighlight:  { value: new THREE.Color(0xc04098) },
+        uFogColor:   { value: new THREE.Color(0x6a1850) },
+        uFogDensity: { value: 0.003 },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -2441,11 +2464,54 @@
       fragmentShader: `
         uniform sampler2D tDiffuse;
         varying vec2 vUv;
+
+        // b028 — 4x4 Bayer matrix dither. Adds the chunky banded gradient
+        // look from PS1/Saturn era and helps the saturated colors hold their
+        // hue at low brightness. Pattern matches the 854x480 framebuffer.
+        float bayer4(vec2 p) {
+          int x = int(mod(p.x, 4.0));
+          int y = int(mod(p.y, 4.0));
+          int i = x + y * 4;
+          float v = 0.0;
+          if (i == 0)  v =  0.0;
+          if (i == 1)  v =  8.0;
+          if (i == 2)  v =  2.0;
+          if (i == 3)  v = 10.0;
+          if (i == 4)  v = 12.0;
+          if (i == 5)  v =  4.0;
+          if (i == 6)  v = 14.0;
+          if (i == 7)  v =  6.0;
+          if (i == 8)  v =  3.0;
+          if (i == 9)  v = 11.0;
+          if (i == 10) v =  1.0;
+          if (i == 11) v =  9.0;
+          if (i == 12) v = 15.0;
+          if (i == 13) v =  7.0;
+          if (i == 14) v = 13.0;
+          if (i == 15) v =  5.0;
+          return v / 16.0 - 0.5;
+        }
+
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
-          // Faint scanlines (lighter for PS2+ — less noisy at higher res)
-          float line = sin(vUv.y * 960.0) * 0.022;
+
+          // b028 — tone curve: lift midtones, mild contrast, saturation pump
+          c.rgb = pow(c.rgb, vec3(0.92));         // gamma lift
+          float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+          c.rgb = mix(vec3(lum), c.rgb, 1.32);    // saturation +32%
+          c.rgb = (c.rgb - 0.5) * 1.08 + 0.5;     // contrast +8%
+
+          // Faint scanlines (lighter for PS2+)
+          float line = sin(vUv.y * 960.0) * 0.020;
           c.rgb -= line;
+
+          // b028 — Bayer dither into ~5 bits per channel. Pixel-perfect
+          // bands; adds nostalgia without crushing saturation.
+          vec2 pix = vUv * vec2(854.0, 480.0);
+          float d = bayer4(floor(pix)) * (1.0 / 32.0);
+          c.rgb += d;
+          c.rgb = floor(c.rgb * 32.0 + 0.5) / 32.0;
+
           // Subtle vignette
           float v = smoothstep(1.1, 0.4, length(vUv - 0.5));
           c.rgb *= v;
@@ -2599,17 +2665,50 @@
 
   // b027 — small popover card anchored at the click position. Replaces
   // the slide-in side panel for the villa view. Has thumbnail, title,
-  // artist, description, play button, decorative animated waveform.
+  // artist, description, play button, animated waveform.
+  // b028 — waveform now driven by getFrequencyData() ONLY when this card's
+  // track is the one currently playing. Otherwise the bars sit flat.
   let villaCardEl = null;
   let villaCardOutsideHandler = null;
+  let villaCardTrackIdx = -1;
+  let villaCardBars = null;
   function closeVillaCard() {
     if (villaCardEl && villaCardEl.parentNode) {
       villaCardEl.parentNode.removeChild(villaCardEl);
     }
     villaCardEl = null;
+    villaCardBars = null;
+    villaCardTrackIdx = -1;
     if (villaCardOutsideHandler) {
       document.removeEventListener('mousedown', villaCardOutsideHandler, true);
       villaCardOutsideHandler = null;
+    }
+  }
+  // b028 — called from animate(). Pulls live frequency data when this
+  // card's track is playing; otherwise leaves the bars at their flat
+  // resting height (set by CSS, no JS height applied).
+  function updateVillaCardWaveform() {
+    if (!villaCardBars || villaCardTrackIdx < 0) return;
+    const playing = (typeof state !== 'undefined')
+      && state.isPlaying
+      && state.currentTrack === villaCardTrackIdx;
+    if (!playing) {
+      // Reset to flat resting state once when playback stops
+      for (let i = 0; i < villaCardBars.length; i++) {
+        villaCardBars[i].style.height = '';
+      }
+      return;
+    }
+    const data = (typeof getFrequencyData === 'function') ? getFrequencyData() : null;
+    if (!data || !data.length) return;
+    const n = villaCardBars.length;
+    const step = Math.floor(data.length / n) || 1;
+    for (let i = 0; i < n; i++) {
+      // Sample a band per bar from the lower 2/3 of the spectrum (the
+      // upper 1/3 is mostly silence for music).
+      const sample = data[Math.min(data.length - 1, i * step)];
+      const h = 8 + (sample / 255) * 92;
+      villaCardBars[i].style.height = h.toFixed(1) + '%';
     }
   }
   function showVillaCard(index, screenX, screenY) {
@@ -2624,11 +2723,11 @@
     card.className = 'villa-card';
     villaCardEl = card;
 
-    // Build 18 waveform bars with random heights — pure decoration, animated via CSS.
+    // b028 — bars sit flat (CSS sets the resting height) until JS drives
+    // them from getFrequencyData() when this track starts playing.
     let bars = '';
-    for (let i = 0; i < 18; i++) {
-      const h = 30 + Math.floor(Math.random() * 70);
-      bars += `<span style="height:${h}%;animation-delay:${(i * 0.07).toFixed(2)}s"></span>`;
+    for (let i = 0; i < 22; i++) {
+      bars += '<span></span>';
     }
 
     const desc = t.description
@@ -2652,9 +2751,13 @@
       <button class="villa-card-play" type="button">▶ PLAY</button>
     `;
 
+    // b028 — capture bar refs for the audio-reactive update loop
+    villaCardTrackIdx = index;
+
     // Position the card. Anchor above the click point; if it would clip the
     // top of the viewport, flip below. Clamp horizontally.
     document.body.appendChild(card);
+    villaCardBars = card.querySelectorAll('.villa-card-wave span');
     const rect = card.getBoundingClientRect();
     const margin = 12;
     let x = screenX - rect.width / 2;
@@ -2780,6 +2883,9 @@
     for (let i = 0; i < timeUniforms.length; i++) {
       timeUniforms[i].value = elapsed;
     }
+
+    // b028 — drive the popover card waveform from live frequency data
+    updateVillaCardWaveform();
 
     // b014 — proper spherical orbit. yaw/pitch/radius come from drag input.
     const cosP = Math.cos(pitch);

@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## b028 — 2026-04-07 — Graphics overhaul: PS2/Dreamcast palette, rim light, dither, no muddy fog + reactive waveform
+
+User said the villa was reading like "an ugly shitty version of Sims or Second Life" and asked for proper PS1/Dreamcast/PS2 nostalgia with **cool beautiful colors and no heavy fog**. Locked direction at PS2-leaning (the 854×480 + 320×180 jitter grid stays — that part was already right) but with lush saturation instead of pastel washout. Plus the waveform fix from the user's previous note ("waveform should only be active upon pressing play").
+
+### 1. Fog density slashed
+`FogExp2` density `0.009 → 0.003` and color shifted from muddy purple `0x40285a` to richer magenta `0x6a1850`. Updated in scene-level fog AND in the three custom shader materials that bake fog manually (PS2, pool, ocean) so they all blend toward the same hue. The old fog was eating saturation across the entire scene — that was the single biggest reason colors looked washed out. Renderer clear color also shifted from `0x1a1238` to `0x2a0a35`.
+
+### 2. Sky palette pumped
+- bottom (horizon) `0xff7050` → `0xff4090` (hot pink, was muddy orange)
+- mid `0x9a3070` → `0xc02888` (deep magenta, was lavender)
+- top (zenith) `0x0a0a3a` → `0x180844` (richer indigo)
+
+### 3. Lighting — brighter pools, tighter falloff
+Hard pools of warm/cyan light instead of a uniform glow:
+- `lampRange` 22 → 14, color `0xffc080` → `0xffaa50` (hotter)
+- `poolRange` 26 → 18, color `0x40fff0` → `0x30ffe8` (more saturated)
+- `windowRange` 18 → 12, color `0xffd090` → `0xffc070`
+
+Lighting math also rebalanced: ambient cooled (`0.28,0.24,0.40 → 0.22,0.16,0.34`), `pointLight()` falloff is now `pow(fall, 1.7)` instead of `fall*fall` (more cinematic), and the N·L term weighted heavier (`0.30 + ndl*0.70 → 0.18 + ndl*1.05`) so lit faces really pop and unlit faces go nearly black. **Way more contrast.**
+
+### 4. RIM LIGHT (PS2 fragment shader)
+The single biggest "I am playing a PS2 game" tell. Pass `vViewDir` from vertex shader, then in the fragment:
+```glsl
+float rim = 1.0 - max(dot(N, V), 0.0);
+rim = pow(rim, 2.4);
+col += vec3(1.00, 0.30, 0.65) * rim * 0.55;
+```
+~3 lines of GLSL, hot pink Fresnel against the sky. Edges of every PS2-shaded object now glow magenta at grazing angles. Massive nostalgia hit.
+
+### 5. Bayer dither + tone curve (post shader)
+Post shader was just scanlines + vignette. Added:
+- **Tone curve** — `pow(c.rgb, 0.92)` gamma lift, saturation boost (+32%), contrast nudge (+8%). Makes the saturated palette actually land instead of getting crushed.
+- **4×4 Bayer dither** — quantizes output to 5-bit-per-channel with the classic ordered-dither pattern at the framebuffer pixel grid. Adds chunky banded gradients in the sky and lit walls. The dither pattern is hardcoded as 16 `if`s instead of an array constant because old WebGL drivers don't always handle const arrays well.
+
+### 6. Waveform reactive (popover card)
+User: "waveform should only be active upon pressing play". Refactored:
+- Bars sit flat at `height: 14%` via CSS, no more `@keyframes villa-wave-pulse` decoration.
+- New `updateVillaCardWaveform()` runs every frame from `animate()`. Checks `state.isPlaying && state.currentTrack === villaCardTrackIdx`. If matching, samples `getFrequencyData()` (one band per bar across the lower 2/3 of the spectrum) and writes per-bar `style.height`. Otherwise resets bars to flat.
+- Bumped from 18 to 22 bars for tighter spectrum coverage.
+- `closeVillaCard()` now also clears `villaCardBars` and `villaCardTrackIdx` so the global update loop becomes a no-op.
+
+### Files modified
+- [js/world.js](js/world.js) — fog density/color, sky palette, light constants, PS2 vertex+fragment shader (rim light), pool/ocean fog uniforms, post shader (tone curve + Bayer dither), `updateVillaCardWaveform`, animate loop hook, `showVillaCard` bar markup
+- [style.css](style.css) — `.villa-card-wave span` flat resting state, removed `@keyframes villa-wave-pulse`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b027 → b028`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Skipped from the original 8-step plan
+Items 3 (vertex-color gradients on plaster), 4 (procedural noise textures), and 7 — wait, 7 was the lights which DID get done. Skipped: 3 and 4. Both are bigger surgery and we can iterate after seeing how the simpler changes (fog kill + rim light + dither + palette pump) land. If walls still look too plain after this build, those are the next two cards.
+
 ## b027 — 2026-04-07 — Villa popover card (anchored at click), no more side panel for villa view
 
 Two fixes in one. (1) **Desktop click was returning `hit: null` even when the cursor showed a pointer.** Re-raycasting at click time was unreliable for some reason — possibly DPR/scaling skew or a few-pixel drift between hover and click in `e.clientX`. The cached `hoveredProp` from the most recent mousemove is the same value that drives the cursor flip, so if the cursor showed a pointer, the click hits. `onCanvasClick` now reads `hoveredProp` instead of re-raycasting. (2) **The slide-in side panel was wrong for the villa view.** User explicitly: "i dont want a side panel to open. i want a small card to hover over the clicked item and from there it gives some description, a thumbnail, play button and cool waveform of the song or something." Built that.
