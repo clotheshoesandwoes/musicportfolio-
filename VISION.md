@@ -45,6 +45,10 @@ The free orbit camera is **the differentiator**. Drake's site can't do it. Don't
 
 ## 4. Art direction
 
+### Architectural baseline (b025+)
+
+The villa is a **Mediterranean U-shaped mansion** — central 2-story block flanked by 1.5-story wings, hipped terracotta tile roofs on every section, stone ground floor + plaster upper, marble cornices and arched windows with dark mullions, wrought iron balcony above the central entry, bell tower (campanile) embedded in the back-west corner of the west wing as the iconic silhouette element. **NOT** the b010-b019 modernist stacked-cantilever box villa with cylindrical tower — that direction was abandoned in b025 because the user said "looks like a bunch of shapes glued together" and they were right. Don't propose modernist box-stack iterations on the villa itself; that style lives in the cross-street neighbor mansions and the supercar showroom now.
+
 ### The PS2 sweet spot
 
 The aesthetic identity is "PS2-era 3D Miami villa at dusk." Not photoreal. Not modern stylized. **PS2.** Think Gran Turismo 3, Vice City, ICO. Chunky pixels, low-poly geometry, vertex jitter, limited shader complexity, intentional jankiness as charm.

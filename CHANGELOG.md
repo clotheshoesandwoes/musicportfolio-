@@ -1,5 +1,99 @@
 # CHANGELOG
 
+## b025 — 2026-04-07 — VILLA REBUILD: Mediterranean U-shaped mansion with bell tower
+
+User feedback after b024: "house honestly looks ugly... like a bunch of shapes glued together." Right call. The b010-b019 modernist stack (1 lower + 2 cantilevered upper boxes + cylindrical tower + LED strips + wood louvers + forward balcony + rooftop hot tub + spiral stairs) had no coherent architectural language — it was 7 distinct volumes with surface decoration patched on top. No amount of cornice/sconce/mullion fix was going to save the bones.
+
+Full architectural rebuild. Replaces ~460 lines of old villa code with ~520 lines of new Mediterranean villa code.
+
+### New architectural form
+
+**U-shaped layout** hugging the pool:
+- **Central block** at `(0, *, -10)`: 14×14 footprint, 2 floors (8m total height), hipped terracotta roof
+- **East wing** at `(11.5, *, -10)`: 9×14 footprint, 1.5 floors (6m), hipped terracotta roof
+- **West wing** at `(-11.5, *, -10)`: mirror of east
+- **Bell tower** (campanile) embedded in the back-west corner of the west wing at `(-13, *, -14)`: 3 stages — stone base + plaster shaft (rises 11m) + marble belfry with 4 corner pillars and visible bell + terracotta cap pyramid. Total height ~17m, the highest point in the scene.
+
+Total villa footprint **32×14** (was 32×18). Fits within the existing 34×20 podium.
+
+### Materials
+- **NEW** `terracottaMat` `0xc05030` — rust orange tile for hipped roofs and bell tower cap
+- **REMOVED** `villaMat2` (was only used by the old second upper volume)
+- **REMOVED** `coveMat` (was only used by the old recessed cove light strip)
+- **MOVED UP** `windowMat` from inside the old villa block to the top of the material declaration section. It's used by villa windows AND yacht windows AND tiki bar AND BBQ AND showroom AND neighbor villas — must be declared once at the top.
+- **REUSED** from b024 palette: `marbleMat` (paths, columns, balconies, frames, sills, headers, sconce trim), `stoneMat` (ground floor walls, tower base, tower waist), `villaMat` (plaster upper walls), `lanternGlowMat` (sconce glow + bell rope)
+
+### Material mixing on every section
+Stone ground floor + plaster upper floor + marble cornices/frames/columns + terracotta tile roofs + dark `railMat` mullions and door slabs and balcony rails. The villa is no longer a single-material monolith.
+
+### Helpers added (inside the villa block, local scope)
+- `addWallBox(cx, cz, w, d, h, yBase, mat)` — 4-sided wall around a footprint
+- `addArchedWindow(cx, cy, cz, w, h)` — warm pane + marble surround (header + sides + sill) + 3 dark mullion bars. PS2 chunky abstraction of an arched window — rectangular framing instead of actual curved geometry, with a slightly wider top header to suggest the arch.
+- `addSconce(x, y, z)` — small dark housing + warm glow box
+- `addHippedRoof(cx, cy, cz, w, d, h, mat)` — `ConeGeometry` with `radialSegments=4`, rotated `Math.PI/4` so the 4 sloped sides face N/S/E/W. Vertices land on the wall corners. For non-square footprints, scales Z to stretch.
+- `addCornice(cx, cy, cz, w, d)` — marble band wrapping a building section at a given height (front + back + left + right strips)
+
+### Feature counts
+- **2 floors of walls per section** × 3 sections (central + 2 wings) = **24 wall meshes**
+- **2 cornice bands per section** × 3 sections × 4 strips each = **24 cornice strips**
+- **3 hipped roofs** (central + 2 wings) plus **1 cap pyramid** on the bell tower
+- **15 arched windows** total: 5 front central (2 ground + 3 upper), 5 back central, 4 east wing front, 4 west wing front, 2 east wing back, 2 west wing back. Each arched window = 8 meshes (pane + 4 frame pieces + 3 mullions). **~120 window meshes.**
+- **Main entry**: arched door pane + dark inset slab + 2 marble columns + 2 marble capitals + marble header = 7 meshes
+- **Wrought iron balcony**: floor slab + front rail + 14 front posts + 2 side rails + 8 side posts = 26 meshes
+- **2 wing side doors** (east + west) with marble headers
+- **Back door** on central block back wall
+- **Bell tower**: stone base + plaster shaft + stone waist + 4 narrow shaft windows + bottom belfry slab + 4 corner pillars + top belfry slab + bell + bell rope + cap pyramid = 15 meshes
+- **12 wall sconces** (front entry, front upper corners, wing side doors x4, back door, wing front facade x2)
+- **Grand entrance**: 4 marble steps (relocated to villaCx=0, was at -6.995) + 2 marble planters with topiary cones
+
+**Total new villa meshes: ~250+**
+
+### What got DELETED from world.js
+- `lowerW`/`lowerH`/`lowerD` constants and the lower volume box
+- 7 stone columns + the `colXs` array
+- Lower roof slab
+- First upper volume box + cantilever roof slab
+- Second upper volume box + roof slab
+- `addLedStrip` helper + 3 call sites
+- Rooftop terrace parapet east wall + front wall
+- Recessed cove light strip
+- Cylindrical tower (body + glass band + cap)
+- `addLowerGlass` helper + 6 FTG glass panes
+- Upper FTG glass + upper side glass + upper2 FTG glass
+- Front door + back door (recreated in new style)
+- Wood louver slats block (14 slats)
+- Forward balcony + 18 posts (b019)
+- Rooftop hot tub (b019)
+- Spiral exterior staircase (12 steps, b019)
+- Old grand entrance steps + planters at `doorX=-6.995` (recreated at `villaCx=0`)
+- `villaMat2` const (was only used by deleted second upper)
+- `coveMat` const (was only used by deleted cove strip)
+
+### Surgical fixes around the rebuild
+- **Garage position** at [js/world.js:1023](js/world.js#L1023): was `villaCz - lowerD/2 - garageD/2`, now `villaCz - centralD/2 - garageD/2`. The new central block is 14m deep (was 18m), so the back wall moved forward by 2m. Garage follows.
+- **Interior shell resized** from old 32×18 (lower volume) to 14×14 (central block). Only the central block has a walkable hollow interior; the wings are solid exterior in this build.
+- **`windowMat` declaration relocated** from inside the old villa block to the top of the material section, so it's available to all the other code that uses it without depending on villa code being earlier.
+
+### What STAYS unchanged
+- All scenery from b022/b023/b024: garden, supercar showroom, beach, ocean, yachts, jet skis, pier, tiki bar, surfboards, fire pit, BBQ bar, statues, hills, hill villas, neighbor mansions, road, sidewalks, streetlamps, palms, skyline
+- Pool + jacuzzi + pool deck props (daybeds, lanterns, boulders, path lights)
+- Pink Lambo + yellow Lambo + garage door
+- Camera (orbit drag/zoom/pinch from b014)
+- Sky shader, ocean shader, fog, render pipeline (PS2+ 854×480 + 320×180 jitter — still pending dial-back, see b026 deferred)
+
+### Files modified
+- [js/world.js](js/world.js) — material declarations cleaned up + ~460 lines of villa code replaced with ~520 lines + garage z fix (~+60 net)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b024 → b025`
+- [VISION.md](VISION.md) — small update to section 4 noting the architectural baseline shifted from modernist stack to Mediterranean U-shape
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Still deferred (tracked in VISION.md section 9)
+- Showroom car swap (yellow G-Wagon, Corvette, "something crazy") — b026 candidate
+- Art style "ugly Roblox" dial-back — needs sign-off on render-target numbers
+- Hill mat fix v2 — emissive boost
+- Click→card system build — design done in VISION.md, build comes after villa scene density is sufficient
+
 ## b024 — 2026-04-07 — Luxury garden v2 + palette upgrade + VISION.md
 
 User feedback after b023: "the garden is tiny, no greenery (many plants, shrubs, cool plants), all green is very dark and fogged? the garden u made is an ugly square terrace with no grass no color etc just some lights and a tiny fountain. were talking exorbitant wealth for this scene and property." Owned the failure. b023's garden was a checkered terrace with floating cubes — not luxury. Two structural problems addressed in this build:
