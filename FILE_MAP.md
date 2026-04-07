@@ -1,7 +1,7 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b010
-**Updated:** 2026-04-06
+**Build:** b011
+**Updated:** 2026-04-07
 
 ## Architecture
 Vanilla JS, no build step. Multi-view single-page site.
@@ -25,14 +25,20 @@ Vanilla JS, no build step. Multi-view single-page site.
 ### js/
 - [js/helpers.js](js/helpers.js) **(NEW b001)** — `window.BUILD_NUMBER`
 - [js/app.js](js/app.js) (~308 lines) — config loader, shared state, view router (`registerView` / `switchView`), search, track-detail panel, theme/socials, keyboard shortcuts (digits 1–4 = views)
-- [js/player.js](js/player.js) — audio playback, transport, `playTrack(i)`, `togglePlay()`, `playNext()`, `playPrev()`, `getFrequencyData()` (not surveyed)
+- [js/player.js](js/player.js) **(b011)** — audio playback, transport, `playTrack(i)`, `togglePlay()`, `playNext()`, `playPrev()`, `getFrequencyData()`. b011: `loadTrack()` now reads `siteConfig.audioBase` for the audio URL (R2 in prod), falls back to local `audio-mp3/` if config hasn't loaded yet.
 - [js/terrain.js](js/terrain.js) — Terrain view, 2D canvas, audio-reactive peaks (not surveyed)
 - [js/deepsea.js](js/deepsea.js) — Deep Sea view, scrolling depth track list (not surveyed)
 - [js/neural.js](js/neural.js) (~382 lines) — Neural view, 2D canvas node graph, audio-reactive nodes/connections, filter pills, mobile-tap-to-play
 - [js/world.js](js/world.js) **(b010)** — Villa view, Three.js 3D scene, PS2+ shaders (finer 320x180 vertex jitter + 854x480 low-res render target + faint scanlines), "sun just dipped" dusk Miami palette. b010 villa redesign: 2-story stacked white box villa with cantilevered upper floor, stacked stone column accents on the lower front, floor-to-ceiling glass walls, recessed warm cove lighting under the cantilever overhang, long infinity-edge pool running parallel to the villa front, white travertine deck, three pool-side daybeds (wood base + cream cushion), four warm deck lanterns at the pool front edge, low-poly icosahedron boulders replacing the old hedges/bushes, 4 palms, ocean horizon plane, distant neon skyline dots, custom water shader (tile lines + ripple displacement + caustic bands, brighter cyan glow), 3-light shader (warm deck lantern + cyan pool glow + warm interior window light)
 
-### audio/, audio-mp3/
-Track files (referenced by config.json).
+### audio/
+WAV originals — local-only, gitignored, never deployed.
+
+### audio-mp3/
+Local cache of MP3s. **Gitignored as of b011.** Production audio is now served from Cloudflare R2 (`cantmute-audio` bucket, public URL `https://pub-5556ef4db74d499ba3f535afccf8c7be.r2.dev/`). Local copies stay on disk for backup and future re-uploads but are no longer in the repo. To upload new tracks, drop them in `audio-mp3/` then run `bash scripts/upload-audio-to-r2.sh`.
+
+### scripts/
+- [scripts/upload-audio-to-r2.sh](scripts/upload-audio-to-r2.sh) **(NEW b011)** — uploads every file in `audio-mp3/` to the `cantmute-audio` R2 bucket. Requires wrangler installed + `wrangler login`. Idempotent.
 
 ## Build numbering
 Stored in [js/helpers.js](js/helpers.js) as `window.BUILD_NUMBER`. Bump every code change. Format `b001` → `b002`.

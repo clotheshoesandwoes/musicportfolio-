@@ -1,2 +1,8 @@
 # Original WAV files - too large for GitHub
 audio/
+
+# Local MP3 cache - served from Cloudflare R2 in prod (b011)
+audio-mp3/
+
+# Wrangler local cache
+.wrangler/
