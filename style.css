@@ -535,6 +535,67 @@ input { font-family: var(--font-body); }
 }
 
 /* ===========================
+   View: Villa (3D PS2 night Miami)
+   =========================== */
+.world-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  cursor: grab;
+}
+.world-canvas:active { cursor: grabbing; }
+
+.world-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #050714;
+  z-index: 5;
+}
+
+.world-loader-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  animation: world-blink 1.2s steps(2, end) infinite;
+}
+
+.world-loader-bar {
+  width: 180px;
+  height: 2px;
+  background: #ffffff10;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.world-loader-fill {
+  height: 100%;
+  width: 30%;
+  background: var(--cyan);
+  animation: world-load 1.6s ease-in-out infinite;
+}
+
+@keyframes world-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+@keyframes world-load {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(360%); }
+}
+
+/* ===========================
    View: Neural
    =========================== */
 .filter-tabs {

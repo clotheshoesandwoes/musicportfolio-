@@ -68,6 +68,7 @@ function switchView(name) {
     terrain: `Sound terrain / ${tracks.length} tracks`,
     deepsea: `Deep dive / ${tracks.length} tracks`,
     neural: `Neural map / ${tracks.length} tracks`,
+    villa: `Villa / night drive`,
   };
   document.getElementById('brandSub').textContent = subs[name] || '';
 
@@ -285,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'Digit1': switchView('terrain'); break;
       case 'Digit2': switchView('deepsea'); break;
       case 'Digit3': switchView('neural'); break;
+      case 'Digit4': switchView('villa'); break;
     }
   });
 
