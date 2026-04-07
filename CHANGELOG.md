@@ -1,5 +1,58 @@
 # CHANGELOG
 
+## b008 — 2026-04-06 — Bigger millionaire mansion, beach + side ocean, neighbor villas
+
+User feedback after b007: villa felt like a "regular suburb home", wanted "Miami millionaire home from the movies"; lots of unrendered background void around the property; wanted a beach on one side and other distant homes for context.
+
+### Villa scaled up to mansion size
+- Lower main volume `13×3.2×7` → `17×4×10` (much wider, taller, deeper)
+- Upper volume `8×2.8×5` → `11×3.5×6.5`
+- **NEW penthouse** — third story `6×2.6×4.5` set further back with its own roof slab + glass strip
+- Glass walls all scaled up to match (lower glass `2.4×8` → `3×8.4`, side glass `1.6×lowerW-2.5` → `2×lowerW-3`, upper glass `1.8×4` → `2.4×5.3`)
+- Balcony deeper (`1.8` → `2.0` deep), 9 railing posts (was 8)
+- Door taller (`1.8×1.0` → `2.2×1.3`)
+- Total villa height: ~7 → ~11 units. Much more imposing.
+
+### Garage scaled to match
+- `5×2.8×6.5` → `6×3.5×8`
+- Garage door scaled to match
+- `garageCx` recomputed automatically from `villaCx + lowerW/2 + garageW/2`
+
+### Beach + side ocean (left side of property)
+- **Beach** — `43×60` sand plane (`#c0a878`) at `(-38.5, 0.04, 0)` stretching from the property's left edge toward the side ocean
+- **Side ocean** — `60×90` plane at `(-90, -0.05, 0)`, reuses the existing `oceanMat` (same shader, same fog), connects with the back ocean visually
+- Beach ground spot y bumped from `0.025` → `0.06` so path-light puddles sit above the sand surface
+
+### 5 neighbor villas
+- New `addNeighborVilla(cx, cz, scale)` helper — simple 2-volume villa (lower + upper + roof slabs) with glowing windows on the camera-facing +Z face
+- Placed on the right side at varying scales: `(40,8,1.0)` `(48,-2,1.1)` `(46,-14,0.9)` `(58,5,1.2)` `(55,-18,1.0)`
+- Heavy fog naturally fades them into the distance
+
+### Ground expanded
+- `60×60` (40×40 segments) → `120×80` (60×40 segments) — covers the bigger property + beach + neighbor area
+
+### Camera pulled back
+- `CAM_RADIUS` `16` → `22` — wider view to take in the bigger scene
+- `CAM_CENTER_X` `3` → `4`
+- `camera.position.y` `5 + pitch*9` → `7 + pitch*12` — higher base + bigger vertical range
+- `lookAt y` `1.8 + pitch*2.5` → `2.8 + pitch*3` — looks higher into the scene
+
+### Repositioned existing things to clear the new villa
+- Bushes that were inside the old garage area moved further right: `(15,-6) (17,-6.5) (14,6.8) (26,3)` → `(30,-6) (32,-7) (33,7) (36,3)`
+- Driveway path lights moved past the bigger garage: `(15,5.5) (19,7.5) (25,6) (27,0)` → `(28,5.5) (30,7.5) (34,6) (35,0)`
+- Property entry path lights nudged: `-11` → `-12` (just outside the new beach edge)
+- **NEW** beach approach path lights at `(-15,8)` and `(-25,0)` (cyan / purple)
+- Pink Lambo `(4,5)` → `(-7,4)` — moved off the path of the bigger villa, parked front-left near the lagoon
+- Yellow Lambo `(20.95,6)` → `(garageCx≈26.45, 7)` — follows the new garage position via `garageCx`
+
+### Files modified
+- [js/world.js](js/world.js) — villa, garage, ground, camera, bushes, path lights, addPathLight ground spot y, beach+side ocean section, neighbor villas section + helper, car positions
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b007` → `b008`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+---
+
 ## b007 — 2026-04-06 — Pink Lambo by the pool, mini lagoon w/ island palm, illuminated path-light puddles
 
 User feedback after b006: garage Lambo was too far right to be visible from default camera, wanted a car visibly *around the pool*; wanted a small lagoon with sand island + mini palm; wanted the path lights to actually light the ground around them instead of being decorative-only.
