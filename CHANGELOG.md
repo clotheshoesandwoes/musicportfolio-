@@ -1,5 +1,48 @@
 # CHANGELOG
 
+## b012 — 2026-04-07 — CORS hotfix for R2 audio (b011 was broken — audio output zeros)
+
+After b011 force-pushed, the deploy completed in seconds (the migration worked) but audio playback was completely silent. Console showed:
+
+```
+MediaElementAudioSource outputs zeroes due to CORS access restrictions
+for https://pub-5556ef4db74d499ba3f535afccf8c7be.r2.dev/rolla.mp3
+```
+
+### Why
+[js/player.js](js/player.js) wires the `<audio>` element through `audioContext.createMediaElementSource(playerAudio)` to feed the analyser for audio-reactive views (terrain/neural). Once you call `createMediaElementSource()` on an audio element, the browser routes its output exclusively through the Web Audio graph, NOT through the default `<audio>` output. So if the source is opaque (CORS-blocked from cross-origin), the analyser produces zeros, and zeros propagate through `analyser.connect(audioContext.destination)` → total silence.
+
+Two things were needed and BOTH had to be set:
+
+1. **R2 bucket needs CORS headers** allowing the cantmute.me origin
+2. **Audio element needs `crossOrigin = "anonymous"`** set BEFORE `src` is assigned
+
+The local-development case worked in b008/b009/b010 because the audio was same-origin (`audio-mp3/`) and CORS didn't apply.
+
+### CORS rules applied to R2 bucket (via dashboard, not committed to repo)
+- `AllowedOrigins`: `https://cantmute.me`, `https://www.cantmute.me`, plus a handful of localhost ports for local dev
+- `AllowedMethods`: `GET`, `HEAD`
+- `AllowedHeaders`: `*` (needed for `Range` requests so audio can seek)
+- `ExposeHeaders`: `Content-Length`, `Content-Type`, `Content-Range`, `Accept-Ranges`
+- `MaxAgeSeconds`: `3600`
+
+A reference copy of the rules is checked in at [scripts/r2-cors.json](scripts/r2-cors.json) (with a slightly different schema for the wrangler CLI rather than the dashboard format — they're not identical, the dashboard uses S3-compatible PascalCase while wrangler wraps it in `{"rules": [...]}`). If the bucket URL or origins ever need updating, edit that file and either re-paste into the dashboard or run `wrangler r2 bucket cors set cantmute-audio --file scripts/r2-cors.json`.
+
+### Code changes
+- [js/player.js:8-13](js/player.js#L8-L13) — `playerAudio.crossOrigin = 'anonymous'` set immediately after the `Audio` constructor, BEFORE any `src` assignment
+- [script.js:186-187](script.js#L186-L187) — same `audio.crossOrigin = "anonymous"` for the admin page audio element
+
+### Files modified
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b011 → b012`
+- [js/player.js](js/player.js) — `crossOrigin` assignment
+- [script.js](script.js) — `crossOrigin` assignment
+- [scripts/r2-cors.json](scripts/r2-cors.json) **(NEW)** — reference copy of the CORS policy
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Lesson
+When the audio source is going through Web Audio API (`createMediaElementSource`), CORS headers + `crossOrigin` attribute are BOTH mandatory. Setting only one is the same as setting neither. This was missed in the b011 plan because the original `audio-mp3/` setup was same-origin, so no Web Audio CORS issue ever surfaced.
+
 ## b011 — 2026-04-07 — Audio served from Cloudflare R2, audio-mp3/ removed from git history
 
 After b010 deployed, the next deploy hung in the clone step for 3+ minutes, twice. Diagnosed as: 285 MB git repo, 301 MB of audio files in `audio-mp3/` (133 files), zero packs / 317 loose objects. The audio files were pre-existing baggage but the deploys had finally got slow enough that Cloudflare Pages cloning was timing out. Decision: migrate audio to Cloudflare R2 (free for our size, native to Cloudflare, zero egress cost on the network) and wipe `audio-mp3/` from git history.

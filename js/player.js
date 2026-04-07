@@ -5,6 +5,12 @@
 const playerAudio = new Audio();
 playerAudio.preload = 'none';
 playerAudio.volume = 0.8;
+// b011 — required for createMediaElementSource() to work with R2 audio.
+// Without this, the AudioContext analyser silently outputs zeros (because
+// the cross-origin source is opaque), which means total silence reaches
+// the audio destination since the analyser is wired into the audio path.
+// Must be set BEFORE any src is assigned.
+playerAudio.crossOrigin = 'anonymous';
 
 let audioContext = null;
 let analyser = null;

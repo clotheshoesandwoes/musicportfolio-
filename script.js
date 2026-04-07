@@ -183,6 +183,8 @@ let repeatMode = 0; // 0=off, 1=all, 2=one
 let audio = new Audio();
 audio.preload = "none";
 audio.volume = 0.8;
+// b011 — required for createMediaElementSource() to work with R2 audio.
+audio.crossOrigin = "anonymous";
 
 let audioContext = null;
 let analyser = null;
