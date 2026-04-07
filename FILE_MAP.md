@@ -1,7 +1,12 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b023
+**Build:** b024
 **Updated:** 2026-04-07
+
+## Design references
+- [VISION.md](VISION.md) — design bible: project vision, Drake's-site reference, art direction, palette table, click→card system design, scene density priorities, what's in/out of scope. **Read before any "luxury" or scenery feature work.**
+- [HANDOFF.md](HANDOFF.md) — current state for fresh chats
+- [CLAUDE.md](CLAUDE.md) — workflow rules (mandatory)
 
 ## Architecture
 Vanilla JS, no build step. Multi-view single-page site.

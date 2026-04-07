@@ -1,5 +1,61 @@
 # CHANGELOG
 
+## b024 — 2026-04-07 — Luxury garden v2 + palette upgrade + VISION.md
+
+User feedback after b023: "the garden is tiny, no greenery (many plants, shrubs, cool plants), all green is very dark and fogged? the garden u made is an ugly square terrace with no grass no color etc just some lights and a tiny fountain. were talking exorbitant wealth for this scene and property." Owned the failure. b023's garden was a checkered terrace with floating cubes — not luxury. Two structural problems addressed in this build:
+
+1. **All greens were the same dark fogged tone** (`shrubMat` + `topiaryMat` both at `0x2a4a25`). Same root cause as the hill plateau problem.
+2. **The garden was sparse** — perimeter hedges + 4 corner topiary cones + a fountain stub + 8 floating emissive cubes. 25 meshes total. Real luxury gardens have ~80+ varied props.
+
+### Palette upgrade (affects all scenes going forward)
+- `shrubMat` `0x2a4a25 → 0x4a7a30` — manicured green that survives fog (also brightens existing shrubs around the pink Lambo)
+- `topiaryMat` `0x2a4a25 → 0x3a6028` — slightly darker than shrubMat for tonal variety (also brightens existing entry topiary cones from b019)
+- 5 new luxury foliage/hardscape mats:
+  - `lawnMat` `0x5a8c38` — bright manicured lawn
+  - `bougainvilleaMat` `0xd83080` — magenta blooms (the iconic Miami villa flower, complements the dusk pink sky)
+  - `roseMat` `0xc02030` — deep red roses
+  - `lavenderMat` `0x9468d0` — purple lavender stalks
+  - `marbleMat` `0xf6f1e4` — luxury white marble (paths, fountains, statues, planters, benches)
+
+### Garden v2 — actual luxury garden at `(-32, 13)`
+**Footprint:** 22×18 (was 14×16). Density jump: ~25 meshes → ~85 meshes.
+
+- **Bright lawn plane** under the entire garden (the scene finally has actual grass color, not deck-fill)
+- **Manicured hedge perimeter** — taller (1.4m vs 0.7m), 4 sides, brighter `shrubMat`
+- **Marble cross paths** (`marbleMat`, was thin `rimMat` strips)
+- **3-tier ornate marble fountain** at center (was a stub): wide base pool 2.5m radius + cyan water disc, marble column, middle basin 1.5m radius + cyan water, upper column, top tier basin, crowning marble sphere. ~3.2m tall total — the actual centerpiece.
+- **6 plant helpers** added inside `addGarden` (could be promoted to top-level later for reuse): `addTopiaryCone`, `addTopiarySphere`, `addTopiarySpiral`, `addBougainvillea`, `addRoseBush`, `addLavenderClump`, `addUrnPlanter`
+- **~30 plants of varied species:**
+  - 4 corner topiary cones + 4 inner-edge topiary cones (8 cones total, varied heights)
+  - 4 topiary spheres flanking the fountain
+  - 4 topiary spirals at the path corners
+  - 6 bougainvillea bushes spilling over the hedges (green base + magenta bloom cluster)
+  - 6 rose bushes scattered across quadrants
+  - 4 lavender clumps in the corner zones
+- **8 marble urn planters** at hedge corners + path entrances, each with a small topiary on top
+- **2 marble corner statues** flanking the fountain on the long axis: an obelisk and a sphere-on-pedestal (both reuse the b022 statue motifs but in marble instead of stone)
+- **2 marble benches** flanking the fountain on the short axis (seat + 2 legs + back)
+- **2 pergola archways** at the north + south path entrances: 4 marble posts + horizontal beams + 5 cross slats + bougainvillea drape blooms on top
+- **6 pathway lanterns** lining the marble paths (reuse `addDeckLantern`)
+
+### VISION.md (new file)
+Captures the design bible: project vision, the Drake's-site reference, how Kani diverges, art direction (the PS2 sweet spot, the luxury rule, fog/palette discipline, the current palette table), scene density priorities, click→card system design, camera principles, what's out of scope, open questions, do/don't checklist. Future Claude reads this when starting fresh chats or when proposing any "luxury" or scenery feature.
+
+The b023 garden failure is the precipitating lesson: **a luxury feature has ≥20 props of varied types, density > size, multiple scales, and a centerpiece bigger than the surrounding props.** Codified in VISION.md section 4.
+
+### Files modified
+- [js/world.js](js/world.js) — palette mats updated + 5 new mats + complete `addGarden` rewrite (~280 lines net)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b023 → b024`
+- [VISION.md](VISION.md) — new design bible
+- [FILE_MAP.md](FILE_MAP.md) — build bump + VISION.md reference
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Deferred (still tracked in VISION.md section 9)
+- Showroom car swap (yellow G-Wagon, Corvette, "something crazy") — b025
+- Art style "ugly Roblox" dial-back (render target + jitter recalibration) — b026, needs sign-off on specific numbers
+- Hill mat fix v2 (probably needs emissive boost not just brighter colors) — deferred until art-style work
+- Click→card system build — design done in VISION.md, build comes after scene density is sufficient
+
 ## b023 — 2026-04-07 — Flanking lots: garden + supercar showroom, pool palm bug fix
 
 User feedback after b022 deploy: 1) "two palm trees in the pool lol" — long-standing bug. 2) "two other less impressive mansions should be where the two circles exist. or maybe a huge garden on 1 side and something rich and cool on the other." Picked option B (garden + showroom — more variety than yet more mansions next to the existing cross-street row).
