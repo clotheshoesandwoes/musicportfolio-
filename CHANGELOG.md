@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## b028a — 2026-04-07 — Hotfix: hemispheric sky fill (no more black hills) + Play keeps card open
+
+Two follow-ups to b028.
+
+### 1. Black hills / dark geometry
+After b028 cut fog density 3× AND bumped lighting contrast, anything outside the tight point-light ranges (lampRange=14, poolRange=18, windowRange=12) was rendering nearly black with no fog to mask it. The neighbor villas in the back, the boulevard, the side hills — all going pitch black.
+
+Added a **hemispheric sky-fill** term to the PS2 fragment shader. Sky color from above (`vec3(0.45, 0.16, 0.42)` magenta), warm ground bounce from below (`vec3(0.55, 0.14, 0.30)`), blended by `vNormal.y * 0.5 + 0.5`. Multiplied by `0.75`, modulated by `uColor`, added on top of ambient. Free secondary lighting that fills shadowed areas with sky/ground color without flattening the contrast on lit pools.
+
+This is the standard trick (hemispheric/IBL light) every modern game uses. Cheap, ~5 lines of GLSL, no extra uniforms needed.
+
+Tweaked ambient slightly down too: `0.22,0.16,0.34 → 0.18,0.12,0.28`. The hemispheric term is doing the work that ambient used to do, and it's more directional/believable.
+
+### 2. Play button kept the card open
+User: "i wish pressing play wouldnt close the popup tho". Removed the `closeVillaCard()` call from the Play button handler in [js/world.js](js/world.js). Now the card stays open after pressing Play so the user can watch the waveform react live to the audio. Closing still works via × button or click-outside.
+
+### Files modified
+- [js/world.js](js/world.js) — hemispheric sky-fill in PS2 fragment shader, removed closeVillaCard from play handler
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b028 → b028a`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b028 — 2026-04-07 — Graphics overhaul: PS2/Dreamcast palette, rim light, dither, no muddy fog + reactive waveform
 
 User said the villa was reading like "an ugly shitty version of Sims or Second Life" and asked for proper PS1/Dreamcast/PS2 nostalgia with **cool beautiful colors and no heavy fog**. Locked direction at PS2-leaning (the 854×480 + 320×180 jitter grid stays — that part was already right) but with lush saturation instead of pastel washout. Plus the waveform fix from the user's previous note ("waveform should only be active upon pressing play").

@@ -258,8 +258,23 @@
 
           void main() {
             // b028 — darker, cooler ambient so pools of light pop
-            vec3 ambient = vec3(0.22, 0.16, 0.34);
+            vec3 ambient = vec3(0.18, 0.12, 0.28);
             vec3 col = uColor * ambient;
+
+            // b028a — HEMISPHERIC SKY FILL. Without this, anything outside
+            // the tight point-light ranges goes nearly black (b028 cut fog
+            // density 3x and bumped contrast). Real games use a sky-color
+            // term from above + warm ground bounce from below to fill in
+            // shadowed areas without flattening the lit pools.
+            // Sky top color tuned to match the magenta sky mid; bottom is a
+            // hot ground bounce so upward-facing surfaces in the shade still
+            // catch a little Miami warmth.
+            vec3 hemiTop = vec3(0.45, 0.16, 0.42);
+            vec3 hemiBot = vec3(0.55, 0.14, 0.30);
+            float upDot = vNormal.y * 0.5 + 0.5;
+            vec3 hemi = mix(hemiBot, hemiTop, upDot) * 0.75;
+            col += uColor * hemi;
+
             col += pointLight(uLampPos,   uLampColor,   uLampRange,   uColor);
             col += pointLight(uPoolPos,   uPoolColor,   uPoolRange,   uColor);
             col += pointLight(uWindowPos, uWindowColor, uWindowRange, uColor);
@@ -2777,8 +2792,9 @@
     });
     card.querySelector('.villa-card-play').addEventListener('click', (ev) => {
       ev.stopPropagation();
+      // b028a — keep the card open after pressing play so the user can
+      // watch the waveform react to the audio they just started.
       if (typeof playTrack === 'function') playTrack(index);
-      closeVillaCard();
     });
 
     // Click outside the card closes it (use capture so it fires before any
