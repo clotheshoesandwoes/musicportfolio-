@@ -1,5 +1,101 @@
 # CHANGELOG
 
+## b014 — 2026-04-07 — Camera overhaul (drag/zoom/pinch) + layout flip (beach side vs street side) + bigger pool
+
+User feedback after b013: camera was stuck on a fixed pivot with no zoom (was hover-based), villa was just a square box, pool was small and squarish, ocean was on BOTH sides (front AND back), red car parked on something weird, cars too far off. Picked Option A (camera + layout fix only, save full architecture rework for b015). Camera = drag/zoom/pinch (no WASD walking yet).
+
+### Camera — proper orbit (the foundational fix)
+The b001-through-b013 camera was hover-based: yaw/pitch derived from absolute mouse position with no zoom. Couldn't actually explore the scene. Replaced with proper orbit math:
+
+- **Mouse drag rotates** — `mousedown` starts a drag, `mousemove` (while dragging) accumulates yaw/pitch deltas, `mouseup`/`mouseleave` ends the drag
+- **Scroll wheel zooms** — `wheel` adjusts radius (with `preventDefault` so it doesn't scroll the page)
+- **Touch drag rotates** — single-finger drag accumulates yaw/pitch
+- **Pinch zoom** — two-finger pinch adjusts radius based on the ratio of current finger distance to start distance
+- **Spherical orbit math** — `position = center + (sin yaw·cos pitch·r, sin pitch·r, cos yaw·cos pitch·r)`. No more `lerp` smoothing toward a target — direct yaw/pitch from drag input.
+- **Cursor hint** — `cursor: grab` by default, `grabbing` while dragging
+- **Clamps** — pitch clamped to [-0.10, 1.30] (can't flip upside-down or look straight up at the sky), radius clamped to [8, 80] (can't zoom inside the villa or so far the scene becomes a dot), `camera.position.y >= 1.0` (never below ground)
+- New state vars: `isDragging`, `lastDragX/Y`, `touchMode` ('drag'|'pinch'|null), `pinchStartDist`, `pinchStartRadius`, `radius` (was const `CAM_RADIUS`)
+- New constants: `MIN_RADIUS`, `MAX_RADIUS`, `MIN_PITCH`, `MAX_PITCH`, `ROTATE_SPEED` (0.005 rad/px), `ZOOM_SPEED` (0.025 r/wheelDelta)
+- Initial state: `yaw=0`, `pitch=0.30` (slight downward tilt), `radius=26`
+- All 8 new event listeners properly removed in `destroy()`
+
+### Layout flip — ONE side beach, ONE side street (the architecture fix)
+b013 had ocean on BOTH sides (back ocean from b009 + front ocean added in b013). User wanted clear visual separation: pool/ocean side vs street/city side, like a real Miami beachfront mansion. Front stays as the beach side; back becomes the street side.
+
+#### Removed
+- Back ocean plane (was at z=-75)
+- Back beach plane (was at z=-42)
+- Front skyline (40 buildings at z=140 — cities are inland, not over the ocean)
+- All 12 b013 neighbor villa positions (rebuilt below)
+- All b013 boulevard palms scattered across both sides (rebuilt below)
+- All back-of-house path lights (no longer needed without back beach)
+
+#### Added
+- **Asphalt road** at z=-41 (`PlaneGeometry(160, 8)`, dark grey `0x1c1c20`)
+- **Dashed yellow center line** — 26 small emissive boxes evenly spaced along the road
+- **Sidewalk strips** on both sides of the road (lighter grey `0x4a4854`) at z=-36 (near sidewalk) and z=-46 (far sidewalk)
+- **Driveway** — `PlaneGeometry(9, 9)` warm concrete plane at (garageCx, *, -31.5) connecting the road to the garage door
+- **6 streetlamps** along the near sidewalk — pole + arm extending over the road + warm emissive bulb. Bulbs are emissive but NOT wired into the shader light uniforms (those stay reserved for closer pool/interior/lantern lights so the back of the property isn't pumping warm light into the front scene)
+- **12 cross-street mansions** in 3 z-bands: 5 at z=-56 to -58, 5 at z=-76 to -80, 2 side flank houses at z=-28 (visible when orbiting around)
+- **13 boulevard palms** lining the street — 8 along the near side at z=-34, 4 along the far side at z=-48, plus the existing front-side palms still in place
+- **80-building Miami skyline** at z=-100 (was 60 back + 40 front in b013) with every 4th building being a tall high-rise
+
+### Garage rebuilt — detached, behind villa, facing street
+b013's garage was attached to the right side of the villa (z range -14 to -6), with door facing +z (camera/pool side). The b014 layout flip needs the garage door facing -z (street side), but the b013 garage z range is INSIDE the villa box so the door would be invisible behind the villa back wall.
+
+Fix: detached the garage from the right wing entirely.
+- `garageCx 18.95 → 0` (centered behind villa instead of right of villa)
+- `garageCz` now derived as `villaCz - lowerD/2 - garageD/2 = -23` (touching the villa back wall from behind)
+- `garageW 6 → 8` (slightly wider to read more like a 2-car garage)
+- Garage door now on `-z` face at `garageCz - garageD/2 - 0.06 = -27.06`
+- Yellow Lambo position derived from new garage: `addCar(garageCx, garageCz - garageD/2 - 2.8, ...)` = `(0, -29.8, ...)` — parked on the driveway directly in front of the garage door
+
+### Pool — bigger
+- `BoxGeometry(14, 0.2, 4) → BoxGeometry(22, 0.2, 6)`. Area went from 56 to 132, ~2.4× bigger.
+- Pool position `(0, 0.10, 4) → (0, 0.10, 5)` (pushed slightly forward)
+- Rim `BoxGeometry(14.6, 0.22, 4.6) → (22.6, 0.22, 6.6)`
+- `poolPos` lighting uniform `(0, 0.4, 4) → (0, 0.4, 5)`, `poolRange 22 → 26` for the bigger reach
+
+### Deck props shifted forward to clear the new pool z range (2-8)
+- **Daybeds** — 3 daybeds shifted from `z=7.5` to `z=10.8` (and from `x=-4/0/4` to `x=-6/0/6` to slot between the new lantern positions)
+- **Deck lanterns** — 4 lanterns shifted from `z=6.4` to `z=9.5` (and from `x=-6/-2/2/6` to `x=-9/-3/3/9` for the wider deck)
+- `lampPos` lighting uniform `(0, 0.6, 6.4) → (0, 0.6, 9.5)` (anchored to the new middle lantern), `lampRange 18 → 22`
+- **Front pool path lights** — moved from `(±10.5, 8.8)` to `(±13, 12.5)` (further out, past the daybeds)
+- **Side path lights** — simplified from 8 lights to 4 (`(±24, 3)` and `(±24, -8)`)
+- **Boulders** — 2 outboard boulders moved from `(±9, 4)` (inside new pool x range) to `(±13, 5)` (outside pool x range). 5 back-of-pool boulders shifted slightly. 4 villa-corner boulders shifted from `(±18.5, 1.5/8)` to `(±19, 1.5/9)`.
+- **Pink Lambo** moved from `(-22, 5)` (way outboard, past the path lights) to `(-14, 5)` (parked on the pool deck alongside the pool's left edge, between villa left wall x=-16 and pool left edge x=-11)
+
+### Beach loungers moved to front beach
+b013 had the loungers on the back beach which is now gone. Moved to the front beach (camera side):
+- 2 lounger sets (umbrella + 2 chairs each) at `(-22, 32)` and `(22, 32)`
+- 2 solo chairs further out at `(-12, 40)` and `(12, 40)`
+
+### Front beach + front ocean repositioned + bigger
+- Front beach `PlaneGeometry(120, 24)` at `(0, 0.03, 30)` → `PlaneGeometry(140, 28)` at `(0, 0.03, 32)`
+- Front ocean `PlaneGeometry(260, 90)` at `(0, -0.02, 90)` → `PlaneGeometry(320, 110)` at `(0, -0.02, 100)`
+
+### Ground plane — extended
+- Was `PlaneGeometry(80, 40)` at `(0, 0, -2)` (just covered villa+pool zone)
+- Now `PlaneGeometry(180, 80)` at `(0, 0, -10)` to cover both the front patio AND the back area between villa back wall and the new street
+
+### Files modified
+- [js/world.js](js/world.js) — camera input rewrite, layout flip, garage rebuild, pool resize, deck prop repositioning, beach lounger move, ground plane extension, skyline cleanup
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b013 → b014`
+- [FILE_MAP.md](FILE_MAP.md) — build bump, camera section rewritten for new orbit math, world.js note rewritten for the layout flip
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### What's NOT in this build
+- **Villa architecture rework** — the villa is still the b013 hollow shell at 32×6×18 with 5 stone columns + cantilever upper. User said "house is just a square, no cool miami architecture" — that's b015. This build is camera + layout only.
+- **Pool reshape** — pool is now bigger but still rectangular. The reference photo's curved/circular jacuzzi treatment is also b015.
+- **Click → song-card system** — that's b016 now.
+- **Walking/WASD** — eventually, but not soon.
+
+### Risks I want to flag
+- **Yellow lambo position math** — it's derived from `garageCx` and `garageCz`, which are now both new values. If anything in the chain is off by a unit, the lambo could be on the road or inside the garage. I tested the math but the visual is the real test.
+- **The road might feel disconnected** from the villa — there's about 4 units of plain ground between the villa back wall (z=-19) and the garage front (z=-19, touching), then the garage takes up z=-19 to -27, then driveway/sidewalk. If the back of the property feels visually empty between the villa and the road, I'll add hedges or more boulders along the back wall in the next build.
+- **Camera at wide zoom may show the property edges** — at radius=80 the camera sees a lot. The ground plane is 180×80 and the front ocean extends to z=210ish, so there should be enough scene coverage, but if you zoom way out and see "the world ends" anywhere, tell me and I'll extend further.
+- **Pinch zoom on mobile** — I can't test this from desktop. The math should be right (`pinchStartRadius * pinchStartDist / dist`) but if it feels inverted or jumpy on your phone, paste what's happening.
+
 ## b013 — 2026-04-07 — Villa expanded ~2× w/ hollow interior shell, front beach + front ocean, denser Miami back
 
 User feedback after b010 deployed: front of pool just hard-cuts off into void, behind the house feels empty (not the rich Miami neighborhood vibe), and the house itself is too small to populate with interior props (piano + decor + future song-card click targets). User picked option C (both exterior expansion AND interior rebuild in one build), camera stays orbit for now (walking is a future build), each future prop will become a click→song-card trigger.
