@@ -1436,7 +1436,9 @@
       const rugMat = makePS2Material({ color: 0x6a2438 });
       const rug = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 4.5), rugMat);
       rug.rotation.x = -Math.PI / 2;
-      rug.position.set(lrCx, lrY + 0.03, lrCz - 3.0);
+      // b033 — bumped from +0.03 to +0.06 to clear coplanar z-fighting with
+      // the interior floor at lrY + 0.01
+      rug.position.set(lrCx, lrY + 0.06, lrCz - 3.0);
       scene.add(rug);
     }
 
@@ -2544,11 +2546,19 @@
     // -----------------------------------------------------
     // Low-res render target → fullscreen quad upscale
     // -----------------------------------------------------
+    // b033 — explicit 24-bit DepthTexture. The default depthBuffer:true on
+    // a WebGLRenderTarget gets a 16-bit DEPTH_COMPONENT16 renderbuffer on
+    // many drivers, which combined with the low-res 854×480 grid produces
+    // visible z-fighting on coplanar interior surfaces (rug/floor/walls).
+    // UnsignedIntType + DEPTH_COMPONENT24 fixes it.
+    const depthTex = new THREE.DepthTexture(LOW_W, LOW_H);
+    depthTex.type = THREE.UnsignedIntType;
     lowResTarget = new THREE.WebGLRenderTarget(LOW_W, LOW_H, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
       format: THREE.RGBAFormat,
       depthBuffer: true,
+      depthTexture: depthTex,
     });
 
     postScene = new THREE.Scene();
@@ -3038,10 +3048,10 @@
     { name: 'pool',     label: 'POOL',     mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -2,    yaw: 0,            pitch: 0.30, radius: 26  },
     { name: 'beach',    label: 'BEACH',    mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -8,    yaw: 0,            pitch: 0.05, radius: 35  },
     { name: 'aerial',   label: 'AERIAL',   mode: 'orbit',       cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 42  },
-    { name: 'living',   label: 'LIVING',   mode: 'firstPerson', px:   0,    py: 2.5, pz: -14.5,  yaw: Math.PI,      pitch: 0.00, fov: 75 },
-    { name: 'bedroom',  label: 'BEDROOM',  mode: 'firstPerson', px: -11.5,  py: 4.8, pz:  -7.5,  yaw: 0,            pitch: -0.05, fov: 75 },
-    { name: 'billiard', label: 'BILLIARD', mode: 'firstPerson', px:  14.5,  py: 1.8, pz: -11.5,  yaw: Math.PI / 2,  pitch: -0.10, fov: 75 },
-    { name: 'indoor',   label: 'INDOOR',   mode: 'firstPerson', px:   0,    py: 2.8, pz: -18.5,  yaw: 0,            pitch: -0.10, fov: 78 },
+    { name: 'living',   label: 'LIVING',   mode: 'firstPerson', px:   0,    py: 3.5, pz: -15.8,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
+    { name: 'bedroom',  label: 'BEDROOM',  mode: 'firstPerson', px: -11.5,  py: 5.8, pz:  -6.0,  yaw: 0,             pitch: 0.18, fov: 75 },
+    { name: 'billiard', label: 'BILLIARD', mode: 'firstPerson', px:  14.5,  py: 3.0, pz: -12.5,  yaw: Math.PI / 2,   pitch: 0.20, fov: 75 },
+    { name: 'indoor',   label: 'INDOOR',   mode: 'firstPerson', px:   0,    py: 4.0, pz: -18.0,  yaw: 0,             pitch: 0.12, fov: 78 },
   ];
   let currentAnchorIdx = 0;
   let flyState = null;  // b032: { startTime, fromPos, fromLook, fromFov, toPos, toLook, toFov, target }

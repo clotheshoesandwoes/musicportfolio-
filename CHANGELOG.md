@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## b033 — 2026-04-07 — Raise interior camera heights + 24-bit depth texture + rug y-offset
+
+User: "billiard view is terrible cuz im midget level so i cant see anything in the room same for bedroom same for living. constant z fighting when zooming or moving camera around is it cuz everything is on the same plane axis?"
+
+Two issues, two causes.
+
+### 1. Midget cameras
+b032 first-person heights were picked for "real human eye level" — but the villa is built oversized, so eye level + tall furniture meant the camera was at table-top / sofa-back level and couldn't see the room contents. Worse, LIVING was placed at z=-14.5 which sits *between* the sofa back (-14.7) and the sofa seat (-14) — camera was inside the sofa.
+
+Bumped all interior anchor heights so the user looks *down at* the hero prop from a stand-on-a-stool view, with a slight downward pitch:
+- LIVING `(0, 2.5, -14.5) → (0, 3.5, -15.8)`, pitch 0 → 0.10
+- BEDROOM `(-11.5, 4.8, -7.5) → (-11.5, 5.8, -6.0)`, pitch -0.05 → 0.18
+- BILLIARD `(14.5, 1.8, -11.5) → (14.5, 3.0, -12.5)`, pitch -0.10 → 0.20
+- INDOOR `(0, 2.8, -18.5) → (0, 4.0, -18.0)`, pitch -0.10 → 0.12
+
+### 2. Z-fighting
+Yes, partly coplanar surfaces — the living room rug was at `lrY + 0.03` vs the interior floor at `lrY + 0.01`, only 0.02 apart. Bumped to `+0.06`.
+
+But the bigger fix is the depth buffer. The 854×480 `lowResTarget` was using `depthBuffer: true` with no explicit type, which on many drivers gets a 16-bit `DEPTH_COMPONENT16` renderbuffer. Combined with the low-res grid this produces visible flickering on coplanar interior surfaces, and the flicker pattern shifts as the camera rotates because the pixel sampling shifts. Attached an explicit `THREE.DepthTexture(LOW_W, LOW_H)` with `UnsignedIntType` (24-bit). This is the b030 step-2 fix I had deferred.
+
+### Files modified
+- [js/world.js](js/world.js) — interior anchor coordinates, `lowResTarget` gets explicit `DepthTexture`, living room rug y `+0.03 → +0.06`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b032 → b033`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b032 — 2026-04-07 — Dual-mode camera: first-person for interior anchors
 
 User: "angles for all interior rooms is bad cause its too zoomed in. as soon as i move camera or zoom out, im locked from the outside i cant zoom back in... also the positions arent great for looking around and clicking into stuff". Two problems, one root cause: orbit-around-a-point is the wrong primitive for tight interiors.
