@@ -2468,7 +2468,7 @@
     container.addEventListener('touchend', onTouchEnd);
     container.addEventListener('touchcancel', onTouchEnd);
     // Hint cursor
-    container.style.cursor = 'grab';
+    (canvas || container).style.cursor = 'grab';
 
     onResize = () => {
       if (!renderer || !container) return;
@@ -2523,7 +2523,7 @@
     dragStartX = e.clientX;
     dragStartY = e.clientY;
     dragMoved = false;
-    container.style.cursor = 'grabbing';
+    (canvas || container).style.cursor = 'grabbing';
   }
   function onMouseMove(e) {
     if (isDragging) {
@@ -2545,13 +2545,13 @@
     const hit = pickPropAtMouse();
     if (hit !== hoveredProp) {
       hoveredProp = hit;
-      if (container) container.style.cursor = hit ? 'pointer' : 'grab';
+      if (container) (canvas || container).style.cursor = hit ? 'pointer' : 'grab';
     }
   }
   function onMouseUp(e) {
     const wasClick = isDragging && !dragMoved;
     isDragging = false;
-    if (container) container.style.cursor = hoveredProp ? 'pointer' : 'grab';
+    if (container) (canvas || container).style.cursor = hoveredProp ? 'pointer' : 'grab';
     // b026 — click→card dispatch. A "click" = mousedown→mouseup with <4px movement.
     if (wasClick && e && e.clientX !== undefined) {
       updateMouseNDC(e);

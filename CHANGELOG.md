@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## b026a — 2026-04-07 — Hotfix: cursor and click events were going to the wrong element
+
+b026 deployed but the click→card system appeared dead — hovering the pink Lambo didn't change the cursor and clicks didn't dispatch cards. Diagnosis: I was setting `container.style.cursor` in JS, but [style.css:540-548](style.css#L540-L548) has `.world-canvas { cursor: grab; }` and the canvas is `position: absolute; inset: 0` ON TOP of the container. The canvas's CSS cursor wins because the canvas is the actual hit target for pointer events, AND the CSS rule on the canvas overrides any inline cursor on the parent container. The hover and click logic was running fine — it just couldn't update the cursor visually.
+
+### Fix
+Changed all 4 `container.style.cursor = X` writes in [js/world.js](js/world.js) to `(canvas || container).style.cursor = X`. Inline styles on the canvas override the CSS rule because inline styles win the cascade. The `(canvas || container)` fallback keeps it safe even if the canvas reference somehow doesn't exist yet.
+
+### Why this slipped past
+The drag/grab cursor was working in b014 onward because `:active` is a CSS pseudo-class that fires on mousedown — it doesn't depend on JS setting the cursor. So `cursor: grab` (idle) and `cursor: grabbing` (`:active`) were both CSS-driven, never JS-driven. b026 was the first build that needed JS to drive the cursor (to switch to `pointer` on hover). I assumed the cursor was already JS-controlled — it wasn't.
+
+### Files modified
+- [js/world.js](js/world.js) — 4 cursor writes redirected to canvas
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b026 → b026a`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b026 — 2026-04-07 — Click→card system MVP (the actual destination interaction loop)
 
 User: "can we start working on the card click music portion pls? just so i have a working concept going". The destination interaction the entire project has been building toward — click a prop in the villa scene, get a song card pop up with a play button. **Working concept shipping in this build.** Reuses the existing `showTrackDetail()` modal in [js/app.js](js/app.js) instead of building a new card UI from scratch — that function already creates a beautiful detail panel with title, gradient art, artist, credits, description, tags, links, play button, close button.
