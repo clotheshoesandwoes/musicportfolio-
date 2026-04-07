@@ -2583,26 +2583,122 @@
     // than tracking it manually here. Mouseup just resets cursor + drag state.
   }
 
-  // b026b — real `click` listener. Fires only on genuine clicks (browser
-  // suppresses it after a drag). dragMoved guard is belt-and-suspenders
-  // for the case where a user drags then releases over a prop.
+  // b027 — real `click` listener. Uses the cached `hoveredProp` from the
+  // most recent mousemove as the source of truth — same value that drives
+  // the cursor flip. If the cursor was a pointer, the click hits.
+  // Re-raycasting at click time was unreliable on desktop (returned null
+  // even when the user was clearly clicking on a highlighted prop).
   function onCanvasClick(e) {
     if (dragMoved) { dragMoved = false; return; }
-    updateMouseNDC(e);
-    const hit = pickPropAtMouse();
-    console.log('[villa b026b click]', { hit, ndcX: mouseNDC && mouseNDC.x.toFixed(2), ndcY: mouseNDC && mouseNDC.y.toFixed(2) });
-    if (!hit) return;
-    const trackIdx = propTracks[hit];
-    if (typeof tracks === 'undefined' || tracks.length === 0) {
-      console.warn('[villa b026b click] tracks not loaded yet');
-      return;
-    }
+    if (!hoveredProp) return;
+    if (typeof tracks === 'undefined' || tracks.length === 0) return;
+    const trackIdx = propTracks[hoveredProp];
     const safeIdx = trackIdx % tracks.length;
-    if (typeof showTrackDetail === 'function') {
-      showTrackDetail(safeIdx);
-    } else if (typeof playTrack === 'function') {
-      playTrack(safeIdx);
+    showVillaCard(safeIdx, e.clientX, e.clientY);
+  }
+
+  // b027 — small popover card anchored at the click position. Replaces
+  // the slide-in side panel for the villa view. Has thumbnail, title,
+  // artist, description, play button, decorative animated waveform.
+  let villaCardEl = null;
+  let villaCardOutsideHandler = null;
+  function closeVillaCard() {
+    if (villaCardEl && villaCardEl.parentNode) {
+      villaCardEl.parentNode.removeChild(villaCardEl);
     }
+    villaCardEl = null;
+    if (villaCardOutsideHandler) {
+      document.removeEventListener('mousedown', villaCardOutsideHandler, true);
+      villaCardOutsideHandler = null;
+    }
+  }
+  function showVillaCard(index, screenX, screenY) {
+    closeVillaCard();
+    const t = tracks[index];
+    if (!t) return;
+    const grad = (typeof getGradient === 'function')
+      ? getGradient(index)
+      : 'linear-gradient(135deg,#8b5cf6,#6d28d9)';
+
+    const card = document.createElement('div');
+    card.className = 'villa-card';
+    villaCardEl = card;
+
+    // Build 18 waveform bars with random heights — pure decoration, animated via CSS.
+    let bars = '';
+    for (let i = 0; i < 18; i++) {
+      const h = 30 + Math.floor(Math.random() * 70);
+      bars += `<span style="height:${h}%;animation-delay:${(i * 0.07).toFixed(2)}s"></span>`;
+    }
+
+    const desc = t.description
+      ? `<div class="villa-card-desc">${escapeHtmlSafe(t.description)}</div>`
+      : '';
+    const newBadge = t.isNew ? '<span class="villa-card-badge new">NEW</span>' : '';
+    const featBadge = t.isFeatured ? '<span class="villa-card-badge feat">FEAT</span>' : '';
+
+    card.innerHTML = `
+      <button class="villa-card-close" type="button" aria-label="Close">&times;</button>
+      <div class="villa-card-row">
+        <div class="villa-card-art" style="background:${grad}"></div>
+        <div class="villa-card-meta">
+          <div class="villa-card-badges">${newBadge}${featBadge}</div>
+          <div class="villa-card-title">${escapeHtmlSafe(t.title || 'Untitled')}</div>
+          <div class="villa-card-artist">${escapeHtmlSafe((typeof siteConfig !== 'undefined' && siteConfig.artist) || 'Kani')}</div>
+        </div>
+      </div>
+      ${desc}
+      <div class="villa-card-wave">${bars}</div>
+      <button class="villa-card-play" type="button">▶ PLAY</button>
+    `;
+
+    // Position the card. Anchor above the click point; if it would clip the
+    // top of the viewport, flip below. Clamp horizontally.
+    document.body.appendChild(card);
+    const rect = card.getBoundingClientRect();
+    const margin = 12;
+    let x = screenX - rect.width / 2;
+    let y = screenY - rect.height - 18;
+    if (y < margin) y = screenY + 18;
+    if (x < margin) x = margin;
+    if (x + rect.width > window.innerWidth - margin) x = window.innerWidth - rect.width - margin;
+    if (y + rect.height > window.innerHeight - margin) y = window.innerHeight - rect.height - margin;
+    card.style.left = x + 'px';
+    card.style.top  = y + 'px';
+    requestAnimationFrame(() => card.classList.add('visible'));
+
+    // Wire up buttons
+    card.querySelector('.villa-card-close').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      closeVillaCard();
+    });
+    card.querySelector('.villa-card-play').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (typeof playTrack === 'function') playTrack(index);
+      closeVillaCard();
+    });
+
+    // Click outside the card closes it (use capture so it fires before any
+    // canvas handlers). Schedule on next frame so the click that opened the
+    // card doesn't immediately close it.
+    requestAnimationFrame(() => {
+      villaCardOutsideHandler = (ev) => {
+        if (villaCardEl && !villaCardEl.contains(ev.target)) closeVillaCard();
+      };
+      document.addEventListener('mousedown', villaCardOutsideHandler, true);
+    });
+  }
+
+  // Local HTML escape so we don't depend on app.js's `escapeHtml` being
+  // accessible from inside this IIFE.
+  function escapeHtmlSafe(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
   function onWheel(e) {
     e.preventDefault();
@@ -2655,19 +2751,15 @@
   }
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
-      // b026 — if this was a tap (drag mode + no movement), dispatch click→card
+      // b027 — if this was a tap (drag mode + no movement), raycast at the
+      // tap position and dispatch the villa card popover.
       const wasTap = touchMode === 'drag' && !dragMoved;
       if (wasTap) {
-        // Use the lastDragX/Y as the tap position (touchend has no clientX)
         updateMouseNDC({ clientX: lastDragX, clientY: lastDragY });
         const hit = pickPropAtMouse();
         if (hit && typeof tracks !== 'undefined' && tracks.length > 0) {
           const safeIdx = propTracks[hit] % tracks.length;
-          if (typeof showTrackDetail === 'function') {
-            showTrackDetail(safeIdx);
-          } else if (typeof playTrack === 'function') {
-            playTrack(safeIdx);
-          }
+          showVillaCard(safeIdx, lastDragX, lastDragY);
         }
       }
       touchMode = null;
@@ -2710,6 +2802,7 @@
 
   function destroy() {
     destroyed = true;
+    closeVillaCard();
     if (animId) cancelAnimationFrame(animId);
     animId = null;
     if (onResize) window.removeEventListener('resize', onResize);

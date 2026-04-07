@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## b027 — 2026-04-07 — Villa popover card (anchored at click), no more side panel for villa view
+
+Two fixes in one. (1) **Desktop click was returning `hit: null` even when the cursor showed a pointer.** Re-raycasting at click time was unreliable for some reason — possibly DPR/scaling skew or a few-pixel drift between hover and click in `e.clientX`. The cached `hoveredProp` from the most recent mousemove is the same value that drives the cursor flip, so if the cursor showed a pointer, the click hits. `onCanvasClick` now reads `hoveredProp` instead of re-raycasting. (2) **The slide-in side panel was wrong for the villa view.** User explicitly: "i dont want a side panel to open. i want a small card to hover over the clicked item and from there it gives some description, a thumbnail, play button and cool waveform of the song or something." Built that.
+
+### Villa popover card (`.villa-card`)
+New DOM element appended to `<body>` and positioned at the click coordinates. Lives in [js/world.js](js/world.js) as `showVillaCard(index, screenX, screenY)` + `closeVillaCard()`. Independent of `showTrackDetail()` — that side panel still ships for the deepsea/neural views which use it.
+
+- **Anchor logic** — defaults to above-the-click; if it would clip the top of the viewport, flips below. Horizontal position clamped to viewport with a 12px margin. Centered on the click X.
+- **Layout** — 280×~auto card, dark frosted background (`backdrop-filter: blur(10px)`), purple ring shadow, rounded 14px corners.
+- **Content** — gradient thumbnail (56×56) using existing `getGradient(index)` palette, NEW/FEAT badges, title (truncated), artist, 2-line clamped description, decorative animated waveform (18 CSS-animated bars on a purple→cyan gradient), full-width Play button.
+- **Waveform** — pure CSS `@keyframes villa-wave-pulse` per-bar with staggered `animation-delay`. Not yet wired to live `getFrequencyData()` — that's a TODO once a track is actually playing while the card is open.
+- **Dismiss** — explicit × button, Play button (which also fires `playTrack(index)`), or any click outside the card (capture-phase mousedown listener on document). The outside-click handler is registered on the next frame so the click that opened the card doesn't immediately close it.
+- **Cleanup** — `destroy()` calls `closeVillaCard()` so leaving the villa view tears down the popover and detaches the outside-click listener.
+- **Touch path** — `onTouchEnd` also calls `showVillaCard(safeIdx, lastDragX, lastDragY)` so mobile taps get the same popover.
+
+### Click reliability fix
+`onCanvasClick` no longer calls `updateMouseNDC` + `pickPropAtMouse`. Instead it reads `hoveredProp` (set by the hover detection in `onMouseMove`) and dispatches the card if it's truthy. Source-of-truth match: cursor and click now share the same input. The old re-raycast path was returning null on desktop even when hovering an outlined prop — root cause unconfirmed (possibly a sub-pixel drift between the move and the click event), but routing through the same cache makes the question moot.
+
+The yellow `BoxHelper` debug outlines from b026b stay in place — user said "the box esp really helps me visually right now". They'll come out when we want a cleaner final look (probably replaced with a subtle glow on hover only).
+
+### Files modified
+- [js/world.js](js/world.js) — `onCanvasClick` reads `hoveredProp`; `showVillaCard`/`closeVillaCard`/`escapeHtmlSafe` added; `onTouchEnd` switched to villa-card; `destroy` closes the card
+- [style.css](style.css) — `.villa-card` block + `@keyframes villa-wave-pulse`; mobile width override
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b026b → b027`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b026b — 2026-04-07 — Click dispatch via real `click` event + yellow outlines on every clickable prop
 
 After b026a, the cursor flipped to a pointer correctly when hovering the pink Lambo, but actually clicking did nothing — and the user reported the same for the yellow Lambo and others. The hover→cursor path proved raycast + propTracks lookup were both working, so the bug was somewhere in the manual mousedown→mouseup → "wasClick" dispatch logic in [js/world.js](js/world.js).
