@@ -2456,12 +2456,38 @@
     postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
 
     // -----------------------------------------------------
+    // b026b — DEBUG OUTLINES: yellow wireframe boxes around every
+    // clickable prop, so the user can see at a glance which objects
+    // are wired up to a song card. Walk the whole scene, find every
+    // Object3D whose `.name` is in propTracks, and add a BoxHelper.
+    // depthTest off + high renderOrder so the outline always pops.
+    // -----------------------------------------------------
+    {
+      const wanted = new Set(Object.keys(propTracks));
+      const found = [];
+      scene.traverse(obj => {
+        if (obj.name && wanted.has(obj.name)) found.push(obj);
+      });
+      for (const obj of found) {
+        const helper = new THREE.BoxHelper(obj, 0xffee00);
+        helper.material.depthTest = false;
+        helper.material.transparent = true;
+        helper.material.opacity = 0.9;
+        helper.renderOrder = 999;
+        scene.add(helper);
+      }
+      console.log('[villa b026b] clickable props found:', found.map(o => o.name));
+    }
+
+    // -----------------------------------------------------
     // Input — b014 proper orbit camera (drag/wheel/pinch)
+    //         b026b — real `click` listener for card dispatch
     // -----------------------------------------------------
     container.addEventListener('mousedown', onMouseDown);
     container.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     container.addEventListener('mouseleave', onMouseUp);
+    container.addEventListener('click', onCanvasClick);
     container.addEventListener('wheel', onWheel, { passive: false });
     container.addEventListener('touchstart', onTouchStart, { passive: false });
     container.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -2549,24 +2575,33 @@
     }
   }
   function onMouseUp(e) {
-    const wasClick = isDragging && !dragMoved;
     isDragging = false;
     if (container) (canvas || container).style.cursor = hoveredProp ? 'pointer' : 'grab';
-    // b026 — click→card dispatch. A "click" = mousedown→mouseup with <4px movement.
-    if (wasClick && e && e.clientX !== undefined) {
-      updateMouseNDC(e);
-      const hit = pickPropAtMouse();
-      if (hit) {
-        const trackIdx = propTracks[hit];
-        if (typeof tracks !== 'undefined' && tracks.length > 0) {
-          const safeIdx = trackIdx % tracks.length;
-          if (typeof showTrackDetail === 'function') {
-            showTrackDetail(safeIdx);
-          } else if (typeof playTrack === 'function') {
-            playTrack(safeIdx);
-          }
-        }
-      }
+    // b026b — click dispatch moved to onCanvasClick (real `click` event).
+    // The browser only fires `click` when mousedown→mouseup happened on the
+    // same element with no significant movement, so it's strictly more reliable
+    // than tracking it manually here. Mouseup just resets cursor + drag state.
+  }
+
+  // b026b — real `click` listener. Fires only on genuine clicks (browser
+  // suppresses it after a drag). dragMoved guard is belt-and-suspenders
+  // for the case where a user drags then releases over a prop.
+  function onCanvasClick(e) {
+    if (dragMoved) { dragMoved = false; return; }
+    updateMouseNDC(e);
+    const hit = pickPropAtMouse();
+    console.log('[villa b026b click]', { hit, ndcX: mouseNDC && mouseNDC.x.toFixed(2), ndcY: mouseNDC && mouseNDC.y.toFixed(2) });
+    if (!hit) return;
+    const trackIdx = propTracks[hit];
+    if (typeof tracks === 'undefined' || tracks.length === 0) {
+      console.warn('[villa b026b click] tracks not loaded yet');
+      return;
+    }
+    const safeIdx = trackIdx % tracks.length;
+    if (typeof showTrackDetail === 'function') {
+      showTrackDetail(safeIdx);
+    } else if (typeof playTrack === 'function') {
+      playTrack(safeIdx);
     }
   }
   function onWheel(e) {
@@ -2683,6 +2718,7 @@
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('mousemove', onMouseMove);
       container.removeEventListener('mouseleave', onMouseUp);
+      container.removeEventListener('click', onCanvasClick);
       container.removeEventListener('wheel', onWheel);
       container.removeEventListener('touchstart', onTouchStart);
       container.removeEventListener('touchmove', onTouchMove);

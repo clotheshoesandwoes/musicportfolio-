@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## b026b — 2026-04-07 — Click dispatch via real `click` event + yellow outlines on every clickable prop
+
+After b026a, the cursor flipped to a pointer correctly when hovering the pink Lambo, but actually clicking did nothing — and the user reported the same for the yellow Lambo and others. The hover→cursor path proved raycast + propTracks lookup were both working, so the bug was somewhere in the manual mousedown→mouseup → "wasClick" dispatch logic in [js/world.js](js/world.js).
+
+### Fix
+Stopped re-implementing `click` by hand. The browser already fires a `click` DOM event only when mousedown→mouseup occurred on the same element with no significant movement — strictly more reliable than the homemade `isDragging && !dragMoved` check. Added a real `click` listener on the container (`onCanvasClick`) that does the raycast + propTracks lookup + `showTrackDetail()` dispatch. Removed the click branch from `onMouseUp` (it now just resets cursor + drag state).
+
+A `dragMoved` guard remains as belt-and-suspenders for the case where a real drag releases over a prop. Added a `console.log('[villa b026b click]', ...)` so future regressions are diagnosable from devtools without code spelunking.
+
+### Debug outlines (temporary)
+User asked: "can all our active props have a highlight around them for time being". Added a `THREE.BoxHelper` (yellow `0xffee00`, depth-test off, opacity 0.9, renderOrder 999) around every Object3D in the scene whose `.name` is a key in `propTracks`. Done in `init()` after the scene graph is built but before input listeners are wired up. The `traverse()` walk also `console.log`s the names found, so we can confirm whether a prop's `.name` is actually being set during construction (e.g. if `bell_tower` shows up but `surfboard` doesn't, that's a clue the surfboard mesh-naming code is missing or wrong).
+
+### Files modified
+- [js/world.js](js/world.js) — `onCanvasClick` added, click branch removed from `onMouseUp`, BoxHelper outlines added in init, listener wired in setup + cleaned up in destroy
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b026a → b026b`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b026a — 2026-04-07 — Hotfix: cursor and click events were going to the wrong element
 
 b026 deployed but the click→card system appeared dead — hovering the pink Lambo didn't change the cursor and clicks didn't dispatch cards. Diagnosis: I was setting `container.style.cursor` in JS, but [style.css:540-548](style.css#L540-L548) has `.world-canvas { cursor: grab; }` and the canvas is `position: absolute; inset: 0` ON TOP of the container. The canvas's CSS cursor wins because the canvas is the actual hit target for pointer events, AND the CSS rule on the canvas overrides any inline cursor on the parent container. The hover and click logic was running fine — it just couldn't update the cursor visually.
