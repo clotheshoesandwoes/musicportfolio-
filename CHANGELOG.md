@@ -1,5 +1,106 @@
 # CHANGELOG
 
+## b010 — 2026-04-06 — Villa redesign: 2-story cantilever w/ stone columns, "sun just dipped" sky, long infinity pool, daybeds + lanterns + boulders, PS2+ render
+
+User sent reference photos (Mykonos/Miami modernist villa, dusk + blue hour, white plaster, stacked stone, infinity pool, white cushioned daybeds, palm silhouettes, warm interior spill). User picked the in-between of sunset and blue hour ("sun just dipped"). User picked "crisper PS2 but don't deviate too much" → PS2+ mode. The villa is now the hero (b011 click→card on deck after this lands), so the house gets a full architecture rewrite to match the photos.
+
+### Render upgrade — "PS2+" mode
+- [js/world.js:18-19](js/world.js#L18-L19) — `LOW_W 480 → 854`, `LOW_H 270 → 480`
+- PS2 vertex jitter grid `vec2(160.0, 90.0) → vec2(320.0, 180.0)` in 3 places: PS2 material vertex shader, ocean vertex shader, skyline-dot vertex shader
+- Scanline freq `540 → 960`, intensity `0.035 → 0.022` in the post material — lighter scanlines for the higher-res target
+
+### Sky shader — "sun just dipped" palette
+- `topColor 0x2a2060 → 0x0a0a3a` (deep indigo at zenith)
+- `midColor 0x8a2585 → 0x9a3070` (lavender/magenta band)
+- `bottomColor 0xff4090 → 0xff7050` (warm pink/orange horizon, sun just below)
+- **Removed moon disc + halo** — it's still dusk, not full night
+- Star threshold raised to `h > 0.4` and `step(0.994, n)` — only sparse stars at the zenith
+
+### Lighting constants — warmer interior, brighter cyan pool
+- `lampColor 0xff8c42 → 0xffc080` (warm lantern, not sodium)
+- `lampRange 28 → 18` (more localized — it's a deck lantern, not a streetlight)
+- `lampPos (6, 5, -1) → (0, 0.6, 6.4)` (sits on the middle deck lantern at the pool front edge)
+- `poolColor 0x2af0d0 → 0x40fff0` (brighter cyan)
+- `poolRange 14 → 22` (cyan glow reaches further across the deck)
+- `windowColor 0xffe6c8 → 0xffd090` (richer warm)
+- `windowRange 16 → 22` (more interior spill through the FTG glass)
+- PS2 shader ambient `(0.36, 0.30, 0.44) → (0.28, 0.24, 0.40)` (slightly darker so warm/cool point lights pop)
+- Fog color `0x55265e → 0x40285a` across all 3 shaders + scene fog (cooler indigo, sharpens contrast against the warm horizon)
+- Renderer clear color `0x251040 → 0x1a1238`
+
+### Pool — long infinity-edge geometry + brighter shader
+- Pool geometry `BoxGeometry(8, 0.18, 5, 12, 1, 8) → BoxGeometry(14, 0.2, 4, 20, 1, 8)` — long rectangle running parallel to villa front
+- Pool shader `uBaseColor 0x0fb5b5 → 0x18d8d0`, `uBrightColor 0x8effe8 → 0xa8fff0`
+- Top-face brightness boost `mix(0.8, 3.0, vTopMask) → mix(0.8, 3.6, vTopMask)`
+- Pool rim `BoxGeometry(8.6, 0.2, 5.6) → (14.6, 0.22, 4.6)` to match
+- Rim color `0x4a4555 → 0xe8e4dc` (white travertine, not dark concrete)
+- Ground color `0x5a5560 → 0xc0bcb0` (white travertine patio matches the new villa)
+
+### Villa — full architecture rewrite (the big one)
+**Ripped:** old lower/upper/penthouse volumes, all roof slabs, balcony floor, balcony rail + 9 posts, all glass strips, old door (~100 lines).
+
+**Replaced with:**
+- New `villaMat` color `0xa8a4b2 → 0xeeeae0` (white plaster)
+- New `roofMat` color `0x5a5666 → 0xe0dcd0` (light slab, slightly darker than walls)
+- New `stoneMat` `0x8a847a` (stacked natural stone for column accents)
+- New `coveMat` (warm emissive cove light strip)
+- **Lower volume:** `BoxGeometry(20, 4, 11)` (was 17×4×10) — wider, more imposing
+- **Upper volume:** `BoxGeometry(13, 3.5, 7)`, set back 0.5 on rear and **hanging 1.0 forward over the pool deck** (the signature cantilever)
+- **Lower roof slab:** thin (0.22 high), oversize +0.6 each side
+- **Upper roof slab:** very thin (0.20 high), oversize +1.5 each side — the floating slab look
+- **Recessed cove light:** warm emissive strip on the underside of the upper cantilever, glows down onto the deck
+- **NEW: 3 stacked stone columns** on the front face of the lower volume at x=-7.5/0/+7.5 — break up the long white wall, match the photo signature
+- **2 floor-to-ceiling glass panes** filling the gaps between the stone columns
+- **Upper FTG glass** on the front face of the upper volume
+- **Side glass strip** on the camera-facing edge of the upper volume
+- **Recessed front door** at x=-5
+- **Penthouse REMOVED** (b011-targeted in the previous build, now actually rebuilt — the b010 villa is the hero house)
+- **Balcony + railing REMOVED** — the cantilever upper volume IS the balcony in the new design
+- New `windowMat` color `0xffe6c8 → 0xffd090`, emissive `0xffd6a0 → 0xffc880`, emissiveAmt `1.8 → 2.0` — richer warm interior glow
+
+### Pool deck daybeds (NEW)
+- New `daybedWoodMat` (warm wood `0x6b4a30`), `daybedCushionMat` (cream `0xf0ece0`), `daybedPillowMat` (`0xe8e2d0`)
+- New `addDaybed(x, z, rotY)` helper — Group of: wood base box + white cushion box + small pillow at one end
+- 3 daybeds along the front edge of the pool deck at z=7.5, x=-4/0/+4 (slotted between the deck lanterns)
+
+### Deck lanterns (NEW, replaces the streetlamp)
+- **Ripped** the sodium streetlamp pole + bulb + shade (~20 lines)
+- New `lanternBaseMat` (dark `0x2a241c`) and `lanternGlowMat` (warm emissive `0xffd090`)
+- New `addDeckLantern(x, z)` helper — tiny base box + glowing body box + dark cap
+- 4 lanterns along the front edge of the pool deck at z=6.4, x=-6/-2/+2/+6
+- The `lampPos` shader uniform is now anchored to the middle lantern position so the warm wash visually emanates from a real source
+
+### Landscaping — boulders replace hedges + bushes
+- **Ripped** all 3 hedge meshes + the `addBush()` helper + 8 bush placements + the `hedgeMat` (~40 lines)
+- New `boulderMat` (`0x6a6560`) and `addBoulder(x, z, size)` helper using `IcosahedronGeometry(size, 0)` — low-poly rounded rocks, fits PS2+ aesthetic perfectly
+- 5 boulders along the back of the pool (between pool back z=2 and villa front)
+- 2 outboard boulders past the pool ends
+- 3 boulders scattered around the villa front corners
+
+### Layout collision fixes (consequence of the wider pool)
+- **Pink Lambo** moved from `(-7, *, 5)` (now inside the new pool) to `(-11, *, 9)` — outboard and forward
+- **Lagoon** moved from `(-8, *, 0)` to `(-14, *, -3)` — clears the new wider pool's left rim
+- **Pool deck path lights** repositioned — front-row from `(±5, 7.5)` to `(±8.5, 8.8)` (outboard of the new daybeds), back-row from `(±5, 0.5)` to `(±8.5, -1.2)` (behind the new boulder line)
+
+### Default camera position
+- `CAM_CENTER_Z -3 → -2` (orbit centerpoint just in front of villa)
+- `CAM_RADIUS 24 → 20` (closer in, tighter framing on the cantilever)
+- Initial camera `(3, 4.5, 14) → (-2, 5, 16)` — looks across the long pool toward the villa with the cantilever in 3/4 view, sky as backdrop
+- Camera y `8.0 + pitch * 13 → 7.5 + pitch * 13` (slightly lower base — sees more of the cantilever silhouette)
+- Camera lookAt y `2.8 + pitch * 3 → 3.2 + pitch * 3` (target the upper volume not the lower)
+
+### Files modified
+- [js/world.js](js/world.js) — every section above (sky, lighting, pool, villa, boulders, daybeds, lanterns, lagoon move, lambo move, path light moves, camera)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b009 → b010`
+- [FILE_MAP.md](FILE_MAP.md) — build bump + villa view design notes rewritten for new render res, new architecture, new lighting palette
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### What's NOT in this build
+- Click → song card system — b011, on deck after you eyeball this build
+- Audio reactivity in the villa view — still none
+- Beach chairs out back, neighbor villas, garage, both Lambos, lagoon, path lights — all still there, just repositioned where the new pool needed the space
+- Stone columns are flat-color boxes, not actually textured stone — the PS2+ render sells "rough material" via the chunky pixels. If they read as "grey boxes" instead of "stacked stone" we can add a noise variation in the shader in a follow-up
+
 ## b009 — 2026-04-06 — Villa = default view, dusk lighting, layout restructured (beach behind house), beach chairs
 
 User feedback after b008: scene felt like deep night, wanted dusk; default view should be Villa not Neural; the camera angle felt like "street view" — wanted the beach to be BEHIND the house in the camera's view, not on the side. Also wanted beach chairs + umbrellas. This is the layout option **B** from the previous turn — full property restructure along the Z axis.

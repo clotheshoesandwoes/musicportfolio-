@@ -1,6 +1,6 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b009
+**Build:** b010
 **Updated:** 2026-04-06
 
 ## Architecture
@@ -29,7 +29,7 @@ Vanilla JS, no build step. Multi-view single-page site.
 - [js/terrain.js](js/terrain.js) — Terrain view, 2D canvas, audio-reactive peaks (not surveyed)
 - [js/deepsea.js](js/deepsea.js) — Deep Sea view, scrolling depth track list (not surveyed)
 - [js/neural.js](js/neural.js) (~382 lines) — Neural view, 2D canvas node graph, audio-reactive nodes/connections, filter pills, mobile-tap-to-play
-- [js/world.js](js/world.js) **(b003)** — Villa view, Three.js 3D scene, PS2-style shaders (vertex jitter + low-res render target + faint scanlines), night Miami palette. b003 expands to a full villa scene: modernist concrete villa cube with glowing windows, 4 palms, ocean horizon plane, distant neon skyline dots, moon disc in sky shader, pool with custom water shader (tile lines + ripple displacement + caustic bands), 3-light shader (sodium streetlamp + pool glow + warm interior window light)
+- [js/world.js](js/world.js) **(b010)** — Villa view, Three.js 3D scene, PS2+ shaders (finer 320x180 vertex jitter + 854x480 low-res render target + faint scanlines), "sun just dipped" dusk Miami palette. b010 villa redesign: 2-story stacked white box villa with cantilevered upper floor, stacked stone column accents on the lower front, floor-to-ceiling glass walls, recessed warm cove lighting under the cantilever overhang, long infinity-edge pool running parallel to the villa front, white travertine deck, three pool-side daybeds (wood base + cream cushion), four warm deck lanterns at the pool front edge, low-poly icosahedron boulders replacing the old hedges/bushes, 4 palms, ocean horizon plane, distant neon skyline dots, custom water shader (tile lines + ripple displacement + caustic bands, brighter cyan glow), 3-light shader (warm deck lantern + cyan pool glow + warm interior window light)
 
 ### audio/, audio-mp3/
 Track files (referenced by config.json).
@@ -39,14 +39,15 @@ Stored in [js/helpers.js](js/helpers.js) as `window.BUILD_NUMBER`. Bump every co
 
 ## Villa view — design notes
 - Lazy-loads Three.js from `https://unpkg.com/three@0.160.0/build/three.module.js` on first mount
-- Renders to a 480×270 `WebGLRenderTarget` with `NearestFilter`, then upscales via fullscreen quad → chunky PS2 pixels
-- PS2 vertex jitter implemented in custom vertex shader: clip-space xy snapped to a 160×90 grid (applied to PS2 material, pool material, ocean material, and skyline-dot material — everything but the sky)
-- Lighting is **not** Three.js's built-in light system — three point lights (sodium streetlamp, turquoise pool glow, warm interior window) are passed as uniforms into the custom fragment shader, doing distance falloff + N·L manually via `pointLight()` helper
-- Heavy `FogExp2` matched in PS2/pool/ocean shaders for consistency
-- Sky dome uses a separate gradient + procedural-stars + procedural moon shader (no jitter)
-- Pool has its own water shader with tile-line UV grid, moving caustic bands, and vertex ripple displacement on the top face
+- Renders to an **854×480** `WebGLRenderTarget` with `NearestFilter`, then upscales via fullscreen quad → "PS2+" pixels (finer than original PS2 but still has the chunky character)
+- PS2+ vertex jitter implemented in custom vertex shader: clip-space xy snapped to a **320×180** grid (applied to PS2 material, ocean material, and skyline-dot material — pool and sky stay smooth)
+- Lighting is **not** Three.js's built-in light system — three point lights (warm deck lantern, cyan pool glow, warm interior window) are passed as uniforms into the custom fragment shader, doing distance falloff + N·L manually via `pointLight()` helper
+- Heavy `FogExp2` (cool indigo `0x40285a`) matched in PS2/pool/ocean shaders for consistency
+- Sky dome uses a separate gradient shader — "sun just dipped" palette (warm pink/orange horizon → lavender mid → deep indigo zenith) + sparse zenith-only stars
+- Pool has its own water shader with tile-line UV grid, moving caustic bands, vertex ripple displacement on the top face, and a 3.6× brightness boost on the top face for the strong cyan glow
 - Ocean is a single shader plane far from the patio with horizontal/vertical sin ripples
 - Distant skyline = ~32 emissive box "dots" with 4 shared materials (4 neon colors)
-- Camera orbits a centerpoint at (3, 0, 0) — between pool and villa — at radius 16
+- Villa architecture (b010): two stacked white plaster boxes — 20×4×11 lower volume + 13×3.5×7 upper volume hanging 1.0 forward over the pool deck (the cantilever signature). Three stacked-stone columns on the lower front face break up the white plaster. FTG glass between/under columns. A recessed cove light strip glows down from the underside of the upper cantilever onto the deck.
+- Camera orbits a centerpoint at (0, *, -2) — just in front of the villa — at radius 20, default position (-2, 5, 16) looking back at the cantilever in 3/4 view
 - `timeUniforms[]` array — every shader that needs `uTime` is registered here so `animate()` can update them all from a single rAF timestamp
-- Still no walking, no tracks, no audio reactivity
+- Still no walking, no tracks, no audio reactivity (b011 = click→card system is on deck)

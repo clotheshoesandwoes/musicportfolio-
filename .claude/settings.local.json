@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m http.server 8080)",
+      "Bash(start http://localhost:8080)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(git push:*)",
+      "Bash(ls /c/Users/B4TTL/musicportfolio/audio-mp3/*.mp3)",
+      "Bash(node -e \"const c = require\\('c:/Users/B4TTL/musicportfolio/config.json'\\); console.log\\('Track count:', c.tracks.length\\); console.log\\('First track:', c.tracks[0].title, '| isNew:', c.tracks[0].isNew, '| isFeatured:', c.tracks[0].isFeatured\\); console.log\\('Track 4:', c.tracks[4].title, '| isNew:', c.tracks[4].isNew, '| isFeatured:', c.tracks[4].isFeatured\\); console.log\\('Track 7:', c.tracks[7].title, '| isFeatured:', c.tracks[7].isFeatured\\); console.log\\('Track 13:', c.tracks[13].title, '| isFeatured:', c.tracks[13].isFeatured\\); console.log\\('Track 27:', c.tracks[27].title, '| isFeatured:', c.tracks[27].isFeatured\\); console.log\\('Last track:', c.tracks[c.tracks.length-1].title\\); const tagged = c.tracks.filter\\(t => t.tags.length > 0\\); console.log\\('Tagged tracks:', tagged.length\\); const newTracks = c.tracks.filter\\(t => t.isNew\\); console.log\\('New tracks:', newTracks.map\\(t => t.title\\)\\); const featured = c.tracks.filter\\(t => t.isFeatured\\); console.log\\('Featured tracks:', featured.map\\(t => t.title\\)\\);\")",
+      "Bash(git pull:*)",
+      "Bash(node -e ':*)",
+      "Bash(node --check js/world.js)",
+      "Bash(node --check js/helpers.js)"
+    ]
+  }
+}

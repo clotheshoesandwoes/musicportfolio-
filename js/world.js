@@ -1,7 +1,9 @@
 /* =========================================================
-   WORLD.JS — Villa view (PS2-style 3D night Miami scene)
-   b003 — Phase 2: villa cube + windows, more palms, ocean,
-   moon, distant skyline, pool ripples, warm window light.
+   WORLD.JS — Villa view (PS2+ Miami modernist villa, dusk)
+   b010 — Villa redesign: 2-story cantilever villa with stacked
+   stone column accents, long infinity-edge pool, "sun just
+   dipped" sky palette, daybeds + deck lanterns + boulders.
+   Render upgraded to 854x480 + 320x180 jitter grid (PS2+).
    Three.js loaded lazily from CDN on first activation.
    ========================================================= */
 
@@ -14,8 +16,8 @@
   let materials = [];
   let timeUniforms = [];
   let THREE_lib = null;
-  const LOW_W = 480;
-  const LOW_H = 270;
+  const LOW_W = 854;
+  const LOW_H = 480;
 
   async function init(cont) {
     container = cont;
@@ -48,14 +50,14 @@
     renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(1);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
-    renderer.setClearColor(0x251040, 1);
+    renderer.setClearColor(0x1a1238, 1);
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x55265e, 0.009);
+    scene.fog = new THREE.FogExp2(0x40285a, 0.009);
 
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 250);
-    camera.position.set(3, 4.5, 14);
-    camera.lookAt(3, 1.6, 0);
+    camera.position.set(-2, 5, 16);
+    camera.lookAt(0, 3.2, -2);
 
     // -----------------------------------------------------
     // Sky dome — gradient + procedural stars + moon disc
@@ -64,10 +66,10 @@
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        topColor:    { value: new THREE.Color(0x2a2060) },
-        midColor:    { value: new THREE.Color(0x8a2585) },
-        bottomColor: { value: new THREE.Color(0xff4090) },
-        moonDir:     { value: new THREE.Vector3(0.35, 0.35, -0.75).normalize() },
+        // "Sun just dipped" palette — pink/orange horizon, lavender mid, deep indigo zenith
+        topColor:    { value: new THREE.Color(0x0a0a3a) },
+        midColor:    { value: new THREE.Color(0x9a3070) },
+        bottomColor: { value: new THREE.Color(0xff7050) },
       },
       vertexShader: `
         varying vec3 vDir;
@@ -80,7 +82,6 @@
         uniform vec3 topColor;
         uniform vec3 midColor;
         uniform vec3 bottomColor;
-        uniform vec3 moonDir;
         varying vec3 vDir;
 
         float hash(vec2 p) {
@@ -96,19 +97,14 @@
             col = mix(midColor, bottomColor, smoothstep(0.0, -0.25, h));
           }
 
-          // Stars (upper hemisphere only)
-          if (h > 0.05) {
+          // Stars only at the zenith — sun just dipped, sky still too bright
+          // for stars near the horizon
+          if (h > 0.4) {
             vec2 sp = vec2(atan(vDir.z, vDir.x) * 80.0, h * 80.0);
             float n = hash(floor(sp));
-            float star = step(0.992, n) * smoothstep(0.05, 0.4, h);
-            col += vec3(star * 0.95);
+            float star = step(0.994, n) * smoothstep(0.4, 0.7, h);
+            col += vec3(star * 0.85);
           }
-
-          // Moon disc + soft halo
-          float m = dot(vDir, moonDir);
-          float disc = smoothstep(0.9970, 0.9985, m);
-          float halo = smoothstep(0.93, 0.999, m) * 0.45;
-          col += vec3(0.96, 0.93, 1.0) * (disc + halo);
 
           gl_FragColor = vec4(col, 1.0);
         }
@@ -120,15 +116,15 @@
     // -----------------------------------------------------
     // Light constants — passed manually as shader uniforms
     // -----------------------------------------------------
-    const lampPos     = new THREE.Vector3(6.0, 5.0, -1.0);  // between pool and house
-    const lampColor   = new THREE.Color(0xff8c42);  // sodium orange
-    const lampRange   = 28;
-    const poolPos     = new THREE.Vector3(0, 0.4, 4);  // pool moved forward
-    const poolColor   = new THREE.Color(0x2af0d0);  // turquoise
-    const poolRange   = 14;
-    const windowPos   = new THREE.Vector3(0, 3.5, -10);  // inside the new house
-    const windowColor = new THREE.Color(0xffe6c8);  // warm interior, paler
-    const windowRange = 16;
+    const lampPos     = new THREE.Vector3(0, 0.6, 6.4);  // middle deck lantern
+    const lampColor   = new THREE.Color(0xffc080);  // warm lantern, not sodium
+    const lampRange   = 18;
+    const poolPos     = new THREE.Vector3(0, 0.4, 4);  // long pool centerpoint
+    const poolColor   = new THREE.Color(0x40fff0);  // brighter cyan glow
+    const poolRange   = 22;
+    const windowPos   = new THREE.Vector3(0, 3.5, -10);  // inside the villa
+    const windowColor = new THREE.Color(0xffd090);  // richer warm interior
+    const windowRange = 22;
 
     // -----------------------------------------------------
     // PS2 material factory — vertex jitter + 3-light shader
@@ -148,7 +144,7 @@
           uWindowPos:    { value: windowPos },
           uWindowColor:  { value: windowColor },
           uWindowRange:  { value: windowRange },
-          uFogColor:     { value: new THREE.Color(0x55265e) },
+          uFogColor:     { value: new THREE.Color(0x40285a) },
           uFogDensity:   { value: 0.009 },
         },
         vertexShader: `
@@ -159,8 +155,8 @@
             vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
             vFogDepth = -mvPos.z;
             vec4 clip = projectionMatrix * mvPos;
-            // PS2 vertex jitter
-            vec2 grid = vec2(160.0, 90.0);
+            // PS2+ vertex jitter — finer grid than original PS2 (320x180)
+            vec2 grid = vec2(320.0, 180.0);
             vec3 ndc = clip.xyz / clip.w;
             ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
             clip.xyz = ndc * clip.w;
@@ -198,7 +194,7 @@
           }
 
           void main() {
-            vec3 ambient = vec3(0.36, 0.30, 0.44);
+            vec3 ambient = vec3(0.28, 0.24, 0.40);
             vec3 col = uColor * ambient;
             col += pointLight(uLampPos,   uLampColor,   uLampRange,   uColor);
             col += pointLight(uPoolPos,   uPoolColor,   uPoolRange,   uColor);
@@ -215,9 +211,9 @@
     }
 
     // -----------------------------------------------------
-    // Ground (concrete patio)
+    // Ground (white travertine patio — matches the villa deck)
     // -----------------------------------------------------
-    const groundMat = makePS2Material({ color: 0x5a5560 });
+    const groundMat = makePS2Material({ color: 0xc0bcb0 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 80, 60, 40), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0;
@@ -229,9 +225,9 @@
     const poolMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime:        { value: 0 },
-        uBaseColor:   { value: new THREE.Color(0x0fb5b5) },
-        uBrightColor: { value: new THREE.Color(0x8effe8) },
-        uFogColor:    { value: new THREE.Color(0x55265e) },
+        uBaseColor:   { value: new THREE.Color(0x18d8d0) },
+        uBrightColor: { value: new THREE.Color(0xa8fff0) },
+        uFogColor:    { value: new THREE.Color(0x40285a) },
         uFogDensity:  { value: 0.009 },
       },
       vertexShader: `
@@ -273,8 +269,8 @@
           float band2 = sin((vUv.x * 0.6 - vUv.y) * 22.0 - uTime * 1.3) * 0.5 + 0.5;
           float caustic = (band * band2);
           vec3 col = mix(uBaseColor, uBrightColor, caustic * 0.6 + gridLine * 0.5);
-          // Boost so it reads as a glowing pool
-          col *= mix(0.8, 3.0, vTopMask);
+          // Boost so it reads as a glowing pool — brighter for the new aesthetic
+          col *= mix(0.8, 3.6, vTopMask);
           float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
           col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
           gl_FragColor = vec4(col, 1.0);
@@ -284,117 +280,126 @@
     materials.push(poolMat);
     timeUniforms.push(poolMat.uniforms.uTime);
 
-    const pool = new THREE.Mesh(new THREE.BoxGeometry(8, 0.18, 5, 12, 1, 8), poolMat);
-    pool.position.set(0, 0.09, 4);
+    // Long infinity-edge pool, runs along the front of the villa (X axis)
+    const pool = new THREE.Mesh(new THREE.BoxGeometry(14, 0.2, 4, 20, 1, 8), poolMat);
+    pool.position.set(0, 0.10, 4);
     scene.add(pool);
 
-    // Pool concrete rim
-    const rimMat = makePS2Material({ color: 0x4a4555 });
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.2, 5.6), rimMat);
-    rim.position.set(0, 0.05, 4);
+    // Pool concrete rim — white travertine, matches the villa
+    const rimMat = makePS2Material({ color: 0xe8e4dc });
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(14.6, 0.22, 4.6), rimMat);
+    rim.position.set(0, 0.06, 4);
     scene.add(rim);
 
     // -----------------------------------------------------
-    // Villa — Miami millionaire mansion: 3 stories w/ penthouse,
-    // cantilever roofs, big glass walls, deeper balcony
+    // Villa — modernist 2-story stacked white box w/ cantilever
+    // upper, stacked stone column accents, FTG glass walls
+    // (b010 redesign per Mykonos/Miami reference photos)
     // -----------------------------------------------------
-    const villaMat   = makePS2Material({ color: 0xa8a4b2 });   // bright cool concrete
-    const roofMat    = makePS2Material({ color: 0x5a5666 });   // darker concrete slab
-    const balconyMat = makePS2Material({ color: 0x6a6676 });
-    const railMat    = makePS2Material({ color: 0x2a2632 });
+    const villaMat   = makePS2Material({ color: 0xeeeae0 });   // white plaster
+    const roofMat    = makePS2Material({ color: 0xe0dcd0 });   // thin slab, slightly darker
+    const stoneMat   = makePS2Material({ color: 0x8a847a });   // stacked natural stone
+    const coveMat    = makePS2Material({                       // recessed cove light
+      color:       0xffd090,
+      emissive:    0xffd090,
+      emissiveAmt: 2.2,
+    });
 
     const villaCx = 0;
     const villaCz = -10;
 
-    // Lower main volume — bigger and more imposing
-    const lowerW = 17, lowerH = 4.0, lowerD = 10;
+    // Lower volume — wide, shallow, the main living box
+    const lowerW = 20, lowerH = 4.0, lowerD = 11;
     const lower = new THREE.Mesh(new THREE.BoxGeometry(lowerW, lowerH, lowerD), villaMat);
     lower.position.set(villaCx, lowerH / 2, villaCz);
     scene.add(lower);
 
-    // Cantilever roof slab over the lower volume
-    const lowerRoof = new THREE.Mesh(new THREE.BoxGeometry(lowerW + 1.8, 0.35, lowerD + 1.8), roofMat);
-    lowerRoof.position.set(villaCx, lowerH + 0.175, villaCz);
+    // Lower roof slab — thin, slightly oversized
+    const lowerRoof = new THREE.Mesh(new THREE.BoxGeometry(lowerW + 0.6, 0.22, lowerD + 0.6), roofMat);
+    lowerRoof.position.set(villaCx, lowerH + 0.11, villaCz);
     scene.add(lowerRoof);
 
-    // Upper volume — second story, set back slightly
-    const upperW = 11, upperH = 3.5, upperD = 6.5;
-    const upperY = lowerH + 0.35 + upperH / 2;
+    // Upper volume — narrower, set back on the rear, hangs forward
+    // over the pool deck (the signature cantilever)
+    const upperW = 13, upperH = 3.5, upperD = 7;
+    const upperY = lowerH + 0.22 + upperH / 2;
+    // Set back 1.5 on the rear (-z) so it overhangs the front (+z) by 1.0
+    const upperZ = villaCz + 1.0;
     const upper = new THREE.Mesh(new THREE.BoxGeometry(upperW, upperH, upperD), villaMat);
-    upper.position.set(villaCx + 0.5, upperY, villaCz - 0.7);
+    upper.position.set(villaCx, upperY, upperZ);
     scene.add(upper);
 
-    // Upper roof slab
-    const upperRoof = new THREE.Mesh(new THREE.BoxGeometry(upperW + 1.2, 0.35, upperD + 1.2), roofMat);
-    upperRoof.position.set(villaCx + 0.5, upperY + upperH / 2 + 0.175, villaCz - 0.7);
+    // Upper roof slab — VERY thin, wider than upper (the floating slab look)
+    const upperRoof = new THREE.Mesh(new THREE.BoxGeometry(upperW + 1.5, 0.20, upperD + 1.5), roofMat);
+    upperRoof.position.set(villaCx, upperY + upperH / 2 + 0.10, upperZ);
     scene.add(upperRoof);
 
-    // Penthouse — third story, smaller, set back further
-    const phW = 6, phH = 2.6, phD = 4.5;
-    const phY = upperY + upperH / 2 + 0.35 + phH / 2;
-    const penthouse = new THREE.Mesh(new THREE.BoxGeometry(phW, phH, phD), villaMat);
-    penthouse.position.set(villaCx + 1, phY, villaCz - 1.5);
-    scene.add(penthouse);
+    // Recessed cove light strip on the underside of the upper cantilever,
+    // glowing down onto the pool deck — warm, sells the warm/cool contrast
+    const coveZ = upperZ + upperD / 2;  // front edge of upper volume
+    const cove = new THREE.Mesh(
+      new THREE.BoxGeometry(upperW - 0.6, 0.06, 0.6),
+      coveMat
+    );
+    cove.position.set(villaCx, lowerH + 0.28, coveZ - 0.3);
+    scene.add(cove);
 
-    // Penthouse roof slab
-    const phRoof = new THREE.Mesh(new THREE.BoxGeometry(phW + 1, 0.3, phD + 1), roofMat);
-    phRoof.position.set(villaCx + 1, phY + phH / 2 + 0.15, villaCz - 1.5);
-    scene.add(phRoof);
-
-    // Glowing glass — single material reused on all openings
+    // Glowing glass — single warm material reused on all openings
     const windowMat = makePS2Material({
-      color:       0xffe6c8,
-      emissive:    0xffd6a0,
-      emissiveAmt: 1.8,
+      color:       0xffd090,
+      emissive:    0xffc880,
+      emissiveAmt: 2.0,
     });
 
-    // Big glass wall on the -X face of the lower volume (facing pool)
-    const lowerFrontX = villaCx - lowerW / 2;
-    const lowerGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.0, lowerD - 1.2), windowMat);
-    lowerGlass.position.set(lowerFrontX - 0.06, lowerH / 2 + 0.3, villaCz);
-    scene.add(lowerGlass);
+    // ---- Stacked stone column accents on the front face of lower volume ----
+    // Three columns break up the long white wall and read as the photo's
+    // signature stone-cladding move
+    const stoneColW = 1.2, stoneColH = lowerH, stoneColD = 0.6;
+    const lowerFrontZ = villaCz + lowerD / 2;
+    const colXs = [-7.5, 0, 7.5];
+    colXs.forEach(cx => {
+      const col = new THREE.Mesh(
+        new THREE.BoxGeometry(stoneColW, stoneColH, stoneColD),
+        stoneMat
+      );
+      col.position.set(villaCx + cx, stoneColH / 2, lowerFrontZ + stoneColD / 2);
+      scene.add(col);
+    });
 
-    // Glass strip on the +Z face of the lower volume (camera side)
-    const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(lowerW - 3.0, 2.0, 0.12), windowMat);
-    sideGlass.position.set(villaCx, lowerH / 2 + 0.4, villaCz + lowerD / 2 + 0.06);
-    scene.add(sideGlass);
+    // ---- Floor-to-ceiling glass on the front of the lower volume ----
+    // Two large glass panes filling the gaps between the stone columns
+    function addLowerGlass(cx, width) {
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(width, lowerH - 0.4, 0.10),
+        windowMat
+      );
+      glass.position.set(villaCx + cx, lowerH / 2, lowerFrontZ + 0.05);
+      scene.add(glass);
+    }
+    addLowerGlass(-3.75, 6.3);  // between left and middle column
+    addLowerGlass( 3.75, 6.3);  // between middle and right column
 
-    // Glass strip on the -X face of the upper volume
-    const upperFrontX = (villaCx + 0.5) - upperW / 2;
-    const upperGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, upperD - 1.2), windowMat);
-    upperGlass.position.set(upperFrontX - 0.06, upperY + 0.1, villaCz - 0.7);
+    // ---- Floor-to-ceiling glass on the front of the upper volume ----
+    const upperFrontZ = upperZ + upperD / 2;
+    const upperGlass = new THREE.Mesh(
+      new THREE.BoxGeometry(upperW - 1.0, upperH - 0.5, 0.10),
+      windowMat
+    );
+    upperGlass.position.set(villaCx, upperY, upperFrontZ + 0.05);
     scene.add(upperGlass);
 
-    // Penthouse glass on the -X face
-    const phFrontX = (villaCx + 1) - phW / 2;
-    const phGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, phD - 0.8), windowMat);
-    phGlass.position.set(phFrontX - 0.06, phY, villaCz - 1.5);
-    scene.add(phGlass);
+    // ---- Side glass strip on the camera-facing edge of upper volume ----
+    // (catches the eye when orbiting around the side)
+    const upperSideGlass = new THREE.Mesh(
+      new THREE.BoxGeometry(0.10, upperH - 0.5, upperD - 1.0),
+      windowMat
+    );
+    upperSideGlass.position.set(villaCx + upperW / 2 + 0.05, upperY, upperZ);
+    scene.add(upperSideGlass);
 
-    // Balcony floor extending forward (+z) from the upper volume
-    const balcony = new THREE.Mesh(new THREE.BoxGeometry(upperW, 0.18, 2.0), balconyMat);
-    balcony.position.set(villaCx + 0.5, lowerH + 0.6, villaCz - 0.7 + upperD / 2 + 1.0);
-    scene.add(balcony);
-
-    // Balcony top rail
-    const railTop = new THREE.Mesh(new THREE.BoxGeometry(upperW, 0.08, 0.08), railMat);
-    railTop.position.set(villaCx + 0.5, lowerH + 0.6 + 1.0, villaCz - 0.7 + upperD / 2 + 1.95);
-    scene.add(railTop);
-
-    // Balcony vertical railing posts
-    for (let i = 0; i < 9; i++) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), railMat);
-      post.position.set(
-        villaCx + 0.5 - upperW / 2 + 0.5 + i * (upperW - 1.0) / 8,
-        lowerH + 0.6 + 0.5,
-        villaCz - 0.7 + upperD / 2 + 1.95
-      );
-      scene.add(post);
-    }
-
-    // Door — taller glowing rectangle at ground level on the front
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.13, 2.2, 1.3), windowMat);
-    door.position.set(lowerFrontX - 0.07, 1.1, villaCz + 2.5);
+    // ---- Recessed front door — taller glowing rectangle, slightly inset ----
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 0.10), windowMat);
+    door.position.set(villaCx - 5.0, 1.2, lowerFrontZ + 0.08);
     scene.add(door);
 
     // -----------------------------------------------------
@@ -427,28 +432,45 @@
     addPalm( 7.5, -4.5, 6.2);
 
     // -----------------------------------------------------
-    // Streetlamp mesh — gives the sodium light a visible source
+    // Deck lanterns — small warm-glow lanterns on the pool deck
+    // (b010 — replaces the old sodium streetlamp)
     // -----------------------------------------------------
-    {
-      const poleMat = makePS2Material({ color: 0x0e0a0e });
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 5.5, 5), poleMat);
-      pole.position.set(lampPos.x, 2.75, lampPos.z);
-      scene.add(pole);
+    const lanternBaseMat = makePS2Material({ color: 0x2a241c });  // dark base
+    const lanternGlowMat = makePS2Material({
+      color:       0xffd090,
+      emissive:    0xffd090,
+      emissiveAmt: 2.6,
+    });
 
-      const bulbMat = makePS2Material({
-        color:       0xffaa55,
-        emissive:    0xffaa55,
-        emissiveAmt: 2.4,
-      });
-      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), bulbMat);
-      bulb.position.set(lampPos.x, lampPos.y, lampPos.z);
-      scene.add(bulb);
-
-      const shadeMat = makePS2Material({ color: 0x1e1418 });
-      const shade = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.14, 0.75), shadeMat);
-      shade.position.set(lampPos.x, lampPos.y + 0.34, lampPos.z);
-      scene.add(shade);
+    function addDeckLantern(x, z) {
+      // Tiny base
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(0.30, 0.12, 0.30),
+        lanternBaseMat
+      );
+      base.position.set(x, 0.06, z);
+      scene.add(base);
+      // Glowing glass body
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.6, 0.25),
+        lanternGlowMat
+      );
+      body.position.set(x, 0.42, z);
+      scene.add(body);
+      // Tiny dark cap on top
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(0.32, 0.06, 0.32),
+        lanternBaseMat
+      );
+      cap.position.set(x, 0.75, z);
+      scene.add(cap);
     }
+
+    // Four lanterns along the front edge of the pool deck
+    addDeckLantern(-6.0, 6.4);
+    addDeckLantern(-2.0, 6.4);
+    addDeckLantern( 2.0, 6.4);
+    addDeckLantern( 6.0, 6.4);
 
     // -----------------------------------------------------
     // Garage — attached wing on the +X side of villa, scaled up
@@ -544,15 +566,16 @@
 
     // Yellow Lambo parked in front of the garage door (z just past the door)
     addCar(garageCx, villaCz + garageD / 2 + 2.5, 0xf5d518);
-    // Pink Lambo parked next to the new pool on the front-left
-    addCar(-7.0, 5.0, 0xff2d95);
+    // Pink Lambo — moved further left + forward in b010 to clear the new wider pool
+    addCar(-11.0, 9.0, 0xff2d95);
 
     // -----------------------------------------------------
     // Lagoon — small secondary water with sand, island, mini palm
     // -----------------------------------------------------
     {
-      const lagoonCx = -8;
-      const lagoonCz = 0;
+      // Moved further left in b010 to clear the new wider pool + boulder line
+      const lagoonCx = -14;
+      const lagoonCz = -3;
 
       // Sand ring (warm tan, slightly raised)
       const sandMat = makePS2Material({ color: 0xc0a878 });
@@ -594,44 +617,68 @@
     }
 
     // -----------------------------------------------------
-    // Greenery — hedges + scattered bushes
+    // Boulders — round low-poly rocks, replace hedges/bushes
+    // (b010 — landscape match for the Mykonos reference photos)
     // -----------------------------------------------------
-    const hedgeMat = makePS2Material({ color: 0x1a3a25 });
+    const boulderMat = makePS2Material({ color: 0x6a6560 });
 
-    // Long hedge along the back of the property
-    {
-      const h = new THREE.Mesh(new THREE.BoxGeometry(28, 0.85, 0.85), hedgeMat);
-      h.position.set(8, 0.42, -8.5);
-      scene.add(h);
-    }
-    // Side hedge on the -X edge
-    {
-      const h = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.85, 14), hedgeMat);
-      h.position.set(-13, 0.42, -1);
-      scene.add(h);
-    }
-    // Front hedge between pool and camera
-    {
-      const h = new THREE.Mesh(new THREE.BoxGeometry(10, 0.7, 0.7), hedgeMat);
-      h.position.set(0, 0.35, 7.6);
-      scene.add(h);
-    }
-
-    function addBush(x, z, size) {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.7, size), hedgeMat);
-      b.position.set(x, size * 0.35, z);
+    function addBoulder(x, z, size) {
+      const b = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(size, 0),
+        boulderMat
+      );
+      b.position.set(x, size * 0.6, z);
+      // Random-ish rotation per position so they don't all look identical
+      b.rotation.set(x * 0.13, z * 0.21, x * 0.07 + z * 0.05);
       scene.add(b);
     }
-    // Around the front patio (between pool and camera)
-    addBush(-6,  10.0, 0.9);
-    addBush(-3,  11.0, 1.1);
-    addBush( 4,  10.5, 0.85);
-    addBush( 7,  11.0, 0.7);
-    // Right side, around the new garage area
-    addBush(15,  -2.0, 1.0);
-    addBush(17,  -8.0, 0.8);
-    addBush(18,   3.0, 0.9);
-    addBush(20,  -5.0, 0.85);
+
+    // Cluster between pool back (z=2) and villa front (z=-4.5)
+    addBoulder(-6.5, 0.8, 0.55);
+    addBoulder(-3.5, 1.0, 0.42);
+    addBoulder( 0.0, 0.8, 0.50);
+    addBoulder( 3.5, 1.0, 0.45);
+    addBoulder( 6.5, 0.8, 0.55);
+    // Outboard, beyond the pool ends
+    addBoulder(-9.0, 4.0, 0.60);
+    addBoulder( 9.0, 4.0, 0.55);
+    // Scattered around the villa front corners
+    addBoulder(-11.5, -3.0, 0.70);
+    addBoulder( 11.5, -3.0, 0.65);
+    addBoulder(-11.5,  4.5, 0.50);
+
+    // -----------------------------------------------------
+    // Pool deck daybeds — wood base + white cushion + pillow
+    // (b010 — replaces the photo's signature pool-side furniture)
+    // -----------------------------------------------------
+    const daybedWoodMat = makePS2Material({ color: 0x6b4a30 });  // warm wood
+    const daybedCushionMat = makePS2Material({ color: 0xf0ece0 }); // cream cushion
+    const daybedPillowMat = makePS2Material({ color: 0xe8e2d0 });  // slightly darker pillow
+
+    function addDaybed(x, z, rotY) {
+      const g = new THREE.Group();
+      // Wood base
+      const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.4, 1.2), daybedWoodMat);
+      base.position.y = 0.20;
+      g.add(base);
+      // White cushion on top
+      const cushion = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.18, 1.0), daybedCushionMat);
+      cushion.position.y = 0.49;
+      g.add(cushion);
+      // Pillow at one end
+      const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.14, 0.85), daybedPillowMat);
+      pillow.position.set(-0.65, 0.65, 0);
+      g.add(pillow);
+      g.position.set(x, 0.05, z);
+      g.rotation.y = rotY;
+      scene.add(g);
+    }
+
+    // Three daybeds along the front edge of the pool deck, slotted between
+    // the deck lanterns (lanterns at x=-6,-2,2,6 — daybeds at -4,0,4)
+    addDaybed(-4.0, 7.5, 0);
+    addDaybed( 0.0, 7.5, 0);
+    addDaybed( 4.0, 7.5, 0);
 
     // -----------------------------------------------------
     // Colored path lights — small accent bulbs + ground spot puddle
@@ -687,11 +734,11 @@
       scene.add(spot);
     }
 
-    // Around the pool deck (pool is now at z=4)
-    addPathLight(-5,   7.5, 0x00d4ff); // cyan, front-left of pool
-    addPathLight(-5,   0.5, 0xff2d95); // magenta, back-left of pool
-    addPathLight( 5,   7.5, 0xa44fff); // purple, front-right of pool
-    addPathLight( 5,   0.5, 0xffaa55); // warm, back-right of pool
+    // Around the pool deck (long pool x:-7..7, daybeds at front z=7.5)
+    addPathLight(-8.5, 8.8, 0x00d4ff); // cyan, front-left, outboard of daybeds
+    addPathLight(-8.5,-1.2, 0xff2d95); // magenta, back-left, behind boulder line
+    addPathLight( 8.5, 8.8, 0xa44fff); // purple, front-right, outboard of daybeds
+    addPathLight( 8.5,-1.2, 0xffaa55); // warm, back-right, behind boulder line
     // Driveway between the pool area and the new garage
     addPathLight( 8,  -3.0, 0x00d4ff);
     addPathLight(15,  -3.0, 0xa44fff);
@@ -712,8 +759,8 @@
       uniforms: {
         uTime:       { value: 0 },
         uColor:      { value: new THREE.Color(0x1a0a3e) },
-        uHighlight:  { value: new THREE.Color(0x7a2895) },
-        uFogColor:   { value: new THREE.Color(0x55265e) },
+        uHighlight:  { value: new THREE.Color(0x9a3a85) },
+        uFogColor:   { value: new THREE.Color(0x40285a) },
         uFogDensity: { value: 0.009 },
       },
       vertexShader: `
@@ -724,7 +771,7 @@
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
           vFogDepth = -mvPos.z;
           vec4 clip = projectionMatrix * mvPos;
-          vec2 grid = vec2(160.0, 90.0);
+          vec2 grid = vec2(320.0, 180.0);
           vec3 ndc = clip.xyz / clip.w;
           ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
           clip.xyz = ndc * clip.w;
@@ -892,7 +939,7 @@
           void main() {
             vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
             vec4 clip = projectionMatrix * mvPos;
-            vec2 grid = vec2(160.0, 90.0);
+            vec2 grid = vec2(320.0, 180.0);
             vec3 ndc = clip.xyz / clip.w;
             ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
             clip.xyz = ndc * clip.w;
@@ -943,8 +990,8 @@
         varying vec2 vUv;
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
-          // Faint scanlines
-          float line = sin(vUv.y * 540.0) * 0.035;
+          // Faint scanlines (lighter for PS2+ — less noisy at higher res)
+          float line = sin(vUv.y * 960.0) * 0.022;
           c.rgb -= line;
           // Subtle vignette
           float v = smoothstep(1.1, 0.4, length(vUv - 0.5));
@@ -991,10 +1038,10 @@
   }
 
   // Orbit around the visual center of the new layout
-  // (pool at z=4, villa at z=-10, beach at z=-30 — center between pool and villa)
+  // (long pool at z=4, villa at z=-10 — center is just in front of villa)
   const CAM_CENTER_X = 0;
-  const CAM_CENTER_Z = -3;
-  const CAM_RADIUS = 24;
+  const CAM_CENTER_Z = -2;
+  const CAM_RADIUS = 20;
 
   function animate(now) {
     if (destroyed || !renderer) return;
@@ -1013,8 +1060,8 @@
 
     camera.position.x = CAM_CENTER_X + Math.sin(yaw) * CAM_RADIUS;
     camera.position.z = CAM_CENTER_Z + Math.cos(yaw) * CAM_RADIUS;
-    camera.position.y = 8.0 + pitch * 13;
-    camera.lookAt(CAM_CENTER_X, 2.8 + pitch * 3, CAM_CENTER_Z);
+    camera.position.y = 7.5 + pitch * 13;
+    camera.lookAt(CAM_CENTER_X, 3.2 + pitch * 3, CAM_CENTER_Z);
 
     // Pass 1 — render scene to low-res target
     renderer.setRenderTarget(lowResTarget);
