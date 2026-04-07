@@ -65,9 +65,9 @@
       depthWrite: false,
       uniforms: {
         topColor:    { value: new THREE.Color(0x1a1e4a) },
-        midColor:    { value: new THREE.Color(0x4a1875) },
+        midColor:    { value: new THREE.Color(0x6a1f95) },
         bottomColor: { value: new THREE.Color(0xc8358f) },
-        moonDir:     { value: new THREE.Vector3(0.35, 0.55, -0.75).normalize() },
+        moonDir:     { value: new THREE.Vector3(0.35, 0.35, -0.75).normalize() },
       },
       vertexShader: `
         varying vec3 vDir;
@@ -91,7 +91,7 @@
           float h = vDir.y;
           vec3 col;
           if (h > 0.0) {
-            col = mix(midColor, topColor, smoothstep(0.0, 0.65, h));
+            col = mix(midColor, topColor, smoothstep(0.0, 0.85, h));
           } else {
             col = mix(midColor, bottomColor, smoothstep(0.0, -0.25, h));
           }
@@ -106,8 +106,8 @@
 
           // Moon disc + soft halo
           float m = dot(vDir, moonDir);
-          float disc = smoothstep(0.9982, 0.9994, m);
-          float halo = smoothstep(0.93, 0.999, m) * 0.22;
+          float disc = smoothstep(0.9970, 0.9985, m);
+          float halo = smoothstep(0.93, 0.999, m) * 0.45;
           col += vec3(0.96, 0.93, 1.0) * (disc + halo);
 
           gl_FragColor = vec4(col, 1.0);
@@ -217,8 +217,8 @@
     // -----------------------------------------------------
     // Ground (concrete patio)
     // -----------------------------------------------------
-    const groundMat = makePS2Material({ color: 0x3a3645 });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120, 4, 4), groundMat);
+    const groundMat = makePS2Material({ color: 0x5a5560 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60, 40, 40), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0;
     scene.add(ground);
@@ -230,7 +230,7 @@
       uniforms: {
         uTime:        { value: 0 },
         uBaseColor:   { value: new THREE.Color(0x0fb5b5) },
-        uBrightColor: { value: new THREE.Color(0x6affe0) },
+        uBrightColor: { value: new THREE.Color(0x8effe8) },
         uFogColor:    { value: new THREE.Color(0x3a1a55) },
         uFogDensity:  { value: 0.014 },
       },
@@ -248,14 +248,10 @@
             p.y += sin(p.x * 1.6 + uTime * 1.4) * 0.035
                  + sin(p.z * 2.1 - uTime * 1.1) * 0.025;
           }
+          // No PS2 jitter on the pool — water shouldn't shatter
           vec4 mvPos = modelViewMatrix * vec4(p, 1.0);
           vFogDepth = -mvPos.z;
-          vec4 clip = projectionMatrix * mvPos;
-          vec2 grid = vec2(160.0, 90.0);
-          vec3 ndc = clip.xyz / clip.w;
-          ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
-          clip.xyz = ndc * clip.w;
-          gl_Position = clip;
+          gl_Position = projectionMatrix * mvPos;
         }
       `,
       fragmentShader: `
@@ -277,7 +273,7 @@
           float caustic = (band * band2);
           vec3 col = mix(uBaseColor, uBrightColor, caustic * 0.6 + gridLine * 0.5);
           // Boost so it reads as a glowing pool
-          col *= mix(0.8, 2.4, vTopMask);
+          col *= mix(0.8, 3.0, vTopMask);
           float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
           col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
           gl_FragColor = vec4(col, 1.0);
@@ -300,7 +296,7 @@
     // -----------------------------------------------------
     // Villa — modernist concrete cube w/ glowing windows
     // -----------------------------------------------------
-    const villaMat = makePS2Material({ color: 0x7a6e5e });
+    const villaMat = makePS2Material({ color: 0x9a96a4 });
     const villaCx = 11.5;
     const villaCz = 0;
 
@@ -340,8 +336,8 @@
     // -----------------------------------------------------
     // Palms — helper + scattered around the property
     // -----------------------------------------------------
-    const trunkMat = makePS2Material({ color: 0x241632 });
-    const frondMat = makePS2Material({ color: 0x381850 });
+    const trunkMat = makePS2Material({ color: 0x4a3868 });
+    const frondMat = makePS2Material({ color: 0x7a3aa8 });
 
     function addPalm(x, z, height) {
       const trunk = new THREE.Mesh(
@@ -356,15 +352,15 @@
         const f = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.6, 1, 1), frondMat);
         f.position.set(x + Math.cos(a) * 1.3, height - 0.2, z + Math.sin(a) * 1.3);
         f.rotation.y = -a;
-        f.rotation.z = -0.32;
+        f.rotation.z = -0.55;
         scene.add(f);
       }
     }
 
-    addPalm(-7.5,  2.5, 6.8);
-    addPalm(-9.5, -3.0, 6.0);
-    addPalm(-3.5,  5.5, 5.4);
-    addPalm( 6.0, -4.5, 6.2);
+    addPalm(-9.0,  4.0, 6.8);
+    addPalm(-7.0, -5.0, 6.0);
+    addPalm( 4.0,  5.5, 5.4);
+    addPalm( 7.5, -4.5, 6.2);
 
     // -----------------------------------------------------
     // Ocean — far plane beyond the property
@@ -414,7 +410,7 @@
     materials.push(oceanMat);
     timeUniforms.push(oceanMat.uniforms.uTime);
 
-    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(220, 70, 1, 1), oceanMat);
+    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(220, 70, 40, 12), oceanMat);
     ocean.rotation.x = -Math.PI / 2;
     ocean.position.set(0, -0.02, -50);
     scene.add(ocean);

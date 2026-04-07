@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## b004 — 2026-04-06 — Villa b003 fix-up: visible ground, visible ocean, visible moon, cream villa, real palms, water-not-shards
+
+Fixes the live b003 issues observed in screenshots: ground was invisible (vertex jitter on a 4-segment plane was destroying it), ocean was invisible (occluded by 120×120 ground), moon was outside the camera FOV, villa was muddy brown (warm beige base + warm lights = orange), palms were dark blobs clustered on the left, pool was visibly shattering each frame from jitter+ripple combo. All fixes are constants/geometry tweaks in [js/world.js](js/world.js) — no new shaders or features.
+
+### Geometry / shader fixes
+- Ground `PlaneGeometry(120, 120, 4, 4)` → `(60, 60, 40, 40)` — shrunk so ocean is visible behind it; subdivided so PS2 vertex jitter renders smoothly instead of distorting 30-unit-wide triangles into garbage
+- Ocean `PlaneGeometry(220, 70, 1, 1)` → `(220, 70, 40, 12)` — same subdivision fix
+- **Pool: removed PS2 vertex jitter from its custom water shader entirely** — water shouldn't shatter; the jitter+ripple combo was making the pool look like floating shards. Ripple displacement still applies on the top face.
+
+### Color/lighting tweaks
+- Villa `#7a6e5e` (warm beige) → `#9a96a4` (cool concrete) — warm sodium + window light now lands as cream, not muddy brown
+- Ground `#3a3645` → `#5a5560` — sodium and window spill now actually shows on the patio
+- Sky midColor `#4a1875` → `#6a1f95` — more vibrant purple band
+- Sky upper smoothstep range `(0.0, 0.65)` → `(0.0, 0.85)` — magenta/purple band sits higher in frame
+- Moon dir y `0.55` → `0.35` — lowered into the camera FOV
+- Moon disc smoothstep `(0.9982, 0.9994)` → `(0.9970, 0.9985)` — ~3× bigger disc
+- Moon halo intensity `0.22` → `0.45` — actually visible glow around the moon
+- Pool `uBrightColor` `#6affe0` → `#8effe8` — brighter caustic peak
+- Pool emissive boost on top face `2.4×` → `3.0×`
+
+### Palm fixes
+- Trunk `#241632` → `#4a3868` (visible silhouette, not pure black)
+- Fronds `#381850` → `#7a3aa8` (visible silhouette)
+- Frond tilt `-0.32` rad → `-0.55` rad (droop more, look less like spokes)
+- Positions un-clustered: was 3 on left + 1 right; now spread to `(-9, 4)`, `(-7, -5)`, `(4, 5.5)`, `(7.5, -4.5)`
+
+### Files modified
+- [js/world.js](js/world.js) — color/geometry constants + pool shader cleanup
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b003` → `b004`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+---
+
 ## b003 — 2026-04-06 — Villa Phase 2: villa, ocean, moon, palms, pool ripples, window light
 
 Flesh out the scene from "lonely glowing brick" into an actual *place*. New geometry, new shaders, brighter palette. Single-file change in [js/world.js](js/world.js) (full rewrite — restructured shader uniforms and added several helper functions).
