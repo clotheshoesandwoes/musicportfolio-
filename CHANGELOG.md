@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## b003 — 2026-04-06 — Villa Phase 2: villa, ocean, moon, palms, pool ripples, window light
+
+Flesh out the scene from "lonely glowing brick" into an actual *place*. New geometry, new shaders, brighter palette. Single-file change in [js/world.js](js/world.js) (full rewrite — restructured shader uniforms and added several helper functions).
+
+### New geometry
+- **Modernist villa** to the right of the pool — lower volume (7×4×8) + upper offset volume (5×3.2×5.5), warm cream concrete material
+- **Glowing windows** on the front face: 4 lower wide windows + 3 upper square windows + 1 doorway slit, all emissive
+- **3 more palm trees** (4 total now) scattered around the property at varied heights via new `addPalm(x, z, height)` helper
+- **Ocean plane** (220×70) far behind the property at z=-50, custom water shader with horizontal/vertical sin ripples
+- **32 distant skyline dots** at z=-78 — small emissive boxes in 4 neon colors (pink/cyan/orange/purple) suggesting a city
+- **Moon disc** baked into the sky shader with soft halo, positioned at (0.35, 0.55, -0.75)
+
+### New shaders
+- **Pool water shader** — tile-grid UV pattern, moving caustic bands (two sin waves multiplied), vertex ripple displacement on the top face only (driven by `uTime`), 3× emissive boost
+- **Ocean shader** — horizontal+vertical sin ripple lerping between dark plum and lit purple, fog blended
+- **PS2 shader gained a third light** — `uWindowPos`/`uWindowColor`/`uWindowRange` for the warm interior spill from the villa windows. Refactored the three light calculations into a `pointLight()` GLSL helper.
+- **Sky shader** — added moon disc + halo via dot-product against `moonDir`
+
+### Palette push
+- Sky `top/mid/bottom` brightened: `#0c1135 / #2a1055 / #8a2575` → `#1a1e4a / #4a1875 / #c8358f`
+- Ground patio `#2a2632` → `#3a3645`
+- Pool rim `#3e3a48` → `#4a4555`
+- Palm trunk `#1c1228` → `#241632`, fronds `#2a1140` → `#381850`
+- Pool turquoise `#1de9c5` → `#2af0d0`, brightColor `#4af5d8` → `#6affe0`
+- Shader ambient `(0.18, 0.16, 0.30)` → `(0.22, 0.20, 0.36)`
+- Fog color `#2a1845` → `#3a1a55`, density `0.015` → `0.014`
+- Sodium lamp range `25` → `28`
+
+### Camera
+- Orbit center moved from origin to `(3, 0, 0)` — between pool and villa — so both are visible
+- Radius `13` → `16` (more breathing room for the bigger scene)
+- Slightly higher base camera (`4.5` → `4.8`)
+
+### What's still NOT in
+- WASD walking ("weird for now" per user)
+- Track-objects / interaction (Phase 3)
+- Audio reactivity
+- Mobile joystick
+
+### Files modified
+- [js/world.js](js/world.js) — full rewrite (~440 lines)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b002` → `b003`
+- [FILE_MAP.md](FILE_MAP.md) — build bump + villa design notes updated for Phase 2
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+---
+
 ## b002 — 2026-04-06 — Villa palette pass: brighten night so the scene is visible
 
 b001 went on the live site and only the pool + stars were visible — sky gradient, ground, palm, and sodium-lamp warmth were all rendering at near-black RGB and disappearing into the void background. Floor brightness was too low for the night ambient to land on any surfaces. This is a pure constants pass, no new geometry or shader logic.

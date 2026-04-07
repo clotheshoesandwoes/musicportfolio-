@@ -1,6 +1,6 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b002
+**Build:** b003
 **Updated:** 2026-04-06
 
 ## Architecture
@@ -29,7 +29,7 @@ Vanilla JS, no build step. Multi-view single-page site.
 - [js/terrain.js](js/terrain.js) — Terrain view, 2D canvas, audio-reactive peaks (not surveyed)
 - [js/deepsea.js](js/deepsea.js) — Deep Sea view, scrolling depth track list (not surveyed)
 - [js/neural.js](js/neural.js) (~382 lines) — Neural view, 2D canvas node graph, audio-reactive nodes/connections, filter pills, mobile-tap-to-play
-- [js/world.js](js/world.js) **(NEW b001)** — Villa view, Three.js 3D scene, PS2-style shaders (vertex jitter + low-res render target + faint scanlines), night Miami palette, sky dome with stars, pool, palm, sodium streetlamp + pool point-light uniforms passed into custom shader
+- [js/world.js](js/world.js) **(b003)** — Villa view, Three.js 3D scene, PS2-style shaders (vertex jitter + low-res render target + faint scanlines), night Miami palette. b003 expands to a full villa scene: modernist concrete villa cube with glowing windows, 4 palms, ocean horizon plane, distant neon skyline dots, moon disc in sky shader, pool with custom water shader (tile lines + ripple displacement + caustic bands), 3-light shader (sodium streetlamp + pool glow + warm interior window light)
 
 ### audio/, audio-mp3/
 Track files (referenced by config.json).
@@ -40,8 +40,13 @@ Stored in [js/helpers.js](js/helpers.js) as `window.BUILD_NUMBER`. Bump every co
 ## Villa view — design notes
 - Lazy-loads Three.js from `https://unpkg.com/three@0.160.0/build/three.module.js` on first mount
 - Renders to a 480×270 `WebGLRenderTarget` with `NearestFilter`, then upscales via fullscreen quad → chunky PS2 pixels
-- PS2 vertex jitter implemented in custom vertex shader: clip-space xy snapped to a 160×90 grid
-- Lighting is **not** Three.js's built-in light system — sodium-lamp + pool-glow positions/colors are passed as uniforms into the custom fragment shader, doing distance falloff + N·L manually
-- Heavy `FogExp2` matched in shader for consistency
-- Sky dome uses a separate gradient + procedural-stars shader (no jitter)
-- Phase 1 = look proof. No walking, no tracks, no audio reactivity yet.
+- PS2 vertex jitter implemented in custom vertex shader: clip-space xy snapped to a 160×90 grid (applied to PS2 material, pool material, ocean material, and skyline-dot material — everything but the sky)
+- Lighting is **not** Three.js's built-in light system — three point lights (sodium streetlamp, turquoise pool glow, warm interior window) are passed as uniforms into the custom fragment shader, doing distance falloff + N·L manually via `pointLight()` helper
+- Heavy `FogExp2` matched in PS2/pool/ocean shaders for consistency
+- Sky dome uses a separate gradient + procedural-stars + procedural moon shader (no jitter)
+- Pool has its own water shader with tile-line UV grid, moving caustic bands, and vertex ripple displacement on the top face
+- Ocean is a single shader plane far from the patio with horizontal/vertical sin ripples
+- Distant skyline = ~32 emissive box "dots" with 4 shared materials (4 neon colors)
+- Camera orbits a centerpoint at (3, 0, 0) — between pool and villa — at radius 16
+- `timeUniforms[]` array — every shader that needs `uTime` is registered here so `animate()` can update them all from a single rAF timestamp
+- Still no walking, no tracks, no audio reactivity

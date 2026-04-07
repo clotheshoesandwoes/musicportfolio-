@@ -1,6 +1,7 @@
 /* =========================================================
    WORLD.JS — Villa view (PS2-style 3D night Miami scene)
-   Phase 1: shader proof-of-concept. Sky + pool + palm + lighting.
+   b003 — Phase 2: villa cube + windows, more palms, ocean,
+   moon, distant skyline, pool ripples, warm window light.
    Three.js loaded lazily from CDN on first activation.
    ========================================================= */
 
@@ -11,6 +12,7 @@
   let mouseX = 0, mouseY = 0;
   let yaw = 0, pitch = 0;
   let materials = [];
+  let timeUniforms = [];
   let THREE_lib = null;
   const LOW_W = 480;
   const LOW_H = 270;
@@ -19,7 +21,6 @@
     container = cont;
     destroyed = false;
 
-    // Loader overlay while we fetch Three.js
     const loader = document.createElement('div');
     loader.className = 'world-loader';
     loader.innerHTML = `
@@ -40,37 +41,33 @@
 
     if (destroyed) { loader.remove(); return; }
 
-    // Canvas
     canvas = document.createElement('canvas');
     canvas.className = 'world-canvas';
     container.appendChild(canvas);
 
-    // Renderer (no AA, no DPR scaling — period-accurate)
     renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(1);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
-    renderer.setClearColor(0x0a0e2e, 1);
+    renderer.setClearColor(0x140828, 1);
 
-    // Scene + heavy night fog
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x2a1845, 0.015);
+    scene.fog = new THREE.FogExp2(0x3a1a55, 0.014);
 
-    // Camera
-    camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 200);
-    camera.position.set(0, 4, 12);
-    camera.lookAt(0, 1, 0);
+    camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 250);
+    camera.position.set(3, 4.5, 14);
+    camera.lookAt(3, 1.6, 0);
 
     // -----------------------------------------------------
-    // Sky dome — gradient + procedural stars
+    // Sky dome — gradient + procedural stars + moon disc
     // -----------------------------------------------------
-    const skyGeo = new THREE.SphereGeometry(100, 24, 16);
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        topColor:    { value: new THREE.Color(0x0c1135) },
-        midColor:    { value: new THREE.Color(0x2a1055) },
-        bottomColor: { value: new THREE.Color(0x8a2575) },
+        topColor:    { value: new THREE.Color(0x1a1e4a) },
+        midColor:    { value: new THREE.Color(0x4a1875) },
+        bottomColor: { value: new THREE.Color(0xc8358f) },
+        moonDir:     { value: new THREE.Vector3(0.35, 0.55, -0.75).normalize() },
       },
       vertexShader: `
         varying vec3 vDir;
@@ -83,6 +80,7 @@
         uniform vec3 topColor;
         uniform vec3 midColor;
         uniform vec3 bottomColor;
+        uniform vec3 moonDir;
         varying vec3 vDir;
 
         float hash(vec2 p) {
@@ -93,65 +91,79 @@
           float h = vDir.y;
           vec3 col;
           if (h > 0.0) {
-            col = mix(midColor, topColor, smoothstep(0.0, 0.7, h));
+            col = mix(midColor, topColor, smoothstep(0.0, 0.65, h));
           } else {
-            col = mix(midColor, bottomColor, smoothstep(0.0, -0.3, h));
+            col = mix(midColor, bottomColor, smoothstep(0.0, -0.25, h));
           }
-          // Stars (only in upper hemisphere)
+
+          // Stars (upper hemisphere only)
           if (h > 0.05) {
             vec2 sp = vec2(atan(vDir.z, vDir.x) * 80.0, h * 80.0);
             float n = hash(floor(sp));
             float star = step(0.992, n) * smoothstep(0.05, 0.4, h);
-            col += vec3(star * 0.9);
+            col += vec3(star * 0.95);
           }
+
+          // Moon disc + soft halo
+          float m = dot(vDir, moonDir);
+          float disc = smoothstep(0.9982, 0.9994, m);
+          float halo = smoothstep(0.93, 0.999, m) * 0.22;
+          col += vec3(0.96, 0.93, 1.0) * (disc + halo);
+
           gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
-    scene.add(new THREE.Mesh(skyGeo, skyMat));
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(110, 24, 16), skyMat));
+    materials.push(skyMat);
 
     // -----------------------------------------------------
-    // Lights (uniforms passed manually into PS2 shader)
+    // Light constants — passed manually as shader uniforms
     // -----------------------------------------------------
-    const lampPos   = new THREE.Vector3(7.5, 5.0, 4.0);
-    const lampColor = new THREE.Color(0xff8c42);  // sodium orange
-    const lampRange = 25;
-    const poolPos   = new THREE.Vector3(0, 0.4, 0);
-    const poolColor = new THREE.Color(0x1de9c5);  // turquoise
-    const poolRange = 12;
+    const lampPos     = new THREE.Vector3(7.5, 5.0, 4.0);
+    const lampColor   = new THREE.Color(0xff8c42);  // sodium orange
+    const lampRange   = 28;
+    const poolPos     = new THREE.Vector3(0, 0.4, 0);
+    const poolColor   = new THREE.Color(0x2af0d0);  // turquoise
+    const poolRange   = 14;
+    const windowPos   = new THREE.Vector3(11.5, 3.5, 0);
+    const windowColor = new THREE.Color(0xffc97a);  // warm interior
+    const windowRange = 22;
 
+    // -----------------------------------------------------
+    // PS2 material factory — vertex jitter + 3-light shader
+    // -----------------------------------------------------
     function makePS2Material(opts) {
       const mat = new THREE.ShaderMaterial({
         uniforms: {
-          uColor:       { value: new THREE.Color(opts.color) },
-          uEmissive:    { value: new THREE.Color(opts.emissive || 0x000000) },
-          uEmissiveAmt: { value: opts.emissiveAmt || 0 },
-          uLampPos:     { value: lampPos },
-          uLampColor:   { value: lampColor },
-          uLampRange:   { value: lampRange },
-          uPoolPos:     { value: poolPos },
-          uPoolColor:   { value: poolColor },
-          uPoolRange:   { value: poolRange },
-          uFogColor:    { value: new THREE.Color(0x2a1845) },
-          uFogDensity:  { value: 0.015 },
+          uColor:        { value: new THREE.Color(opts.color) },
+          uEmissive:     { value: new THREE.Color(opts.emissive || 0x000000) },
+          uEmissiveAmt:  { value: opts.emissiveAmt || 0 },
+          uLampPos:      { value: lampPos },
+          uLampColor:    { value: lampColor },
+          uLampRange:    { value: lampRange },
+          uPoolPos:      { value: poolPos },
+          uPoolColor:    { value: poolColor },
+          uPoolRange:    { value: poolRange },
+          uWindowPos:    { value: windowPos },
+          uWindowColor:  { value: windowColor },
+          uWindowRange:  { value: windowRange },
+          uFogColor:     { value: new THREE.Color(0x3a1a55) },
+          uFogDensity:   { value: 0.014 },
         },
         vertexShader: `
           varying vec3 vNormal;
           varying vec3 vWorldPos;
           varying float vFogDepth;
-
           void main() {
             vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
             vFogDepth = -mvPos.z;
             vec4 clip = projectionMatrix * mvPos;
-
-            // PS2 vertex jitter — snap clip-space xy to a low-res grid.
-            // This is the famous "wobble" — vertices shimmer as the camera moves.
+            // PS2 vertex jitter
             vec2 grid = vec2(160.0, 90.0);
             vec3 ndc = clip.xyz / clip.w;
             ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
             clip.xyz = ndc * clip.w;
-
             gl_Position = clip;
             vNormal = normalize(mat3(modelMatrix) * normal);
             vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
@@ -167,40 +179,33 @@
           uniform vec3 uPoolPos;
           uniform vec3 uPoolColor;
           uniform float uPoolRange;
+          uniform vec3 uWindowPos;
+          uniform vec3 uWindowColor;
+          uniform float uWindowRange;
           uniform vec3 uFogColor;
           uniform float uFogDensity;
           varying vec3 vNormal;
           varying vec3 vWorldPos;
           varying float vFogDepth;
 
+          vec3 pointLight(vec3 lp, vec3 lc, float lr, vec3 base) {
+            vec3 d = lp - vWorldPos;
+            float dist = length(d);
+            float fall = max(0.0, 1.0 - dist / lr);
+            fall *= fall;
+            float ndl = max(dot(vNormal, normalize(d)), 0.0);
+            return base * lc * fall * (0.30 + ndl * 0.70);
+          }
+
           void main() {
-            // Ambient (cool blue night)
-            vec3 ambient = vec3(0.18, 0.16, 0.30);
+            vec3 ambient = vec3(0.22, 0.20, 0.36);
             vec3 col = uColor * ambient;
-
-            // Sodium streetlamp — warm point falloff
-            vec3 toLamp = uLampPos - vWorldPos;
-            float lampDist = length(toLamp);
-            float lampFall = max(0.0, 1.0 - lampDist / uLampRange);
-            lampFall *= lampFall;
-            float lampNdl = max(dot(vNormal, normalize(toLamp)), 0.0);
-            col += uColor * uLampColor * lampFall * (0.35 + lampNdl * 0.6);
-
-            // Pool glow — turquoise point falloff (mostly upward)
-            vec3 toPool = uPoolPos - vWorldPos;
-            float poolDist = length(toPool);
-            float poolFall = max(0.0, 1.0 - poolDist / uPoolRange);
-            poolFall *= poolFall;
-            float poolNdl = max(dot(vNormal, normalize(toPool)), 0.0);
-            col += uColor * uPoolColor * poolFall * (0.25 + poolNdl * 0.5);
-
-            // Self-emissive
+            col += pointLight(uLampPos,   uLampColor,   uLampRange,   uColor);
+            col += pointLight(uPoolPos,   uPoolColor,   uPoolRange,   uColor);
+            col += pointLight(uWindowPos, uWindowColor, uWindowRange, uColor);
             col += uEmissive * uEmissiveAmt;
-
-            // Exponential fog blend (matches scene.fog)
             float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
             col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
-
             gl_FragColor = vec4(col, 1.0);
           }
         `,
@@ -212,56 +217,246 @@
     // -----------------------------------------------------
     // Ground (concrete patio)
     // -----------------------------------------------------
-    const groundMat = makePS2Material({ color: 0x2a2632 });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80, 6, 6), groundMat);
+    const groundMat = makePS2Material({ color: 0x3a3645 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120, 4, 4), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0;
     scene.add(ground);
 
     // -----------------------------------------------------
-    // Pool — flat glowing slab
+    // Pool — custom water shader with tile lines + ripples
     // -----------------------------------------------------
-    const poolMat = makePS2Material({
-      color:       0x0fb5b5,
-      emissive:    0x1de9c5,
-      emissiveAmt: 1.6,
+    const poolMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime:        { value: 0 },
+        uBaseColor:   { value: new THREE.Color(0x0fb5b5) },
+        uBrightColor: { value: new THREE.Color(0x6affe0) },
+        uFogColor:    { value: new THREE.Color(0x3a1a55) },
+        uFogDensity:  { value: 0.014 },
+      },
+      vertexShader: `
+        uniform float uTime;
+        varying vec2 vUv;
+        varying float vTopMask;
+        varying float vFogDepth;
+        void main() {
+          vUv = uv;
+          vec3 p = position;
+          vTopMask = step(0.5, normal.y);
+          // Ripple displacement on the top face only
+          if (vTopMask > 0.5) {
+            p.y += sin(p.x * 1.6 + uTime * 1.4) * 0.035
+                 + sin(p.z * 2.1 - uTime * 1.1) * 0.025;
+          }
+          vec4 mvPos = modelViewMatrix * vec4(p, 1.0);
+          vFogDepth = -mvPos.z;
+          vec4 clip = projectionMatrix * mvPos;
+          vec2 grid = vec2(160.0, 90.0);
+          vec3 ndc = clip.xyz / clip.w;
+          ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
+          clip.xyz = ndc * clip.w;
+          gl_Position = clip;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uBaseColor;
+        uniform vec3 uBrightColor;
+        uniform vec3 uFogColor;
+        uniform float uFogDensity;
+        varying vec2 vUv;
+        varying float vTopMask;
+        varying float vFogDepth;
+        void main() {
+          // Tile grid
+          vec2 g = abs(fract(vUv * vec2(8.0, 5.0)) - 0.5);
+          float gridLine = smoothstep(0.42, 0.5, max(g.x, g.y));
+          // Caustic-ish moving bands
+          float band = sin((vUv.x + vUv.y * 0.6) * 18.0 + uTime * 1.8) * 0.5 + 0.5;
+          float band2 = sin((vUv.x * 0.6 - vUv.y) * 22.0 - uTime * 1.3) * 0.5 + 0.5;
+          float caustic = (band * band2);
+          vec3 col = mix(uBaseColor, uBrightColor, caustic * 0.6 + gridLine * 0.5);
+          // Boost so it reads as a glowing pool
+          col *= mix(0.8, 2.4, vTopMask);
+          float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
+          col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
     });
-    const pool = new THREE.Mesh(new THREE.BoxGeometry(8, 0.15, 5), poolMat);
-    pool.position.set(0, 0.08, 0);
+    materials.push(poolMat);
+    timeUniforms.push(poolMat.uniforms.uTime);
+
+    const pool = new THREE.Mesh(new THREE.BoxGeometry(8, 0.18, 5, 12, 1, 8), poolMat);
+    pool.position.set(0, 0.09, 0);
     scene.add(pool);
 
-    // Pool rim (slightly raised concrete lip)
-    const rimMat = makePS2Material({ color: 0x3e3a48 });
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.18, 5.6), rimMat);
+    // Pool concrete rim
+    const rimMat = makePS2Material({ color: 0x4a4555 });
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.2, 5.6), rimMat);
     rim.position.set(0, 0.05, 0);
     scene.add(rim);
 
     // -----------------------------------------------------
-    // Palm tree (low-poly silhouette)
+    // Villa — modernist concrete cube w/ glowing windows
     // -----------------------------------------------------
-    const trunkMat = makePS2Material({ color: 0x1c1228 });
-    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.32, 6.5, 5);
-    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.set(-7.5, 3.25, 2.5);
-    scene.add(trunk);
+    const villaMat = makePS2Material({ color: 0x7a6e5e });
+    const villaCx = 11.5;
+    const villaCz = 0;
 
-    const frondMat = makePS2Material({ color: 0x2a1140 });
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const frond = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.7, 1, 1), frondMat);
-      frond.position.set(
-        -7.5 + Math.cos(a) * 1.4,
-        6.4,
-        2.5 + Math.sin(a) * 1.4
+    // Lower volume (2 stories deep)
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 8), villaMat);
+    lower.position.set(villaCx, 2, villaCz);
+    scene.add(lower);
+
+    // Upper volume (offset back, smaller)
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 5.5), villaMat);
+    upper.position.set(villaCx + 0.6, 5.6, villaCz - 1);
+    scene.add(upper);
+
+    // Glowing windows on the front face (toward the pool, -x side)
+    const windowMat = makePS2Material({
+      color:       0xffd089,
+      emissive:    0xffd089,
+      emissiveAmt: 1.5,
+    });
+    // Lower row — 4 wide rectangular windows
+    for (let i = 0; i < 4; i++) {
+      const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.06), windowMat);
+      w.position.set(villaCx - 3.55, 2.3, -2.4 + i * 1.6);
+      scene.add(w);
+    }
+    // Upper row — 3 square windows
+    for (let i = 0; i < 3; i++) {
+      const w = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 0.06), windowMat);
+      w.position.set(villaCx - 1.95, 5.6, -1.6 + i * 1.6);
+      scene.add(w);
+    }
+    // Doorway slit on the lower volume
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.06), windowMat);
+    door.position.set(villaCx - 3.55, 1.1, 1.6);
+    scene.add(door);
+
+    // -----------------------------------------------------
+    // Palms — helper + scattered around the property
+    // -----------------------------------------------------
+    const trunkMat = makePS2Material({ color: 0x241632 });
+    const frondMat = makePS2Material({ color: 0x381850 });
+
+    function addPalm(x, z, height) {
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.16, 0.30, height, 5),
+        trunkMat
       );
-      frond.rotation.y = -a;
-      frond.rotation.z = -0.35;
-      scene.add(frond);
+      trunk.position.set(x, height / 2, z);
+      scene.add(trunk);
+      const fronds = 7;
+      for (let i = 0; i < fronds; i++) {
+        const a = (i / fronds) * Math.PI * 2;
+        const f = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.6, 1, 1), frondMat);
+        f.position.set(x + Math.cos(a) * 1.3, height - 0.2, z + Math.sin(a) * 1.3);
+        f.rotation.y = -a;
+        f.rotation.z = -0.32;
+        scene.add(f);
+      }
+    }
+
+    addPalm(-7.5,  2.5, 6.8);
+    addPalm(-9.5, -3.0, 6.0);
+    addPalm(-3.5,  5.5, 5.4);
+    addPalm( 6.0, -4.5, 6.2);
+
+    // -----------------------------------------------------
+    // Ocean — far plane beyond the property
+    // -----------------------------------------------------
+    const oceanMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime:       { value: 0 },
+        uColor:      { value: new THREE.Color(0x14082e) },
+        uHighlight:  { value: new THREE.Color(0x5a2080) },
+        uFogColor:   { value: new THREE.Color(0x3a1a55) },
+        uFogDensity: { value: 0.014 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying float vFogDepth;
+        void main() {
+          vUv = uv;
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          vFogDepth = -mvPos.z;
+          vec4 clip = projectionMatrix * mvPos;
+          vec2 grid = vec2(160.0, 90.0);
+          vec3 ndc = clip.xyz / clip.w;
+          ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
+          clip.xyz = ndc * clip.w;
+          gl_Position = clip;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uColor;
+        uniform vec3 uHighlight;
+        uniform vec3 uFogColor;
+        uniform float uFogDensity;
+        varying vec2 vUv;
+        varying float vFogDepth;
+        void main() {
+          float r1 = sin(vUv.x * 60.0 + uTime * 1.2) * 0.5 + 0.5;
+          float r2 = sin(vUv.y * 35.0 - uTime * 0.7) * 0.5 + 0.5;
+          float ripple = r1 * r2;
+          vec3 col = mix(uColor, uHighlight, ripple * 0.45);
+          float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
+          col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+    });
+    materials.push(oceanMat);
+    timeUniforms.push(oceanMat.uniforms.uTime);
+
+    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(220, 70, 1, 1), oceanMat);
+    ocean.rotation.x = -Math.PI / 2;
+    ocean.position.set(0, -0.02, -50);
+    scene.add(ocean);
+
+    // -----------------------------------------------------
+    // Distant skyline dots (neon lights on the horizon)
+    // -----------------------------------------------------
+    const skylineColors = [0xff2d95, 0x00d4ff, 0xffaa55, 0xa44fff];
+    const skylineMats = skylineColors.map(c => {
+      const m = new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: new THREE.Color(c) } },
+        vertexShader: `
+          void main() {
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            vec4 clip = projectionMatrix * mvPos;
+            vec2 grid = vec2(160.0, 90.0);
+            vec3 ndc = clip.xyz / clip.w;
+            ndc.xy = floor(ndc.xy * grid + 0.5) / grid;
+            clip.xyz = ndc * clip.w;
+            gl_Position = clip;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          void main() { gl_FragColor = vec4(uColor * 1.3, 1.0); }
+        `,
+      });
+      materials.push(m);
+      return m;
+    });
+    for (let i = 0; i < 32; i++) {
+      const mat = skylineMats[i % skylineMats.length];
+      const xrange = (i / 32 - 0.5) * 200;
+      const yjit = 0.6 + Math.abs(Math.sin(i * 1.7)) * 0.5 + Math.abs(Math.sin(i * 3.3)) * 1.4;
+      const tall = 0.4 + Math.abs(Math.sin(i * 2.1)) * 1.2;
+      const dot = new THREE.Mesh(new THREE.BoxGeometry(0.55, tall, 0.55), mat);
+      dot.position.set(xrange, yjit, -78);
+      scene.add(dot);
     }
 
     // -----------------------------------------------------
     // Low-res render target → fullscreen quad upscale
-    // This is what gives us the chunky-pixel PS2 look.
     // -----------------------------------------------------
     lowResTarget = new THREE.WebGLRenderTarget(LOW_W, LOW_H, {
       minFilter: THREE.NearestFilter,
@@ -333,21 +528,30 @@
     mouseY = ((t.clientY - r.top) / r.height) * 2 - 1;
   }
 
-  function animate() {
+  // Orbit around the visual center between pool and villa
+  const CAM_CENTER_X = 3;
+  const CAM_CENTER_Z = 0;
+  const CAM_RADIUS = 16;
+
+  function animate(now) {
     if (destroyed || !renderer) return;
     animId = requestAnimationFrame(animate);
 
-    // Gentle orbit driven by mouse position
-    const targetYaw = -mouseX * 0.6;
+    const elapsed = (now || 0) / 1000;
+    for (let i = 0; i < timeUniforms.length; i++) {
+      timeUniforms[i].value = elapsed;
+    }
+
+    // Gentle orbit driven by mouse
+    const targetYaw = -mouseX * 0.7;
     const targetPitch = -mouseY * 0.25;
     yaw += (targetYaw - yaw) * 0.05;
     pitch += (targetPitch - pitch) * 0.05;
 
-    const radius = 13;
-    camera.position.x = Math.sin(yaw) * radius;
-    camera.position.z = Math.cos(yaw) * radius;
-    camera.position.y = 4 + pitch * 4;
-    camera.lookAt(0, 1.2, 0);
+    camera.position.x = CAM_CENTER_X + Math.sin(yaw) * CAM_RADIUS;
+    camera.position.z = CAM_CENTER_Z + Math.cos(yaw) * CAM_RADIUS;
+    camera.position.y = 4.8 + pitch * 4;
+    camera.lookAt(CAM_CENTER_X, 1.8, CAM_CENTER_Z);
 
     // Pass 1 — render scene to low-res target
     renderer.setRenderTarget(lowResTarget);
@@ -371,6 +575,7 @@
     }
     materials.forEach(m => m.dispose && m.dispose());
     materials = [];
+    timeUniforms = [];
     if (lowResTarget) { lowResTarget.dispose(); lowResTarget = null; }
     if (postMaterial) { postMaterial.dispose(); postMaterial = null; }
     if (renderer) { renderer.dispose(); renderer = null; }
