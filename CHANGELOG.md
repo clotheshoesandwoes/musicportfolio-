@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## b032 — 2026-04-07 — Dual-mode camera: first-person for interior anchors
+
+User: "angles for all interior rooms is bad cause its too zoomed in. as soon as i move camera or zoom out, im locked from the outside i cant zoom back in... also the positions arent great for looking around and clicking into stuff". Two problems, one root cause: orbit-around-a-point is the wrong primitive for tight interiors.
+
+**Bug 1 (locked-out):** orbit input has a hard `MIN_RADIUS = 8` clamp from b014. b031 interior anchors used radius 3.5–5.5, which the fly-to set directly. The moment the user touched scroll/pinch the clamp snapped radius up to 8, and they could never zoom back below 8 → permanently locked outside the room.
+
+**Bug 2 (bad framing for looking around):** orbit-around-a-fixed-point in a 14×14 room means dragging the mouse arcs the camera *through walls*. "Look around a room and click on stuff" is fundamentally a first-person rotation (camera position fixed, lookAt direction swings), not an orbit.
+
+### Fix
+Added a per-anchor `mode: 'orbit' | 'firstPerson'` field. Exterior anchors (POOL/BEACH/AERIAL) keep the existing orbit math. Interior anchors (LIVING/BEDROOM/BILLIARD/INDOOR) use a new first-person mode:
+
+- **Position is fixed** at the anchor's `(px, py, pz)` — the camera stands in one spot inside the room
+- **Drag rotates lookAt direction** in place (yaw/pitch) — true look-around feel
+- **Wider pitch clamp** (`-1.35..1.35` vs orbit's `-0.10..1.30`) so the user can look nearly straight up/down inside a room
+- **Wheel/pinch adjusts FOV** instead of orbit radius — clamps `35..95`, default 75–78 per anchor
+
+The fly-to tween was rewritten to interpolate **cartesian position + lookAt point + FOV** rather than the mode-specific state. That means an orbit anchor → first-person anchor (or vice versa) flies smoothly through 3D space without any visible mode-switch pop. At `t=1` the underlying state vars settle into the target mode and the matching free-input path takes over.
+
+### Files modified
+- [js/world.js](js/world.js) — `camMode` state, `clampFov`, dual-mode `clampPitch`, dual-mode `onWheel` + pinch, `currentLookAtPoint` / `anchorCameraPosition` / `anchorLookAtPoint` helpers, `flyToAnchor` rewritten to cartesian, `animate()` camera section split into 3 branches (fly tween / orbit free / first-person free), `cameraAnchors[]` schema with `mode` field
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b031 → b032`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b031 — 2026-04-07 — Rebuild camera anchors against actual room geometry
 
 User: "some of our camera angles are broken or poorly positioned". Screenshots of all 7 jumper anchors showed LIVING / BEDROOM / BILLIARD / INDOOR rendering as nearly-black voids with stray edge fragments — and AERIAL / BEACH framed wrong. Cause was a math error in every interior anchor: the orbit formula places the camera at `center + sin(yaw)·cos(pitch)·radius`, and the prior radii (7–11) were larger than the rooms themselves, so the camera always landed *outside* the wing walls and rendered the back of opaque geometry.

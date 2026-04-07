@@ -12,19 +12,31 @@
   let lowResTarget, postScene, postCamera, postMaterial;
   let onResize, destroyed = false;
   // b014 — proper orbit camera input: drag to rotate, scroll/pinch to zoom
+  // b032 — dual-mode camera: 'orbit' (exterior anchors) and 'firstPerson'
+  // (interior anchors). Orbit uses center+yaw+pitch+radius spherical math.
+  // First-person uses fixed position+yaw+pitch+fov, drag rotates lookAt in
+  // place, scroll changes FOV instead of distance.
+  let camMode = 'orbit';         // 'orbit' | 'firstPerson'
   let yaw = 0, pitch = 0.30;     // initial slight downward tilt
-  let radius = 26;               // initial orbit distance (was CAM_RADIUS const)
+  let radius = 26;               // orbit distance (orbit mode only)
+  let fov = 70;                  // perspective FOV (first-person zoom target)
   let isDragging = false;
   let lastDragX = 0, lastDragY = 0;
   let touchMode = null;          // 'drag' | 'pinch' | null
   let pinchStartDist = 0;
   let pinchStartRadius = 0;
+  let pinchStartFov = 70;
   const MIN_RADIUS = 8;
   const MAX_RADIUS = 80;
-  const MIN_PITCH = -0.10;       // can dip just below horizontal
-  const MAX_PITCH = 1.30;        // close to top-down
+  const MIN_PITCH = -0.10;       // orbit: can dip just below horizontal
+  const MAX_PITCH = 1.30;        // orbit: close to top-down
+  const MIN_PITCH_FP = -1.35;    // first-person: nearly straight down
+  const MAX_PITCH_FP =  1.35;    // first-person: nearly straight up
+  const MIN_FOV = 35;
+  const MAX_FOV = 95;
   const ROTATE_SPEED = 0.005;    // rad per pixel
-  const ZOOM_SPEED = 0.025;      // radius per wheel delta
+  const ZOOM_SPEED = 0.025;      // radius per wheel delta (orbit)
+  const FOV_ZOOM_SPEED = 0.05;   // fov per wheel delta (first-person)
   let materials = [];
   let timeUniforms = [];
   // b029 — Day/night cycle uniform shared across sky + PS2 shaders.
@@ -2689,10 +2701,19 @@
   }
 
   function clampPitch(p) {
+    // b032 — first-person mode gets a much wider pitch range so the user
+    // can look nearly straight up/down inside a room. Orbit keeps the
+    // narrower range so the camera doesn't flip upside-down on exterior shots.
+    if (camMode === 'firstPerson') {
+      return Math.max(MIN_PITCH_FP, Math.min(MAX_PITCH_FP, p));
+    }
     return Math.max(MIN_PITCH, Math.min(MAX_PITCH, p));
   }
   function clampRadius(r) {
     return Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, r));
+  }
+  function clampFov(f) {
+    return Math.max(MIN_FOV, Math.min(MAX_FOV, f));
   }
 
   // b026 — convert mouse position to normalized device coordinates
@@ -2919,7 +2940,12 @@
   }
   function onWheel(e) {
     e.preventDefault();
-    radius = clampRadius(radius + e.deltaY * ZOOM_SPEED);
+    if (camMode === 'orbit') {
+      radius = clampRadius(radius + e.deltaY * ZOOM_SPEED);
+    } else {
+      // b032 — first-person zoom adjusts FOV instead of orbit distance
+      fov = clampFov(fov + e.deltaY * FOV_ZOOM_SPEED);
+    }
   }
 
   function onTouchStart(e) {
@@ -2940,6 +2966,7 @@
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       pinchStartDist = Math.hypot(dx, dy) || 1;
       pinchStartRadius = radius;
+      pinchStartFov = fov;
     }
   }
   function onTouchMove(e) {
@@ -2962,8 +2989,13 @@
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.hypot(dx, dy) || 1;
-      // pinch out (dist increases) → smaller radius (zoom in)
-      radius = clampRadius(pinchStartRadius * (pinchStartDist / dist));
+      if (camMode === 'orbit') {
+        // pinch out (dist increases) → smaller radius (zoom in)
+        radius = clampRadius(pinchStartRadius * (pinchStartDist / dist));
+      } else {
+        // b032 — first-person pinch zoom: pinch out → smaller fov (zoom in)
+        fov = clampFov(pinchStartFov * (pinchStartDist / dist));
+      }
     }
   }
   function onTouchEnd(e) {
@@ -2996,33 +3028,83 @@
   // ANCHOR_FLY_MS, then resumes free orbit at the new anchor.
   const ANCHOR_FLY_MS = 1400;
   const cameraAnchors = [
-    // b031 — Anchors rebuilt against actual room geometry. Interior anchors
-    // (LIVING/BEDROOM/BILLIARD/INDOOR) had radii too large for their rooms,
-    // landing the camera OUTSIDE wing walls and looking at black voids.
-    // Tightened radii + adjusted yaw so camera lands inside the target room.
-    { name: 'pool',     label: 'POOL',     cx:   0,    cy: 4.0, cz:  -2,    yaw: 0,            pitch: 0.30, radius: 26  },
-    { name: 'beach',    label: 'BEACH',    cx:   0,    cy: 4.0, cz:  -8,    yaw: 0,            pitch: 0.05, radius: 35  },
-    { name: 'aerial',   label: 'AERIAL',   cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 42  },
-    { name: 'living',   label: 'LIVING',   cx:   0,    cy: 2.0, cz: -10,    yaw: Math.PI / 2,  pitch: 0.18, radius: 5.5 },
-    { name: 'bedroom',  label: 'BEDROOM',  cx: -11.5,  cy: 4.5, cz:  -7.7,  yaw: 0,            pitch: 0.15, radius: 3.5 },
-    { name: 'billiard', label: 'BILLIARD', cx:  11.5,  cy: 1.5, cz: -11.5,  yaw: Math.PI,      pitch: 0.25, radius: 3.5 },
-    { name: 'indoor',   label: 'INDOOR',   cx:   0,    cy: 2.5, cz: -23.2,  yaw: Math.PI,      pitch: 0.18, radius: 4.5 },
+    // b032 — Anchors carry an explicit camera MODE.
+    //   - 'orbit'       → cx/cy/cz = orbit center; yaw/pitch/radius spherical
+    //   - 'firstPerson' → px/py/pz = fixed camera position; yaw/pitch lookAt
+    //                     direction; fov for zoom
+    // Interior rooms use first-person so the user can stand in place and
+    // pan their view (orbit-around-a-point arcs the camera through walls in
+    // tight spaces, plus the radius clamp makes interior orbits unstable).
+    { name: 'pool',     label: 'POOL',     mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -2,    yaw: 0,            pitch: 0.30, radius: 26  },
+    { name: 'beach',    label: 'BEACH',    mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -8,    yaw: 0,            pitch: 0.05, radius: 35  },
+    { name: 'aerial',   label: 'AERIAL',   mode: 'orbit',       cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 42  },
+    { name: 'living',   label: 'LIVING',   mode: 'firstPerson', px:   0,    py: 2.5, pz: -14.5,  yaw: Math.PI,      pitch: 0.00, fov: 75 },
+    { name: 'bedroom',  label: 'BEDROOM',  mode: 'firstPerson', px: -11.5,  py: 4.8, pz:  -7.5,  yaw: 0,            pitch: -0.05, fov: 75 },
+    { name: 'billiard', label: 'BILLIARD', mode: 'firstPerson', px:  14.5,  py: 1.8, pz: -11.5,  yaw: Math.PI / 2,  pitch: -0.10, fov: 75 },
+    { name: 'indoor',   label: 'INDOOR',   mode: 'firstPerson', px:   0,    py: 2.8, pz: -18.5,  yaw: 0,            pitch: -0.10, fov: 78 },
   ];
   let currentAnchorIdx = 0;
-  let flyState = null;  // { startTime, fromCx, fromCy, fromCz, fromYaw, fromPitch, fromRadius, to: anchor }
+  let flyState = null;  // b032: { startTime, fromPos, fromLook, fromFov, toPos, toLook, toFov, target }
+
+  // b032 — helpers for the cartesian fly tween. They convert between the
+  // mode-specific state and a unified (camera position + lookAt point) pair.
+
+  function currentLookAtPoint() {
+    // Where is the camera currently looking?
+    if (camMode === 'orbit') {
+      return new THREE_lib.Vector3(camCenterX, camCenterY, camCenterZ);
+    }
+    // first-person — derive lookAt from position + forward(yaw, pitch)
+    const cp = Math.cos(pitch);
+    return new THREE_lib.Vector3(
+      camCenterX - Math.sin(yaw) * cp,
+      camCenterY - Math.sin(pitch),
+      camCenterZ - Math.cos(yaw) * cp
+    );
+  }
+  function anchorCameraPosition(a) {
+    if (a.mode === 'orbit') {
+      const cp = Math.cos(a.pitch);
+      return new THREE_lib.Vector3(
+        a.cx + Math.sin(a.yaw) * cp * a.radius,
+        a.cy + Math.sin(a.pitch) * a.radius,
+        a.cz + Math.cos(a.yaw) * cp * a.radius
+      );
+    }
+    return new THREE_lib.Vector3(a.px, a.py, a.pz);
+  }
+  function anchorLookAtPoint(a) {
+    if (a.mode === 'orbit') {
+      return new THREE_lib.Vector3(a.cx, a.cy, a.cz);
+    }
+    const cp = Math.cos(a.pitch);
+    return new THREE_lib.Vector3(
+      a.px - Math.sin(a.yaw) * cp,
+      a.py - Math.sin(a.pitch),
+      a.pz - Math.cos(a.yaw) * cp
+    );
+  }
 
   function flyToAnchor(idx) {
     if (idx < 0 || idx >= cameraAnchors.length) return;
     const target = cameraAnchors[idx];
+
+    // b032 — Tween cartesian (position + lookAt point + fov), not the underlying
+    // mode-specific state. This works seamlessly across mode switches: an orbit
+    // anchor flying to a first-person anchor (or vice versa) just lerps through
+    // intermediate camera positions without any visible pop. The mode swap
+    // happens at t=1 when we settle the underlying state vars.
+    const fromPos = camera.position.clone();
+    const fromLook = currentLookAtPoint();
+    const toPos = anchorCameraPosition(target);
+    const toLook = anchorLookAtPoint(target);
+    const toFov = (target.mode === 'firstPerson' ? target.fov : 70);
+
     flyState = {
       startTime: performance.now(),
-      fromCx: camCenterX,
-      fromCy: camCenterY,
-      fromCz: camCenterZ,
-      fromYaw: yaw,
-      fromPitch: pitch,
-      fromRadius: radius,
-      to: target,
+      fromPos, fromLook, fromFov: camera.fov,
+      toPos, toLook, toFov,
+      target,
     };
     currentAnchorIdx = idx;
     // Update the active button styling
@@ -3056,30 +3138,69 @@
     // b028 — drive the popover card waveform from live frequency data
     updateVillaCardWaveform();
 
-    // b029 — Camera anchor fly-to tween. Lerps center+yaw+pitch+radius from
-    // the saved start state into the target anchor over ANCHOR_FLY_MS, then
-    // hands control back to the user (orbit input remains live throughout
-    // but each frame the tween overrides whatever the input set).
+    // b032 — Camera anchor fly-to tween (cartesian). Lerps camera position +
+    // lookAt point + fov in straight 3D space, so an orbit anchor → first-person
+    // anchor (or vice versa) flies smoothly without a mode-switch pop. The user's
+    // drag/zoom input is ignored during the tween — at t=1 we settle the
+    // mode-specific state vars and hand control back to the matching free-input
+    // path below.
     if (flyState) {
       const t = Math.min(1, ((now || 0) - flyState.startTime) / ANCHOR_FLY_MS);
       const k = easeInOutCubic(t);
-      camCenterX = flyState.fromCx + (flyState.to.cx     - flyState.fromCx)     * k;
-      camCenterY = flyState.fromCy + (flyState.to.cy     - flyState.fromCy)     * k;
-      camCenterZ = flyState.fromCz + (flyState.to.cz     - flyState.fromCz)     * k;
-      yaw        = flyState.fromYaw    + (flyState.to.yaw    - flyState.fromYaw)    * k;
-      pitch      = flyState.fromPitch  + (flyState.to.pitch  - flyState.fromPitch)  * k;
-      radius     = flyState.fromRadius + (flyState.to.radius - flyState.fromRadius) * k;
-      if (t >= 1) flyState = null;
+      const px = flyState.fromPos.x  + (flyState.toPos.x  - flyState.fromPos.x)  * k;
+      const py = flyState.fromPos.y  + (flyState.toPos.y  - flyState.fromPos.y)  * k;
+      const pz = flyState.fromPos.z  + (flyState.toPos.z  - flyState.fromPos.z)  * k;
+      const lx = flyState.fromLook.x + (flyState.toLook.x - flyState.fromLook.x) * k;
+      const ly = flyState.fromLook.y + (flyState.toLook.y - flyState.fromLook.y) * k;
+      const lz = flyState.fromLook.z + (flyState.toLook.z - flyState.fromLook.z) * k;
+      camera.position.set(px, py, pz);
+      camera.lookAt(lx, ly, lz);
+      const newFov = flyState.fromFov + (flyState.toFov - flyState.fromFov) * k;
+      if (Math.abs(camera.fov - newFov) > 0.01) {
+        camera.fov = newFov;
+        camera.updateProjectionMatrix();
+      }
+      if (t >= 1) {
+        // Settle into the target anchor's mode + state. After this frame the
+        // free-input path takes over and the user can drag/zoom from here.
+        const tgt = flyState.target;
+        camMode = tgt.mode;
+        if (tgt.mode === 'orbit') {
+          camCenterX = tgt.cx; camCenterY = tgt.cy; camCenterZ = tgt.cz;
+          yaw = tgt.yaw; pitch = tgt.pitch; radius = tgt.radius;
+          fov = 70;
+        } else {
+          camCenterX = tgt.px; camCenterY = tgt.py; camCenterZ = tgt.pz;
+          yaw = tgt.yaw; pitch = tgt.pitch; fov = tgt.fov;
+        }
+        flyState = null;
+      }
+    } else if (camMode === 'orbit') {
+      // b014 — spherical orbit around (camCenterX/Y/Z). yaw/pitch/radius come
+      // from drag/wheel/pinch input.
+      const cosP = Math.cos(pitch);
+      const sinP = Math.sin(pitch);
+      camera.position.x = camCenterX + Math.sin(yaw) * cosP * radius;
+      camera.position.z = camCenterZ + Math.cos(yaw) * cosP * radius;
+      camera.position.y = camCenterY + sinP * radius;
+      if (camera.position.y < 1.0) camera.position.y = 1.0;  // never below ground
+      camera.lookAt(camCenterX, camCenterY, camCenterZ);
+      if (camera.fov !== 70) { camera.fov = 70; camera.updateProjectionMatrix(); }
+    } else {
+      // b032 — first-person: camera position is fixed at (camCenterX/Y/Z),
+      // drag rotates the lookAt direction in place, wheel/pinch adjusts FOV.
+      camera.position.set(camCenterX, camCenterY, camCenterZ);
+      const cp = Math.cos(pitch);
+      camera.lookAt(
+        camCenterX - Math.sin(yaw) * cp,
+        camCenterY - Math.sin(pitch),
+        camCenterZ - Math.cos(yaw) * cp
+      );
+      if (Math.abs(camera.fov - fov) > 0.01) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+      }
     }
-
-    // b014 — proper spherical orbit. yaw/pitch/radius come from drag input.
-    const cosP = Math.cos(pitch);
-    const sinP = Math.sin(pitch);
-    camera.position.x = camCenterX + Math.sin(yaw) * cosP * radius;
-    camera.position.z = camCenterZ + Math.cos(yaw) * cosP * radius;
-    camera.position.y = camCenterY + sinP * radius;
-    if (camera.position.y < 1.0) camera.position.y = 1.0;  // never below ground
-    camera.lookAt(camCenterX, camCenterY, camCenterZ);
 
     // Pass 1 — render scene to low-res target
     renderer.setRenderTarget(lowResTarget);
