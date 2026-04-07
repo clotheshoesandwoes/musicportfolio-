@@ -85,7 +85,7 @@
     // eating saturation across the whole scene and making it look pastel.
     scene.fog = new THREE.FogExp2(0x6a1850, 0.003);
 
-    camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 320);
+    camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 1.5, 320);
     // Initial position will be overwritten by animate() on first frame, but
     // set something reasonable so the first render isn't broken if anything
     // skips animate.
@@ -2996,13 +2996,17 @@
   // ANCHOR_FLY_MS, then resumes free orbit at the new anchor.
   const ANCHOR_FLY_MS = 1400;
   const cameraAnchors = [
-    { name: 'pool',     label: 'POOL',     cx:   0, cy:  4.0, cz:  -2, yaw: 0,             pitch: 0.30, radius: 26 },
-    { name: 'beach',    label: 'BEACH',    cx:   0, cy:  2.5, cz:  30, yaw: Math.PI,       pitch: 0.18, radius: 22 },
-    { name: 'aerial',   label: 'AERIAL',   cx:   0, cy:  4.0, cz: -10, yaw: 0,             pitch: 1.10, radius: 38 },
-    { name: 'living',   label: 'LIVING',   cx:   0, cy:  2.4, cz: -10, yaw: 0,             pitch: 0.10, radius: 8  },
-    { name: 'bedroom',  label: 'BEDROOM',  cx: -11.5, cy: 5.0, cz: -10, yaw: Math.PI / 2,  pitch: 0.08, radius: 7  },
-    { name: 'billiard', label: 'BILLIARD', cx:  11.5, cy: 2.5, cz: -10, yaw: -Math.PI / 2, pitch: 0.08, radius: 7  },
-    { name: 'indoor',   label: 'INDOOR',   cx:   0, cy:  4.0, cz: -23.2, yaw: 0,           pitch: 0.18, radius: 11 },
+    // b031 — Anchors rebuilt against actual room geometry. Interior anchors
+    // (LIVING/BEDROOM/BILLIARD/INDOOR) had radii too large for their rooms,
+    // landing the camera OUTSIDE wing walls and looking at black voids.
+    // Tightened radii + adjusted yaw so camera lands inside the target room.
+    { name: 'pool',     label: 'POOL',     cx:   0,    cy: 4.0, cz:  -2,    yaw: 0,            pitch: 0.30, radius: 26  },
+    { name: 'beach',    label: 'BEACH',    cx:   0,    cy: 4.0, cz:  -8,    yaw: 0,            pitch: 0.05, radius: 35  },
+    { name: 'aerial',   label: 'AERIAL',   cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 42  },
+    { name: 'living',   label: 'LIVING',   cx:   0,    cy: 2.0, cz: -10,    yaw: Math.PI / 2,  pitch: 0.18, radius: 5.5 },
+    { name: 'bedroom',  label: 'BEDROOM',  cx: -11.5,  cy: 4.5, cz:  -7.7,  yaw: 0,            pitch: 0.15, radius: 3.5 },
+    { name: 'billiard', label: 'BILLIARD', cx:  11.5,  cy: 1.5, cz: -11.5,  yaw: Math.PI,      pitch: 0.25, radius: 3.5 },
+    { name: 'indoor',   label: 'INDOOR',   cx:   0,    cy: 2.5, cz: -23.2,  yaw: Math.PI,      pitch: 0.18, radius: 4.5 },
   ];
   let currentAnchorIdx = 0;
   let flyState = null;  // { startTime, fromCx, fromCy, fromCz, fromYaw, fromPitch, fromRadius, to: anchor }

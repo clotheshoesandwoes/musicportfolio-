@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## b031 — 2026-04-07 — Rebuild camera anchors against actual room geometry
+
+User: "some of our camera angles are broken or poorly positioned". Screenshots of all 7 jumper anchors showed LIVING / BEDROOM / BILLIARD / INDOOR rendering as nearly-black voids with stray edge fragments — and AERIAL / BEACH framed wrong. Cause was a math error in every interior anchor: the orbit formula places the camera at `center + sin(yaw)·cos(pitch)·radius`, and the prior radii (7–11) were larger than the rooms themselves, so the camera always landed *outside* the wing walls and rendered the back of opaque geometry.
+
+Worked it out per-room against the real coordinates (villa central x∈[-7,7] z∈[-17,-3]; west wing cx=-11.5; east wing cx=11.5; atrium cz=-23.2 d=12), then chose new yaw/pitch/radius so the camera lands inside the correct room and the lookAt frames the hero prop (sofa, bed, pool table, indoor pool).
+
+### Fix
+Rewrote `cameraAnchors[]` in [js/world.js](js/world.js):
+- **POOL** — unchanged (was already correct)
+- **BEACH** — flipped to "stand on the beach looking at the villa" (yaw=0, cz=-8, r=35) instead of looking out toward the ocean from the pool
+- **AERIAL** — pitch 1.10 → 1.25, lookAt y dropped to 0, radius 38 → 42 → true top-down framing
+- **LIVING** — radius 8 → 5.5, yaw 0 → π/2 → camera lands inside the central room at x=5.4, frames sofa + coffee table + TV
+- **BEDROOM** — radius 7 → 3.5, cz -10 → -7.7 (foot of bed), yaw π/2 → 0 → camera inside west wing
+- **BILLIARD** — radius 7 → 3.5, cz -10 → -11.5 (pool table center), yaw -π/2 → π → camera inside east wing
+- **INDOOR** — radius 11 → 4.5, yaw 0 → π → camera inside atrium back wall, frames indoor pool + sauna
+
+### Files modified
+- [js/world.js](js/world.js) — `cameraAnchors[]` rewritten
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b030 → b031`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+## b030 — 2026-04-07 — Fix z-fighting on scenery (camera near plane)
+
+User: "there is a lot of jitter on the scenery... Z fighting is what I want addressed". Roof/wall/deck surfaces were flickering against each other as the camera moved. Cause was the perspective camera's depth range: `near=0.1, far=320` gives a 3200:1 ratio, which crushes z-buffer precision and causes coplanar surfaces to fight. Camera radius is clamped 8–80 (orbit), so the near plane has tons of headroom.
+
+### Fix
+Bumped `near` from `0.1` → `1.5` on the main `PerspectiveCamera`. Ratio drops from 3200:1 to ~213:1 — typically eliminates 90% of z-fighting on its own. If any flicker remains visible after deploy, the next step is attaching an explicit 24-bit `DepthTexture` to `lowResTarget`.
+
+### Files modified
+- [js/world.js](js/world.js) — camera near `0.1 → 1.5`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b029a → b030`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b029a — 2026-04-07 — Hotfix: cycleUniform was scoped wrong, animate() threw on first frame, canvas stayed black
 
 User: "i can click buttons but cant see a thing". The DOM anchor bar was rendering and the click handlers worked, but the 3D canvas was just the dark purple clear color (`0x2a0a35`). Diagnosis: `cycleUniform` was declared `const` INSIDE `init()`, but `animate()` lives at IIFE level outside `init()` — closure-wise, animate's reference to `cycleUniform` resolved to undefined and threw `ReferenceError` on the very first rAF tick. The rAF chain died immediately, no scene was ever rendered, the canvas just held the cleared background.
