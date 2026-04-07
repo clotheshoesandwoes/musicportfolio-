@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## b018 — 2026-04-07 — Villa glow nerf, stone podium, Lambo de-shrubbed, hill rework, back grass plane
+
+User feedback after b017 deploy: "mansion looks super ugly, car covered in shrubs, background missing, no grass or elevation for homes behind the main one." This build addresses all four.
+
+### Pink Lambo de-shrubbed
+The b016 cluster (6 shrubs around the Lambo at -14, 5) literally surrounded the car — 4 of the 6 were on the camera-facing side, completely hiding it. b018 keeps only 3 shrubs, all on the FAR side (north of the car) so the Lambo is visible from the camera default angle.
+
+- Removed: `(-16, 3) (-15, 1.5) (-13, 1) (-12, 2.5) (-16.5, 6.5) (-15, 7.5)`
+- Added: `(-16.5, 7.0) (-14.5, 8.0) (-17.5, 5.5)`
+
+### Villa glow nerf
+The front face was washing out into a yellow lite-brite blob. Two changes:
+- `windowMat.emissiveAmt`: `2.0 → 0.95` — FTG glass + door + tower glass + garage door + neighbor villa windows still glow but no longer overpower the plaster + columns + asymmetric stack reading
+- `windowRange` (the 3-light shader uniform that lights the entire scene from inside the villa): `32 → 18` — was bathing literally everything in warm yellow, including the boulders and the back hills
+
+### Stone podium under villa
+The villa was floating on the deck with no base. Added `podiumMat` (darker travertine `0x6f6960`) and a `34 × 0.8 × 20` box at `(0, 0.4, -10)`. Slightly larger footprint than the lower volume so it reads as a base rather than just a darker floor stripe. Interior floor raised from `y=0.02` to `y=0.82` to sit on top of the podium. Walls/columns/door clip into the podium below the visible top — fine, hidden inside the box.
+
+### Second upper plaster contrast
+New `villaMat2` color `0xece4d0` (slightly warmer than `villaMat`'s `0xeeeae0`) used only on the second upper volume box. Makes the third floor visually distinct from the first upper, so the asymmetric stepped stack reads as architecture instead of two same-colored boxes.
+
+### Hill rework — taller, closer, wider, more
+The b016 hills were too far (`z=-90 to -118`), too short (`h=5-12`), and too few (5) to read as terrain at the camera default distance. Reworked into 6 hills in 3 ridges:
+- Front ridge (right behind the cross-street mansions): `(-55, 0, -85) 60×14×24`, `(0, 0, -92) 90×20×28`, `(55, 0, -85) 60×15×24`
+- Mid ridge: `(-30, 0, -105) 70×24×20`, `(30, 0, -105) 70×22×20`
+- Back ridge: `(0, 0, -120) 120×28×24`
+
+Hills overlap intentionally so they read as a continuous ridge, not 6 separate boxes.
+
+### Big back grass plane
+Past the far sidewalk at `z=-46`, the world dropped into void/fog — the cross-street mansions were floating on nothing. Added a `360 × 100` grass plane (reusing `hillMat`) at `(0, 0.04, -100)` covering `z=-50 to z=-150` and `x=-180 to 180`. Now the back half of the world has continuous green ground from the road out to the back hills.
+
+### Hill villas repositioned
+9 villas (was 7) repositioned onto the new hill tops:
+- Front ridge (y=14-20): `(-50, 14, -85)`, `(-20, 20, -92)`, `(20, 20, -92)`, `(50, 15, -85)`
+- Mid ridge (y=22-24): `(-30, 24, -105)`, `(30, 22, -105)`
+- Back ridge (y=28): `(-25, 28, -120)`, `(25, 28, -120)`, `(0, 28, -120)`
+
+### Files modified
+- [js/world.js](js/world.js) — shrub cluster, windowMat emissiveAmt, windowRange, villaMat2 + podiumMat declarations, podium box, interior floor y, upper2 mat swap, hill rework, back grass plane, hill villa repositioning
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b017 → b018`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b017 — 2026-04-07 — Hotfix: tower block referenced windowMat before declaration
 
 b016 deployed but the villa view crashed on init with:

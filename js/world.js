@@ -139,7 +139,7 @@
     const poolRange   = 26;  // bigger reach for the bigger pool
     const windowPos   = new THREE.Vector3(0, 4.5, -10);  // inside the bigger villa
     const windowColor = new THREE.Color(0xffd090);  // richer warm interior
-    const windowRange = 32;  // bigger range for the bigger house
+    const windowRange = 18;  // b018 — was 32, the entire scene was washed out by interior glow
 
     // -----------------------------------------------------
     // PS2 material factory — vertex jitter + 3-light shader
@@ -331,10 +331,12 @@
     // roughly 2x in every axis. Ready for interior props in b014.
     // -----------------------------------------------------
     const villaMat       = makePS2Material({ color: 0xeeeae0 });   // white plaster (exterior)
+    const villaMat2      = makePS2Material({ color: 0xece4d0 });   // b018 — warmer plaster for the second upper volume so it reads as a separate floor
     const villaInteriorMat = makePS2Material({ color: 0xddd6c8 }); // slightly warmer interior plaster
     const floorInteriorMat = makePS2Material({ color: 0xc9c2b2 }); // warm travertine floor inside
     const roofMat        = makePS2Material({ color: 0xe0dcd0 });   // thin slab, slightly darker
     const stoneMat       = makePS2Material({ color: 0x8a847a });   // stacked natural stone
+    const podiumMat      = makePS2Material({ color: 0x6f6960 });   // b018 — darker travertine plinth under the villa
     const coveMat        = makePS2Material({                       // recessed cove light
       color:       0xffd090,
       emissive:    0xffd090,
@@ -355,13 +357,23 @@
     const lowerLeftX  = villaCx - lowerHalfW;
     const lowerRightX = villaCx + lowerHalfW;
 
-    // ---- Interior floor (travertine) ----
+    // ---- b018 — darker stone podium under the entire villa footprint
+    // (slightly larger than the lower volume so it reads as a base, not
+    // just floating plaster directly on the deck) ----
+    const podium = new THREE.Mesh(
+      new THREE.BoxGeometry(lowerW + 2.0, 0.8, lowerD + 2.0),
+      podiumMat
+    );
+    podium.position.set(villaCx, 0.4, villaCz);
+    scene.add(podium);
+
+    // ---- Interior floor (travertine) — sits on top of the podium ----
     const interiorFloor = new THREE.Mesh(
       new THREE.PlaneGeometry(lowerW - wallT * 2, lowerD - wallT * 2),
       floorInteriorMat
     );
     interiorFloor.rotation.x = -Math.PI / 2;
-    interiorFloor.position.set(villaCx, 0.02, villaCz);
+    interiorFloor.position.set(villaCx, 0.82, villaCz);
     scene.add(interiorFloor);
 
     // ---- Back wall (full, solid) ----
@@ -453,7 +465,7 @@
     const upper2Z = villaCz - 0.5;      // pulled back slightly
     const upper2 = new THREE.Mesh(
       new THREE.BoxGeometry(upper2W, upper2H, upper2D),
-      villaMat
+      villaMat2
     );
     upper2.position.set(upper2X, upper2Y, upper2Z);
     scene.add(upper2);
@@ -497,10 +509,12 @@
     scene.add(cove);
 
     // Glowing glass — single warm material reused on all openings
+    // b018 — emissiveAmt nerfed 2.0 → 0.95 so the FTG glass doesn't wash
+    // out the entire villa front face into a yellow lite-brite blob.
     const windowMat = makePS2Material({
       color:       0xffd090,
       emissive:    0xffc880,
-      emissiveAmt: 2.0,
+      emissiveAmt: 0.95,
     });
 
     // -------------------------------------------------------------------
@@ -782,13 +796,12 @@
       s.rotation.set(x * 0.13, z * 0.21, x * 0.07);
       scene.add(s);
     }
-    // b016 — denser shrub cluster around the pink Lambo (was 2 small ones)
-    addShrub(-16.0, 3.0, 1.10);
-    addShrub(-15.0, 1.5, 0.85);
-    addShrub(-13.0, 1.0, 0.65);
-    addShrub(-12.0, 2.5, 0.55);
-    addShrub(-16.5, 6.5, 0.95);
-    addShrub(-15.0, 7.5, 0.70);
+    // b018 — shrubs moved to ONE side (north of car only) so the Lambo is
+    // visible from the camera default angle. Was a tight surround in b016
+    // that engulfed the car.
+    addShrub(-16.5, 7.0, 0.95);
+    addShrub(-14.5, 8.0, 0.75);
+    addShrub(-17.5, 5.5, 0.65);
 
     // -----------------------------------------------------
     // Lagoon — small secondary water with sand, island, mini palm
@@ -1243,23 +1256,39 @@
     addNeighborVilla( 46, -28, 0.95);
 
     // -----------------------------------------------------
-    // b016 — Hills behind the city + houses on hills (rising terrain
-    // for depth, no more flat empty back. Cities are inland from beaches
-    // and the terrain rises as you go further from the coast.)
+    // b018 — Hills + grass behind the city. Hills are now closer (z=-85
+    // to -120 instead of -90 to -118), much taller (14-28 instead of 5-12),
+    // wider, and overlap so they read as a continuous ridge instead of
+    // 5 isolated boxes. Plus a big grass plane filling the void behind
+    // the cross-street mansions.
     // -----------------------------------------------------
     const hillMat = makePS2Material({ color: 0x2a3a25 });  // dark grassy green
+
+    // Big grass plane filling the void from past the far sidewalk to the
+    // back of the hills — fixes the "everything behind the mansions
+    // drops into fog" complaint.
+    const backGrass = new THREE.Mesh(
+      new THREE.PlaneGeometry(360, 100, 20, 8),
+      hillMat
+    );
+    backGrass.rotation.x = -Math.PI / 2;
+    backGrass.position.set(0, 0.04, -100);
+    scene.add(backGrass);
+
     function addHill(cx, cy, cz, w, h, d) {
       const hill = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hillMat);
       hill.position.set(cx, h / 2 + cy, cz);
       scene.add(hill);
     }
-    // Three hill mounds rising behind the cross-street mansions
-    addHill(-60, 0, -90, 50, 5, 18);
-    addHill(  0, 0, -98, 70, 8, 20);
-    addHill( 60, 0, -90, 50, 6, 18);
-    // A second row of even taller hills further back (the deep distance)
-    addHill(-30, 0, -115, 45, 11, 16);
-    addHill( 30, 0, -115, 45, 12, 16);
+    // Front ridge — wide, overlapping mounds right behind the mansions
+    addHill(-55, 0, -85, 60, 14, 24);
+    addHill(  0, 0, -92, 90, 20, 28);
+    addHill( 55, 0, -85, 60, 15, 24);
+    // Mid ridge — taller, deeper
+    addHill(-30, 0, -105, 70, 24, 20);
+    addHill( 30, 0, -105, 70, 22, 20);
+    // Back ridge — the tallest, the silhouette behind everything
+    addHill(  0, 0, -120, 120, 28, 24);
 
     // Houses ON the hills — elevated villas perched on the slopes
     // (rebuild a quick neighbor villa helper that takes a y offset)
@@ -1278,17 +1307,19 @@
       nlglow.position.set(cx, cy + lh * 0.45, cz + ld / 2 + 0.04);
       scene.add(nlglow);
     }
-    // First row of hills (y=5-8)
-    addHillVilla(-50, 5,  -88, 0.9);
-    addHillVilla(-15, 8,  -95, 1.0);
-    addHillVilla( 15, 8,  -95, 0.95);
-    addHillVilla( 50, 6,  -88, 0.85);
-    // Second row of hills (y=11-12, the tallest)
-    addHillVilla(-25, 11, -113, 0.8);
-    addHillVilla( 25, 12, -113, 0.85);
-    addHillVilla(  0, 11, -118, 0.75);
-    // (palms on actual hills would need a y-offset version of addPalm —
-    // skipping for b016, the hill villas are enough to sell the depth)
+    // b018 — repositioned onto the new (taller, closer) hills
+    // Front ridge (y=14-20)
+    addHillVilla(-50, 14, -85, 1.0);
+    addHillVilla(-20, 20, -92, 1.1);
+    addHillVilla( 20, 20, -92, 1.05);
+    addHillVilla( 50, 15, -85, 0.95);
+    // Mid ridge (y=22-24)
+    addHillVilla(-30, 24, -105, 0.9);
+    addHillVilla( 30, 22, -105, 0.95);
+    // Back ridge (y=28, the deepest)
+    addHillVilla(-25, 28, -120, 0.85);
+    addHillVilla( 25, 28, -120, 0.90);
+    addHillVilla(  0, 28, -120, 0.80);
 
     // Boulevard palms — concentrated along both sides of the street
     // (between villa back area and near sidewalk, and across the road)
