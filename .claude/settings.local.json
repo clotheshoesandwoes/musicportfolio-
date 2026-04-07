@@ -31,7 +31,10 @@
       "Bash(bash scripts/upload-audio-to-r2.sh)",
       "Bash(tee /tmp/r2-upload.log)",
       "Bash(curl -sI \"https://pub-5556ef4db74d499ba3f535afccf8c7be.r2.dev/work%20smart.mp3\")",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git branch:*)",
+      "Bash('/c/Users/B4TTL/AppData/Local/Programs/Python/Python313/Scripts/git-filter-repo.EXE' --path audio-mp3/ --invert-paths --force)",
+      "Bash(git fetch:*)"
     ]
   }
 }
