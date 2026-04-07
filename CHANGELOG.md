@@ -1,5 +1,83 @@
 # CHANGELOG
 
+## b026 — 2026-04-07 — Click→card system MVP (the actual destination interaction loop)
+
+User: "can we start working on the card click music portion pls? just so i have a working concept going". The destination interaction the entire project has been building toward — click a prop in the villa scene, get a song card pop up with a play button. **Working concept shipping in this build.** Reuses the existing `showTrackDetail()` modal in [js/app.js](js/app.js) instead of building a new card UI from scratch — that function already creates a beautiful detail panel with title, gradient art, artist, credits, description, tags, links, play button, close button.
+
+### Architecture
+- **`THREE.Raycaster`** in world.js, fired on mouse click and tap
+- **Walk-up parent chain** on each raycast hit until we find a node whose `.name` matches a key in the `propTracks` lookup
+- **`propTracks` lookup** — JS object mapping prop names → track indices (with `% tracks.length` wrap so it doesn't break if config.json has fewer tracks than props)
+- **Drag-vs-click detection** — track pixel movement from `mousedown` to `mouseup`. If less than 4px (`DRAG_CLICK_THRESHOLD`), it's a click. Otherwise it's the end of an orbit drag and we don't dispatch a card. Same logic for touch tap-vs-drag.
+- **Hover detection** — on `mousemove` (when not dragging), raycast and change cursor to `pointer` over clickable props, back to `grab` everywhere else
+- **Click dispatch** — calls existing `showTrackDetail(trackIdx)` from app.js, which opens the detail modal with a Play button. Falls back to `playTrack(trackIdx)` if showTrackDetail isn't loaded.
+
+### What's clickable in this MVP (14 prop types, ~25+ instances)
+| Prop name | Track index | What it is |
+|---|---|---|
+| `lambo_pink` | 0 | Pink Lambo on the deck (-14, 5) |
+| `lambo_yellow` | 1 | Yellow Lambo in the driveway |
+| `yacht` | 2 | Any of the 3 yachts in the front ocean |
+| `jetski` | 3 | Any of the 3 jet skis closer to shore |
+| `tikibar` | 4 | Tiki bar far west on the beach |
+| `firepit` | 5 | Fire pit west of the pool deck |
+| `bbqbar` | 6 | BBQ bar east of the jacuzzi |
+| `fountain` | 7 | 3-tier marble fountain in the garden |
+| `pierDeck` | 8 | Pier extending into the ocean |
+| `statue_obelisk` | 9 | Obelisk statue on the front lawn |
+| `statue_sphere` | 10 | Sphere-on-pedestal statue on the front lawn |
+| `statue_abstract` | 11 | Abstract stacked-cubes statue on the front lawn |
+| `bell_tower` | 12 | Mediterranean villa bell tower |
+| `surfboard` | 13 | Any of the 3 surfboards leaning on the tiki bar |
+
+Track indices wrap around with `% tracks.length` so even with fewer than 14 tracks in config.json, every prop still maps to something playable.
+
+### Code changes in [js/world.js](js/world.js)
+- **State variables** at the top of the IIFE (~10 lines): `raycaster`, `mouseNDC`, `dragStartX`, `dragStartY`, `dragMoved`, `propTracks`, `hoveredProp`, `DRAG_CLICK_THRESHOLD`
+- **`updateMouseNDC(e)` helper** — converts mouse pixel position to normalized device coordinates relative to the canvas
+- **`pickPropAtMouse()` helper** — runs the raycaster, walks up the parent chain on each hit, returns the first matching prop name (or null)
+- **`onMouseDown` modified** — records `dragStartX`/`dragStartY`, resets `dragMoved`
+- **`onMouseMove` modified** — when dragging, tracks total movement; when NOT dragging, runs hover detection and updates cursor
+- **`onMouseUp` rewritten** — checks `wasClick = isDragging && !dragMoved`. If true, raycasts at the mouse position and dispatches `showTrackDetail()` for the matched prop
+- **`onTouchStart` modified** — same drag-start tracking for single-finger touch
+- **`onTouchMove` modified** — same total-movement tracking for tap-vs-drag
+- **`onTouchEnd` rewritten** — detects tap (drag mode + no movement) and dispatches `showTrackDetail()` for the matched prop, using the last touch position
+- **Raycaster + propTracks initialization** in the `init()` function right after camera setup
+- **`addCar(cx, cz, hex, rotY = 0, name = null)` signature extended** — accepts optional name and now `return g`s the group, sets `g.name = name` so the click handler can find it
+- **Pink Lambo addCar call** — passes `'lambo_pink'` as name
+- **Yellow Lambo addCar call** — passes `'lambo_yellow'` as name
+- **Fountain `basin1` mesh** in `addGarden` — gets `name = 'fountain'`
+- **Bell tower `shaft` mesh** in the bell tower block — gets `name = 'bell_tower'`
+
+### What this MVP does NOT include (deferred to v2)
+- **Visual highlight pulse** on hovered props (just cursor change for now)
+- **Camera fly-to-prop animation** on click — clicking just opens the card, camera doesn't move
+- **Per-prop card art** — every card uses the existing gradient art from app.js (`getGradient(index)`). Custom art per track is a config.json change later.
+- **Sound effect on hover/click** — silent
+- **Outline / glow** on hovered props — defer until VISION.md §6 v2 work
+- **Click detection on multi-mesh props that aren't grouped** (e.g. clicking a chair stub around the fire pit instead of the fire pit ring itself won't match — only the named main mesh dispatches). This is acceptable for MVP — the named mesh in each prop is the obvious large click target.
+
+### How to test
+1. Hard-refresh the deployed site
+2. Hover over the pink Lambo on the pool deck — cursor should change to pointer
+3. Click it — track detail panel pops up with Play button (track 0 from config.json)
+4. Click outside or hit X to close
+5. Hover/click any of the other 13 props in the table above — each opens its own track card
+6. Drag the camera around — orbit still works, no card pops up at the end of a drag
+
+### Files modified
+- [js/world.js](js/world.js) — raycaster + click handler + hover + propTracks + name additions (~110 lines)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b025a → b026`
+- [VISION.md](VISION.md) — section 6 marked as MVP shipped, section 9 click→card item updated
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+### Still deferred
+- Villa pivot to fully modernist (b027 — user gave reference photos and direction this turn, will be next major build)
+- Showroom car swap (yellow G-Wagon, Corvette, "something crazy")
+- Art style "ugly Roblox" dial-back
+- Hill mat fix v2
+
 ## b025a — 2026-04-07 — Hotfix: TDZ on lanternGlowMat (villa wouldn't load)
 
 b025 villa rebuilt fine but the page hung on init — never finished loading the villa view. Diagnosis: classic TDZ trap, same pattern as b017. The new `addSconce` helper inside the villa block uses `lanternGlowMat`, but `lanternGlowMat` was declared at line 980 (inside the deck-lantern block) — way AFTER the villa block runs (~line 870). When `addSconce` was called for the first villa wall sconce, `lanternGlowMat` was in the temporal dead zone → `ReferenceError: Cannot access 'lanternGlowMat' before initialization` → init crashed silently → page never finished loading.

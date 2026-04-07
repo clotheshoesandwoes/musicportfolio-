@@ -128,7 +128,9 @@ Currently the scene is exterior-heavy and interior-empty. Density priorities goi
 
 ## 6. Click → card system design
 
-The destination interaction loop. Not built yet. Design intent:
+**Status: MVP shipped in b026.** Reuses the existing `showTrackDetail()` modal in [js/app.js](js/app.js) for the card UI. Raycaster + drag-vs-click detection + hover cursor change all in [js/world.js](js/world.js). 14 prop types currently clickable: pink/yellow Lambos, yacht, jetski, tikibar, firepit, bbqbar, fountain, pierDeck, 3 statues, bell_tower, surfboard. Each maps to a track index (`% tracks.length` wrap). Adding new clickable props going forward = name the main mesh + add an entry to `propTracks` in init().
+
+Original design intent (kept for v2 work):
 
 ### What clicks
 - **Both interior and exterior props** are valid click targets. The Drake reference has interior-heavy clicks; we go heavier on exterior because exterior is our hero. (See `memory/project_clickable_props_scope.md`.)

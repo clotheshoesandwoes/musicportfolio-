@@ -30,6 +30,14 @@
   let THREE_lib = null;
   const LOW_W = 854;
   const LOW_H = 480;
+  // b026 — click→card system state
+  let raycaster = null;
+  let mouseNDC = null;
+  let dragStartX = 0, dragStartY = 0;
+  let dragMoved = false;
+  const DRAG_CLICK_THRESHOLD = 4;  // pixels of movement before mousedown→up counts as drag, not click
+  let propTracks = {};             // prop name → track index, populated in init
+  let hoveredProp = null;
 
   async function init(cont) {
     container = cont;
@@ -73,6 +81,31 @@
     // skips animate.
     camera.position.set(0, 12, 26);
     camera.lookAt(0, 4, -2);
+
+    // b026 — click→card system: raycaster + prop→track lookup
+    // Each entry maps a prop's THREE.Object3D `.name` to a track index in
+    // config.json's tracks list. The click handler walks up the parent chain
+    // from any raycast hit and picks the first ancestor whose name is in
+    // this lookup. Track indices wrap around with `% tracks.length` so the
+    // table doesn't break if config.json has fewer tracks than props.
+    raycaster = new THREE.Raycaster();
+    mouseNDC = new THREE.Vector2();
+    propTracks = {
+      'lambo_pink':      0,
+      'lambo_yellow':    1,
+      'yacht':           2,
+      'jetski':          3,
+      'tikibar':         4,
+      'firepit':         5,
+      'bbqbar':          6,
+      'fountain':        7,
+      'pierDeck':        8,
+      'statue_obelisk':  9,
+      'statue_sphere':   10,
+      'statue_abstract': 11,
+      'bell_tower':      12,
+      'surfboard':       13,
+    };
 
     // -----------------------------------------------------
     // Sky dome — gradient + procedural stars + moon disc
@@ -781,12 +814,14 @@
       scene.add(towerBase);
 
       // ---- Stage 1: plaster shaft (rises from base to belfry) ----
+      // b026 — named as the click→card target for the bell tower
       const shaftH = 11.0;
       const shaft = new THREE.Mesh(
         new THREE.BoxGeometry(towerW, shaftH, towerW),
         villaMat
       );
       shaft.position.set(towerCx, podiumTopY + baseH + shaftH / 2, towerCz);
+      shaft.name = 'bell_tower';
       scene.add(shaft);
 
       // Stone waist band on the shaft (about 1/3 of the way up)
@@ -1055,7 +1090,7 @@
     // Lambo — wedge supercar. b015: built into a Group so we can rotate it
     // around its own center via the rotY parameter (CCW radians around Y).
     // -----------------------------------------------------
-    function addCar(cx, cz, bodyColorHex, rotY = 0) {
+    function addCar(cx, cz, bodyColorHex, rotY = 0, name = null) {
       const bodyMat = makePS2Material({
         color:       bodyColorHex,
         emissive:    bodyColorHex,
@@ -1120,15 +1155,18 @@
 
       g.position.set(cx, 0, cz);
       g.rotation.y = rotY;
+      if (name) g.name = name;
       scene.add(g);
+      return g;
     }
 
     // b014 — Yellow Lambo parked in the driveway, just in front of the
     // garage door (which now faces -z toward the street).
-    addCar(garageCx, garageCz - garageD / 2 - 2.8, 0xf5d518);
+    // b026 — named for click→card system
+    addCar(garageCx, garageCz - garageD / 2 - 2.8, 0xf5d518, 0, 'lambo_yellow');
     // b016 — Pink Lambo rotation flipped (-PI/4 not +PI/4) so hood points
     // toward (-x, +z) — diagonally toward the front-left of the property
-    addCar(-14.0, 5.0, 0xff2d95, -Math.PI / 4);
+    addCar(-14.0, 5.0, 0xff2d95, -Math.PI / 4, 'lambo_pink');
 
     // Shrub helper (b015) + bigger cluster around pink Lambo (b016)
     // b024 — bumped from 0x2a4a25 (fog-killed dark) to 0x4a7a30 (manicured green that survives the fog)
@@ -2024,9 +2062,10 @@
       scene.add(pathCross);
 
       // ----- 4. 3-tier ornate marble fountain (the centerpiece) -----
-      // Lower basin
+      // Lower basin (b026 — named as the click→card target for the fountain)
       const basin1 = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.5, 0.55, 20), marbleMat);
       basin1.position.set(cx, 0.275, cz);
+      basin1.name = 'fountain';
       scene.add(basin1);
       const water1 = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.05, 0.10, 20), poolMat);
       water1.position.set(cx, 0.56, cz);
@@ -2451,25 +2490,84 @@
     return Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, r));
   }
 
+  // b026 — convert mouse position to normalized device coordinates
+  function updateMouseNDC(e) {
+    if (!mouseNDC || !container) return;
+    const rect = container.getBoundingClientRect();
+    mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  // b026 — raycast and walk up parent chain to find a clickable prop name
+  function pickPropAtMouse() {
+    if (!raycaster || !scene || !camera) return null;
+    raycaster.setFromCamera(mouseNDC, camera);
+    const hits = raycaster.intersectObjects(scene.children, true);
+    for (const h of hits) {
+      let obj = h.object;
+      while (obj) {
+        if (obj.name && propTracks[obj.name] !== undefined) {
+          return obj.name;
+        }
+        obj = obj.parent;
+      }
+    }
+    return null;
+  }
+
   function onMouseDown(e) {
     if (!container || e.button !== 0) return;
     isDragging = true;
     lastDragX = e.clientX;
     lastDragY = e.clientY;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragMoved = false;
     container.style.cursor = 'grabbing';
   }
   function onMouseMove(e) {
-    if (!isDragging) return;
-    const dx = e.clientX - lastDragX;
-    const dy = e.clientY - lastDragY;
-    yaw   -= dx * ROTATE_SPEED;
-    pitch  = clampPitch(pitch + dy * ROTATE_SPEED);
-    lastDragX = e.clientX;
-    lastDragY = e.clientY;
+    if (isDragging) {
+      const dx = e.clientX - lastDragX;
+      const dy = e.clientY - lastDragY;
+      yaw   -= dx * ROTATE_SPEED;
+      pitch  = clampPitch(pitch + dy * ROTATE_SPEED);
+      lastDragX = e.clientX;
+      lastDragY = e.clientY;
+      // b026 — track total movement from mousedown so we can tell click from drag
+      if (Math.abs(e.clientX - dragStartX) > DRAG_CLICK_THRESHOLD ||
+          Math.abs(e.clientY - dragStartY) > DRAG_CLICK_THRESHOLD) {
+        dragMoved = true;
+      }
+      return;
+    }
+    // b026 — hover detection (only when not dragging). Updates cursor.
+    updateMouseNDC(e);
+    const hit = pickPropAtMouse();
+    if (hit !== hoveredProp) {
+      hoveredProp = hit;
+      if (container) container.style.cursor = hit ? 'pointer' : 'grab';
+    }
   }
-  function onMouseUp() {
+  function onMouseUp(e) {
+    const wasClick = isDragging && !dragMoved;
     isDragging = false;
-    if (container) container.style.cursor = 'grab';
+    if (container) container.style.cursor = hoveredProp ? 'pointer' : 'grab';
+    // b026 — click→card dispatch. A "click" = mousedown→mouseup with <4px movement.
+    if (wasClick && e && e.clientX !== undefined) {
+      updateMouseNDC(e);
+      const hit = pickPropAtMouse();
+      if (hit) {
+        const trackIdx = propTracks[hit];
+        if (typeof tracks !== 'undefined' && tracks.length > 0) {
+          const safeIdx = trackIdx % tracks.length;
+          if (typeof showTrackDetail === 'function') {
+            showTrackDetail(safeIdx);
+          } else if (typeof playTrack === 'function') {
+            playTrack(safeIdx);
+          }
+        }
+      }
+    }
   }
   function onWheel(e) {
     e.preventDefault();
@@ -2483,6 +2581,10 @@
       isDragging = true;
       lastDragX = e.touches[0].clientX;
       lastDragY = e.touches[0].clientY;
+      // b026 — track tap-vs-drag start position
+      dragStartX = e.touches[0].clientX;
+      dragStartY = e.touches[0].clientY;
+      dragMoved = false;
     } else if (e.touches.length === 2) {
       touchMode = 'pinch';
       isDragging = false;
@@ -2502,6 +2604,11 @@
       pitch  = clampPitch(pitch + dy * ROTATE_SPEED);
       lastDragX = e.touches[0].clientX;
       lastDragY = e.touches[0].clientY;
+      // b026 — track total movement for tap-vs-drag
+      if (Math.abs(e.touches[0].clientX - dragStartX) > DRAG_CLICK_THRESHOLD ||
+          Math.abs(e.touches[0].clientY - dragStartY) > DRAG_CLICK_THRESHOLD) {
+        dragMoved = true;
+      }
     } else if (touchMode === 'pinch' && e.touches.length === 2) {
       e.preventDefault();
       const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -2513,6 +2620,21 @@
   }
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
+      // b026 — if this was a tap (drag mode + no movement), dispatch click→card
+      const wasTap = touchMode === 'drag' && !dragMoved;
+      if (wasTap) {
+        // Use the lastDragX/Y as the tap position (touchend has no clientX)
+        updateMouseNDC({ clientX: lastDragX, clientY: lastDragY });
+        const hit = pickPropAtMouse();
+        if (hit && typeof tracks !== 'undefined' && tracks.length > 0) {
+          const safeIdx = propTracks[hit] % tracks.length;
+          if (typeof showTrackDetail === 'function') {
+            showTrackDetail(safeIdx);
+          } else if (typeof playTrack === 'function') {
+            playTrack(safeIdx);
+          }
+        }
+      }
       touchMode = null;
       isDragging = false;
     }
