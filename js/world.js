@@ -127,8 +127,8 @@
     const poolColor   = new THREE.Color(0x2af0d0);  // turquoise
     const poolRange   = 14;
     const windowPos   = new THREE.Vector3(11.5, 3.5, 0);
-    const windowColor = new THREE.Color(0xffc97a);  // warm interior
-    const windowRange = 22;
+    const windowColor = new THREE.Color(0xffe6c8);  // warm interior, paler
+    const windowRange = 14;
 
     // -----------------------------------------------------
     // PS2 material factory — vertex jitter + 3-light shader
@@ -243,10 +243,11 @@
           vUv = uv;
           vec3 p = position;
           vTopMask = step(0.5, normal.y);
-          // Ripple displacement on the top face only
+          // Ripple displacement on the top face only — subtle so the
+          // surface stays readable as water during camera movement
           if (vTopMask > 0.5) {
-            p.y += sin(p.x * 1.6 + uTime * 1.4) * 0.035
-                 + sin(p.z * 2.1 - uTime * 1.1) * 0.025;
+            p.y += sin(p.x * 1.6 + uTime * 0.9) * 0.012
+                 + sin(p.z * 2.1 - uTime * 0.7) * 0.008;
           }
           // No PS2 jitter on the pool — water shouldn't shatter
           vec4 mvPos = modelViewMatrix * vec4(p, 1.0);
@@ -294,43 +295,88 @@
     scene.add(rim);
 
     // -----------------------------------------------------
-    // Villa — modernist concrete cube w/ glowing windows
+    // Villa — modernist beach house: wide & low, cantilever
+    // roof, big glass walls, balcony with railing
     // -----------------------------------------------------
-    const villaMat = makePS2Material({ color: 0x9a96a4 });
-    const villaCx = 11.5;
+    const villaMat   = makePS2Material({ color: 0xa8a4b2 });   // bright cool concrete
+    const roofMat    = makePS2Material({ color: 0x5a5666 });   // darker concrete slab
+    const balconyMat = makePS2Material({ color: 0x6a6676 });
+    const railMat    = makePS2Material({ color: 0x2a2632 });
+
+    const villaCx = 12;
     const villaCz = 0;
 
-    // Lower volume (2 stories deep)
-    const lower = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 8), villaMat);
-    lower.position.set(villaCx, 2, villaCz);
+    // Lower main volume — wide and low
+    const lowerW = 13, lowerH = 3.2, lowerD = 7;
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(lowerW, lowerH, lowerD), villaMat);
+    lower.position.set(villaCx, lowerH / 2, villaCz);
     scene.add(lower);
 
-    // Upper volume (offset back, smaller)
-    const upper = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 5.5), villaMat);
-    upper.position.set(villaCx + 0.6, 5.6, villaCz - 1);
+    // Cantilever roof slab over the lower volume
+    const lowerRoof = new THREE.Mesh(new THREE.BoxGeometry(lowerW + 1.6, 0.3, lowerD + 1.6), roofMat);
+    lowerRoof.position.set(villaCx, lowerH + 0.15, villaCz);
+    scene.add(lowerRoof);
+
+    // Upper volume — smaller, set back
+    const upperW = 8, upperH = 2.8, upperD = 5;
+    const upperY = lowerH + 0.3 + upperH / 2;
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(upperW, upperH, upperD), villaMat);
+    upper.position.set(villaCx + 0.5, upperY, villaCz - 0.6);
     scene.add(upper);
 
-    // Glowing windows on the front face (toward the pool, -x side)
+    // Upper roof slab
+    const upperRoof = new THREE.Mesh(new THREE.BoxGeometry(upperW + 1, 0.3, upperD + 1), roofMat);
+    upperRoof.position.set(villaCx + 0.5, upperY + upperH / 2 + 0.15, villaCz - 0.6);
+    scene.add(upperRoof);
+
+    // Glowing glass — single material reused on all openings
     const windowMat = makePS2Material({
-      color:       0xffd089,
-      emissive:    0xffd089,
-      emissiveAmt: 1.5,
+      color:       0xffe6c8,
+      emissive:    0xffd6a0,
+      emissiveAmt: 1.8,
     });
-    // Lower row — 4 wide rectangular windows
-    for (let i = 0; i < 4; i++) {
-      const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.06), windowMat);
-      w.position.set(villaCx - 3.55, 2.3, -2.4 + i * 1.6);
-      scene.add(w);
+
+    // Big glass wall on the -X face of the lower volume (facing pool)
+    const lowerFrontX = villaCx - lowerW / 2;
+    const lowerGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, lowerD - 1.2), windowMat);
+    lowerGlass.position.set(lowerFrontX - 0.06, lowerH / 2 + 0.2, villaCz);
+    scene.add(lowerGlass);
+
+    // Glass strip on the +Z face of the lower volume (camera side)
+    const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(lowerW - 2.5, 1.6, 0.12), windowMat);
+    sideGlass.position.set(villaCx, lowerH / 2 + 0.3, villaCz + lowerD / 2 + 0.06);
+    scene.add(sideGlass);
+
+    // Glass strip on the -X face of the upper volume
+    const upperFrontX = (villaCx + 0.5) - upperW / 2;
+    const upperGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, upperD - 1.0), windowMat);
+    upperGlass.position.set(upperFrontX - 0.06, upperY + 0.1, villaCz - 0.6);
+    scene.add(upperGlass);
+
+    // Balcony floor extending forward (+z) from the upper volume
+    const balcony = new THREE.Mesh(new THREE.BoxGeometry(upperW, 0.15, 1.8), balconyMat);
+    balcony.position.set(villaCx + 0.5, lowerH + 0.55, villaCz - 0.6 + upperD / 2 + 0.9);
+    scene.add(balcony);
+
+    // Balcony top rail
+    const railTop = new THREE.Mesh(new THREE.BoxGeometry(upperW, 0.08, 0.08), railMat);
+    railTop.position.set(villaCx + 0.5, lowerH + 0.55 + 1.0, villaCz - 0.6 + upperD / 2 + 1.7);
+    scene.add(railTop);
+
+    // Balcony vertical railing posts
+    for (let i = 0; i < 8; i++) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), railMat);
+      post.position.set(
+        villaCx + 0.5 - upperW / 2 + 0.4 + i * (upperW - 0.8) / 7,
+        lowerH + 0.55 + 0.5,
+        villaCz - 0.6 + upperD / 2 + 1.7
+      );
+      scene.add(post);
     }
-    // Upper row — 3 square windows
-    for (let i = 0; i < 3; i++) {
-      const w = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 0.06), windowMat);
-      w.position.set(villaCx - 1.95, 5.6, -1.6 + i * 1.6);
-      scene.add(w);
-    }
-    // Doorway slit on the lower volume
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.06), windowMat);
-    door.position.set(villaCx - 3.55, 1.1, 1.6);
+
+    // Door — slim glowing rectangle at ground level on the front
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.8, 1.0), windowMat);
+    door.position.set(lowerFrontX - 0.07, 0.9, villaCz + 1.6);
     scene.add(door);
 
     // -----------------------------------------------------
@@ -346,13 +392,13 @@
       );
       trunk.position.set(x, height / 2, z);
       scene.add(trunk);
-      const fronds = 7;
+      const fronds = 9;
       for (let i = 0; i < fronds; i++) {
         const a = (i / fronds) * Math.PI * 2;
-        const f = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.6, 1, 1), frondMat);
-        f.position.set(x + Math.cos(a) * 1.3, height - 0.2, z + Math.sin(a) * 1.3);
+        const f = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.55, 1, 1), frondMat);
+        f.position.set(x + Math.cos(a) * 1.4, height - 0.15, z + Math.sin(a) * 1.4);
         f.rotation.y = -a;
-        f.rotation.z = -0.55;
+        f.rotation.z = -0.7;
         scene.add(f);
       }
     }
@@ -538,16 +584,16 @@
       timeUniforms[i].value = elapsed;
     }
 
-    // Gentle orbit driven by mouse
-    const targetYaw = -mouseX * 0.7;
-    const targetPitch = -mouseY * 0.25;
+    // Position-based orbit — full ±180° yaw, ±34° pitch
+    const targetYaw = -mouseX * Math.PI;
+    const targetPitch = -mouseY * 0.6;
     yaw += (targetYaw - yaw) * 0.05;
     pitch += (targetPitch - pitch) * 0.05;
 
     camera.position.x = CAM_CENTER_X + Math.sin(yaw) * CAM_RADIUS;
     camera.position.z = CAM_CENTER_Z + Math.cos(yaw) * CAM_RADIUS;
-    camera.position.y = 4.8 + pitch * 4;
-    camera.lookAt(CAM_CENTER_X, 1.8, CAM_CENTER_Z);
+    camera.position.y = 5.0 + pitch * 9;
+    camera.lookAt(CAM_CENTER_X, 1.8 + pitch * 2.5, CAM_CENTER_Z);
 
     // Pass 1 — render scene to low-res target
     renderer.setRenderTarget(lowResTarget);

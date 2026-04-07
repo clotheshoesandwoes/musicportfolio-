@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## b005 — 2026-04-06 — Villa fixes: orbit camera, sleek beach house redesign, water settles, less yellow
+
+User feedback after b004: camera was stuck (couldn't orbit far), villa felt like a "concrete brick embassy" not a millionaire's beach house, patio was bright yellow, pool was buggy when moving, palms still meh.
+
+### Camera
+- Yaw range `-mouseX * 0.7` → `-mouseX * Math.PI` — full ±180° orbit (you can put the building on either side now)
+- Pitch range `-mouseY * 0.25` → `-mouseY * 0.6` — ~±34° vertical
+- Camera y influence `4 +pitch*4` → `5 + pitch*9` (bigger vertical movement so you can look up at the moon)
+- `lookAt` y now follows pitch (`1.8 + pitch*2.5`) so you actually point upward when mouse goes up
+
+### Villa redesign — sleek modern beach house, not a brick embassy
+- Two stacked cubes → wide low main volume + smaller offset upper volume + **two cantilever roof slabs** with overhangs
+- Punched windows → **big single-plane glass walls** (one on the front -X face, one on the +Z face facing the camera default, one on the upper -X face)
+- New **balcony** floor + top rail + 8 vertical posts on the upper volume facing forward
+- New `roofMat`, `balconyMat`, `railMat` (darker grey concrete + dark railings) for material variety
+- Lower volume: 7×4×8 → **13×3.2×7** (much wider, lower)
+- Upper volume: 5×3.2×5.5 → **8×2.8×5** (wider footprint)
+- Villa material slightly brighter: `#9a96a4` → `#a8a4b2`
+- Door is now a slim emissive plate at ground level
+
+### Window light tuning
+- `windowColor` `#ffc97a` (warm orange) → `#ffe6c8` (paler cream) — patio no longer goes neon yellow
+- `windowRange` `22` → `14` — spill is contained near the villa instead of bathing the whole patio
+- Glass material `color` `#ffd089` → `#ffe6c8`, `emissiveAmt` `1.5` → `1.8`
+
+### Pool — water now reads stable during camera movement
+- Ripple amplitude `0.035 / 0.025` → `0.012 / 0.008` (was huge from b003, never reduced)
+- Ripple time multipliers `1.4 / 1.1` → `0.9 / 0.7` (slower, more lazy)
+
+### Palms
+- Fronds count `7` → `9`
+- Frond tilt `-0.55 rad` → `-0.7 rad` (droopier, more palm-like)
+- Slightly longer fronds (`2.8` → `3.0`)
+
+### Files modified
+- [js/world.js](js/world.js) — camera, villa, window light, pool ripples, palms
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b004` → `b005`
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
+---
+
 ## b004 — 2026-04-06 — Villa b003 fix-up: visible ground, visible ocean, visible moon, cream villa, real palms, water-not-shards
 
 Fixes the live b003 issues observed in screenshots: ground was invisible (vertex jitter on a 4-segment plane was destroying it), ocean was invisible (occluded by 120×120 ground), moon was outside the camera FOV, villa was muddy brown (warm beige base + warm lights = orange), palms were dark blobs clustered on the left, pool was visibly shattering each frame from jitter+ripple combo. All fixes are constants/geometry tweaks in [js/world.js](js/world.js) — no new shaders or features.
