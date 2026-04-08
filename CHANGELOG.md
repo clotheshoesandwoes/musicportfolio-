@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## b037b — 2026-04-07 — Fix asphalt road protruding into loop driveway interior
+
+User: "pertruding out of the circle (inner)". Diagnosed: outward road segment 1 was at `z=-85 length=40` (spans z=-65 to z=-105) while the loop ring's back outer edge is at `ringCz - outerR = -58 - 17.5 = -75.5`. Front 10 units of the segment were inside the donut hole.
+
+Pushed both segments back so segment 1 starts exactly at the loop's back outer edge:
+- Segment 1: `z=-91.5 length=32` → spans z=-75.5 to z=-107.5
+- Segment 2: `z=-117.5 length=20` → spans z=-107.5 to z=-127.5
+
+### Files modified
+- [js/world.js:2722-2723](js/world.js#L2722-L2723) — segment positions
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b037 → b037b`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b037 — 2026-04-07 — Modern Miami beach mansion rebuild
 
 User: "lowkey still super robloxy cuz its super blocky. also mansion is not an open design. fack the windows i want a huge white mansion, crazy looking almost like some vacation resort type shit by the beach. modern miami yes that correct."

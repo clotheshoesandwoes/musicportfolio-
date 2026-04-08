@@ -2719,8 +2719,12 @@
     // b035e — single road leading outward from the loop into the deep
     // jungle. No more villa→loop connector — the loop IS the driveway,
     // so the only road is the one heading away from the house.
-    addRoadSegment(0, -85, 40, 0);
-    addRoadSegment(0, -110, 12, 0);
+    // b037b — pushed both segments further back so segment 1 starts AT the
+    // loop's back outer edge (z = ringCz - 17.5 = -75.5) instead of inside
+    // the donut hole. Previously segment 1 at z=-85 len=40 spanned z=-65
+    // to z=-105, with the front 10 units protruding into the loop interior.
+    addRoadSegment(0, -91.5, 32, 0);   // spans z=-75.5 to z=-107.5
+    addRoadSegment(0, -117.5, 20, 0);  // spans z=-107.5 to z=-127.5
 
     // ----- Forest — pine cones + extra palms east + north -----
     // b034b — bigger trees + brighter emissive needles so they read at
