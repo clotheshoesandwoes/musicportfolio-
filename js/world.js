@@ -525,6 +525,15 @@
       emissive:    0xffc880,
       emissiveAmt: 0.95,
     });
+    // b039 — cool tinted glass for the modern Miami villa. Used in place of
+    // the warm yellow windowMat anywhere on the new mansion shell. Reads as
+    // dusk-tinted glass (low emissive cyan) instead of "lit yellow window".
+    // Other things (yachts, BBQ bottles, neighbor villas) keep windowMat.
+    const glassMat = makePS2Material({
+      color:       0x4a6878,
+      emissive:    0x305060,
+      emissiveAmt: 0.35,
+    });
     // b025 — terracotta tile roof for the new Mediterranean villa
     const terracottaMat = makePS2Material({ color: 0xc05030 });
     // b025 — lanternBaseMat + lanternGlowMat moved up here (were declared
@@ -757,7 +766,13 @@
     addWallBoxOpenFront(villaCx, villaCz, centralW, centralD, centralH1, podiumTopY, villaMat);
     addWallBoxOpenFront(villaCx, villaCz, centralW, centralD, centralH2, podiumTopY + centralH1, villaMat);
 
-    // Solid plaster strip behind the living-room TV (ground floor only)
+    // b039 — Open-air retry: NO glass on the front of central or wings.
+    // The whole front face is open. Solid plaster strip ONLY behind the
+    // living-room TV (ground floor) so the TV doesn't float against sky;
+    // everything else on the front is open archway. Upper floor "hangs"
+    // visually via the back/side walls + a forward cantilever balcony slab
+    // (added below). 4 internal structural columns under the upper floor
+    // sell the open-plan beach-house language.
     {
       const tvBackW = 5.4;
       const tvBack = new THREE.Mesh(
@@ -770,35 +785,63 @@
         centralFrontZ - wallT / 2
       );
       scene.add(tvBack);
-
-      // Glass spans flanking the TV strip (ground floor)
-      const sideW = (centralW - tvBackW) / 2 - wallT - 0.2;
-      const sideCxLeft  = villaCx - tvBackW / 2 - sideW / 2 - 0.1;
-      const sideCxRight = villaCx + tvBackW / 2 + sideW / 2 + 0.1;
-      const groundY = podiumTopY + centralH1 / 2;
-      addGlassSpan(sideCxLeft,  groundY, centralFrontZ + 0.04, sideW, centralH1 - 0.4);
-      addGlassSpan(sideCxRight, groundY, centralFrontZ + 0.04, sideW, centralH1 - 0.4);
-    }
-
-    // Upper floor — 3 huge frameless glass spans across the full width
-    {
-      const upperY = podiumTopY + centralH1 + centralH2 / 2;
-      const usable = centralW - wallT * 2 - 0.4;
-      const spanW = usable / 3 - 0.1;
-      for (let i = 0; i < 3; i++) {
-        const cx = villaCx - usable / 2 + spanW / 2 + i * (spanW + 0.1);
-        addGlassSpan(cx, upperY, centralFrontZ + 0.04, spanW, centralH2 - 0.4);
-      }
     }
 
     // Slim marble floor-line eyebrow between ground + upper (full width,
-    // projects forward 0.4 — modern Miami's signature horizontal line)
+    // projects forward 0.4 — the modern Miami horizontal shadow line).
+    // Without glass spans below it, this band reads as the underside of
+    // the cantilevered upper floor.
     const cFloorLine = new THREE.Mesh(
-      new THREE.BoxGeometry(centralW + 0.8, 0.16, 0.4),
+      new THREE.BoxGeometry(centralW + 0.8, 0.30, 0.6),
       marbleMat
     );
-    cFloorLine.position.set(villaCx, podiumTopY + centralH1, centralFrontZ + 0.20);
+    cFloorLine.position.set(villaCx, podiumTopY + centralH1 - 0.05, centralFrontZ + 0.30);
     scene.add(cFloorLine);
+
+    // b039 — 4 internal structural columns under the upper floor of the
+    // central block. Visible inside the open-air ground floor, holding up
+    // the cantilevered upper. Slim white round columns matching the colonnade.
+    {
+      const colY = podiumTopY;
+      const colH = centralH1;
+      for (const dx of [-centralW / 2 + 1.0, centralW / 2 - 1.0]) {
+        for (const dz of [centralFrontZ - 0.6, centralBackZ + 1.6]) {
+          addColumn(villaCx + dx, dz, colH, colY);
+        }
+      }
+    }
+
+    // b039 — Cantilever upper-floor balcony slab projecting forward from
+    // the upper floor over the open ground floor. Sells the "upper floor
+    // floats above an open ground floor" beach-house silhouette + gives the
+    // upper floor a usable terrace overlooking the pool.
+    {
+      const balW = centralW + 1.2;
+      const balD = 2.4;
+      const balY = podiumTopY + centralH1 + centralH2 + 0.10;
+      const balZ = centralFrontZ + balD / 2 - 0.2;
+      const balSlab = new THREE.Mesh(
+        new THREE.BoxGeometry(balW, 0.22, balD),
+        villaMat
+      );
+      balSlab.position.set(villaCx, balY - 0.11, balZ);
+      scene.add(balSlab);
+      // Frameless cool-glass rail along the front edge (no posts, just a
+      // single low pane — modern Miami signature)
+      const railPane = new THREE.Mesh(
+        new THREE.BoxGeometry(balW - 0.4, 0.9, 0.06),
+        glassMat
+      );
+      railPane.position.set(villaCx, balY + 0.45, balZ + balD / 2 - 0.05);
+      scene.add(railPane);
+      // Marble cap on top of the glass rail
+      const railCap = new THREE.Mesh(
+        new THREE.BoxGeometry(balW - 0.3, 0.10, 0.16),
+        marbleMat
+      );
+      railCap.position.set(villaCx, balY + 0.95, balZ + balD / 2 - 0.05);
+      scene.add(railCap);
+    }
 
     // Interior floor (travertine, kept — interior rooms depend on this)
     const cInteriorFloor = new THREE.Mesh(
@@ -853,25 +896,23 @@
     addWallBoxOpenFront(eastWingCx, villaCz, wingW, wingD, wingH1, podiumTopY, villaMat);
     addWallBoxOpenFront(eastWingCx, villaCz, wingW, wingD, wingH2, podiumTopY + wingH1, villaMat);
 
-    // Front facade: 2 huge glass spans on each floor
-    {
-      const wgY = podiumTopY + wingH1 / 2;
-      const wuY = podiumTopY + wingH1 + wingH2 / 2;
-      const spanW = (wingW - wallT * 2) / 2 - 0.2;
-      addGlassSpan(eastWingCx - spanW / 2 - 0.1, wgY, centralFrontZ + 0.04, spanW, wingH1 - 0.4);
-      addGlassSpan(eastWingCx + spanW / 2 + 0.1, wgY, centralFrontZ + 0.04, spanW, wingH1 - 0.4);
-      addGlassSpan(eastWingCx - spanW / 2 - 0.1, wuY, centralFrontZ + 0.04, spanW, wingH2 - 0.4);
-      addGlassSpan(eastWingCx + spanW / 2 + 0.1, wuY, centralFrontZ + 0.04, spanW, wingH2 - 0.4);
-    }
-
-    // Floor-line eyebrow between wing's two floors
+    // b039 — Open-air retry: NO glass on the front of the east wing.
+    // Floor-line eyebrow becomes the visible front edge of the upper floor's
+    // underside, supported by 2 internal structural columns at the ground floor.
     {
       const eb = new THREE.Mesh(
-        new THREE.BoxGeometry(wingW + 0.6, 0.16, 0.4),
+        new THREE.BoxGeometry(wingW + 0.6, 0.30, 0.6),
         marbleMat
       );
-      eb.position.set(eastWingCx, podiumTopY + wingH1, centralFrontZ + 0.20);
+      eb.position.set(eastWingCx, podiumTopY + wingH1 - 0.05, centralFrontZ + 0.30);
       scene.add(eb);
+    }
+    {
+      const colY = podiumTopY;
+      const colH = wingH1;
+      for (const dx of [-wingW / 2 + 0.8, wingW / 2 - 0.8]) {
+        addColumn(eastWingCx + dx, centralFrontZ - 0.6, colH, colY);
+      }
     }
 
     // Flat roof + rooftop terrace + parapet
@@ -910,10 +951,10 @@
       scene.add(drum);
 
       // Continuous floor-to-ceiling glass band wrapping the drum at the
-      // upper floor — slim windowMat ring just outside the drum surface
+      // upper floor — slim glassMat ring (b039: cool tinted, not warm yellow)
       const glassRing = new THREE.Mesh(
         new THREE.CylinderGeometry(drumR + 0.04, drumR + 0.04, wingH2 - 0.6, 16, 1, true),
-        windowMat
+        glassMat
       );
       glassRing.position.set(drumCx, podiumTopY + wingH1 + wingH2 / 2, drumCz);
       scene.add(glassRing);
@@ -941,26 +982,62 @@
     addWallBoxOpenFront(westWingCx, villaCz, wingW, wingD, wingH1, podiumTopY, villaMat);
     addWallBoxOpenFront(westWingCx, villaCz, wingW, wingD, wingH2, podiumTopY + wingH1, villaMat);
 
-    {
-      const wgY = podiumTopY + wingH1 / 2;
-      const wuY = podiumTopY + wingH1 + wingH2 / 2;
-      const spanW = (wingW - wallT * 2) / 2 - 0.2;
-      addGlassSpan(westWingCx - spanW / 2 - 0.1, wgY, centralFrontZ + 0.04, spanW, wingH1 - 0.4);
-      addGlassSpan(westWingCx + spanW / 2 + 0.1, wgY, centralFrontZ + 0.04, spanW, wingH1 - 0.4);
-      addGlassSpan(westWingCx - spanW / 2 - 0.1, wuY, centralFrontZ + 0.04, spanW, wingH2 - 0.4);
-      addGlassSpan(westWingCx + spanW / 2 + 0.1, wuY, centralFrontZ + 0.04, spanW, wingH2 - 0.4);
-    }
-
+    // b039 — Open-air front, mirror of east wing
     {
       const eb = new THREE.Mesh(
-        new THREE.BoxGeometry(wingW + 0.6, 0.16, 0.4),
+        new THREE.BoxGeometry(wingW + 0.6, 0.30, 0.6),
         marbleMat
       );
-      eb.position.set(westWingCx, podiumTopY + wingH1, centralFrontZ + 0.20);
+      eb.position.set(westWingCx, podiumTopY + wingH1 - 0.05, centralFrontZ + 0.30);
       scene.add(eb);
+    }
+    {
+      const colY = podiumTopY;
+      const colH = wingH1;
+      for (const dx of [-wingW / 2 + 0.8, wingW / 2 - 0.8]) {
+        addColumn(westWingCx + dx, centralFrontZ - 0.6, colH, colY);
+      }
     }
 
     addFlatRoofWithParapet(westWingCx, villaCz, wingW, wingD, wingTopY);
+
+    // b039 — WEST WING CYLINDRICAL CORNER PAVILION (mirror of the east one)
+    // Curved silhouette element at the front-west corner so both ends of
+    // the mansion have rounded volumes — kills the all-rectangles read.
+    {
+      const drumR = 2.4;
+      const drumH = wingH1 + wingH2;
+      const drumCx = westWingLeftX - 0.4;
+      const drumCz = centralFrontZ + 0.4;
+
+      const drum = new THREE.Mesh(
+        new THREE.CylinderGeometry(drumR, drumR, drumH, 16),
+        villaMat
+      );
+      drum.position.set(drumCx, podiumTopY + drumH / 2, drumCz);
+      scene.add(drum);
+
+      const glassRing = new THREE.Mesh(
+        new THREE.CylinderGeometry(drumR + 0.04, drumR + 0.04, wingH2 - 0.6, 16, 1, true),
+        glassMat
+      );
+      glassRing.position.set(drumCx, podiumTopY + wingH1 + wingH2 / 2, drumCz);
+      scene.add(glassRing);
+
+      const drumRoof = new THREE.Mesh(
+        new THREE.CylinderGeometry(drumR + 0.5, drumR + 0.5, 0.20, 16),
+        villaMat
+      );
+      drumRoof.position.set(drumCx, podiumTopY + drumH + 0.10, drumCz);
+      scene.add(drumRoof);
+
+      const drumRing = new THREE.Mesh(
+        new THREE.CylinderGeometry(drumR + 0.12, drumR + 0.12, 0.18, 16),
+        marbleMat
+      );
+      drumRing.position.set(drumCx, podiumTopY + wingH1, drumCz);
+      scene.add(drumRing);
+    }
 
     {
       const sideDoor = new THREE.Mesh(new THREE.BoxGeometry(0.10, 2.6, 1.4), windowMat);
@@ -1008,10 +1085,13 @@
     }
 
     // =====================================================================
-    // ROOFTOP PAVILION — small white cube + cantilever canopy on slim
-    // columns, sitting on the central rooftop terrace. The new iconic
-    // vertical accent (replaces the b025 bell tower campanile). Carries
-    // the `bell_tower` click→card target so its track card still wires.
+    // ROOFTOP PAVILION (b039 — taller, more vertical, no yellow glow)
+    // Small white cube + cantilever canopy on slim columns, sitting on
+    // the central rooftop terrace. New iconic vertical accent (replaces
+    // the b025 bell tower campanile). Carries the `bell_tower` click→card
+    // target so its track card still wires. b039: taller (3.6 vs 2.6),
+    // sits on a marble plinth, front face is cool glassMat instead of
+    // warm windowMat (no more "yellow window").
     // =====================================================================
     {
       const pavCx = villaCx;
@@ -1019,23 +1099,31 @@
       const pavY  = centralTopY + 0.20;   // rooftop deck top
       const pavW = 4.0;
       const pavD = 4.0;
-      const pavH = 2.6;
+      const pavH = 3.6;                    // b039 — was 2.6, taller silhouette
+
+      // Marble plinth so the pavilion reads lifted off the deck
+      const pavPlinth = new THREE.Mesh(
+        new THREE.BoxGeometry(pavW + 0.8, 0.30, pavD + 0.8),
+        marbleMat
+      );
+      pavPlinth.position.set(pavCx, pavY + 0.15, pavCz);
+      scene.add(pavPlinth);
 
       // White cube room (the pavilion volume)
       const pavRoom = new THREE.Mesh(
         new THREE.BoxGeometry(pavW, pavH, pavD),
         villaMat
       );
-      pavRoom.position.set(pavCx, pavY + pavH / 2, pavCz);
+      pavRoom.position.set(pavCx, pavY + 0.30 + pavH / 2, pavCz);
       pavRoom.name = 'bell_tower';   // preserve b025 click→card target
       scene.add(pavRoom);
 
-      // Warm glow front face (so it reads as a lit pavilion at dusk)
+      // Cool glass front face (b039 — was warm windowMat → yellow window)
       const pavFront = new THREE.Mesh(
-        new THREE.BoxGeometry(pavW - 0.6, pavH - 0.6, 0.06),
-        windowMat
+        new THREE.BoxGeometry(pavW - 0.6, pavH - 0.8, 0.06),
+        glassMat
       );
-      pavFront.position.set(pavCx, pavY + pavH / 2, pavCz + pavD / 2 + 0.04);
+      pavFront.position.set(pavCx, pavY + 0.30 + pavH / 2, pavCz + pavD / 2 + 0.04);
       scene.add(pavFront);
 
       // Flat canopy slab cantilevering forward over the rooftop deck
@@ -1043,12 +1131,12 @@
         new THREE.BoxGeometry(pavW + 4.0, 0.20, pavD + 2.4),
         villaMat
       );
-      canopy.position.set(pavCx, pavY + pavH + 0.10, pavCz + 0.6);
+      canopy.position.set(pavCx, pavY + 0.30 + pavH + 0.10, pavCz + 0.6);
       scene.add(canopy);
 
       // 2 slim columns supporting the canopy front edge
       for (const dx of [-(pavW / 2 + 1.6), pavW / 2 + 1.6]) {
-        addColumn(pavCx + dx, pavCz + pavD / 2 + 0.6, pavH, pavY);
+        addColumn(pavCx + dx, pavCz + pavD / 2 + 0.6, pavH + 0.30, pavY);
       }
 
       // Sconce on each side of the pavilion front
@@ -1078,14 +1166,51 @@
     addSconce(eastWingCx, podiumTopY + wingH1 + 1.0, centralFrontZ + 0.20);
     addSconce(westWingCx, podiumTopY + wingH1 + 1.0, centralFrontZ + 0.20);
 
-    // ---- Back door (warm glow slab on the central block back wall) ----
+    // b039 — Back door is now an OPEN ARCHWAY through the back wall.
+    // Marble jamb on each side + marble lintel above. No door slab, no
+    // glow pane — you can see straight through the mansion from front to
+    // back. Matches the open-air language of the front facade.
     {
-      const bd = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.8, 0.10), windowMat);
-      bd.position.set(villaCx, podiumTopY + 1.4, centralBackZ - 0.04);
-      scene.add(bd);
-      const bdSlab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.06), railMat);
-      bdSlab.position.set(villaCx, podiumTopY + 1.4, centralBackZ - 0.10);
-      scene.add(bdSlab);
+      const archW = 2.4;
+      const archH = 3.0;
+      const archY = podiumTopY + archH / 2;
+      const archZ = centralBackZ - wallT / 2;
+
+      // Cut the back wall by overlaying a plaster mask on either side of
+      // the archway. The original back wall covers the full width — we
+      // overlay marble jambs that visually frame an opening (the wall
+      // behind reads through the slim opening between the jambs).
+      // Left jamb
+      const lj = new THREE.Mesh(
+        new THREE.BoxGeometry(0.32, archH, 0.6),
+        marbleMat
+      );
+      lj.position.set(villaCx - archW / 2 - 0.16, archY, archZ - 0.30);
+      scene.add(lj);
+      // Right jamb
+      const rj = new THREE.Mesh(
+        new THREE.BoxGeometry(0.32, archH, 0.6),
+        marbleMat
+      );
+      rj.position.set(villaCx + archW / 2 + 0.16, archY, archZ - 0.30);
+      scene.add(rj);
+      // Lintel
+      const lintel = new THREE.Mesh(
+        new THREE.BoxGeometry(archW + 0.96, 0.30, 0.6),
+        marbleMat
+      );
+      lintel.position.set(villaCx, podiumTopY + archH + 0.15, archZ - 0.30);
+      scene.add(lintel);
+      // "Cut" the back wall by inserting a flush-fit black void box that
+      // visually erases the wall behind the archway. The PS2 fragment
+      // shader doesn't do real cut-outs, but a thin podium-colored slab
+      // sized to match the opening reads as a hole at this distance.
+      const voidBox = new THREE.Mesh(
+        new THREE.BoxGeometry(archW, archH, wallT + 0.02),
+        podiumMat
+      );
+      voidBox.position.set(villaCx, archY, centralBackZ + wallT / 2 - 0.01);
+      scene.add(voidBox);
     }
 
     // =====================================================================
@@ -3018,9 +3143,12 @@
     container.addEventListener('touchcancel', onTouchEnd);
     // b038 — RMB drag = pan, so suppress the browser context menu on the canvas
     container.addEventListener('contextmenu', onContextMenu);
-    // b038 — keyboard nav: WASD/QE move, R resets to current anchor
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    // b038/b039 — keyboard nav: WASD/QE move, R resets to current anchor.
+    // b039: attached at document CAPTURE phase so browser-level shortcut
+    // consumers (Vivaldi quick-commands, mouse gestures, etc.) can't swallow
+    // letter keys before the page sees them. window+bubble was unreliable.
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('keyup', onKeyUp, true);
     // Hint cursor
     (canvas || container).style.cursor = 'grab';
 
@@ -3109,28 +3237,50 @@
     camCenterZ += (dir.z * f + right.z * s) * speed;
   }
 
-  // b038 — keyboard listeners. WASD/QE add to heldKeys, R re-flies to the
-  // current anchor (reset). Skip while typing in any input/textarea so the
-  // top-bar search doesn't intercept letters as movement.
+  // b038/b039 — keyboard listeners. WASD/QE add to heldKeys, R re-flies to
+  // the current anchor (reset). b039: match by `e.code` (KeyW/KeyA/etc.)
+  // first because some browsers (Vivaldi, Opera with mouse-gestures) reserve
+  // raw letter keys at the browser level and `e.key` arrives mangled or
+  // never fires window-level. e.code is layout-independent and arrives
+  // earlier in the dispatch order. Listener is also attached at document
+  // capture phase (see init) so the page sees the event before any browser
+  // shortcut consumer. Skip while typing in any input/textarea so the
+  // top-bar search isn't hijacked.
+  function keyToAction(e) {
+    const code = e.code || '';
+    const key  = (e.key || '').toLowerCase();
+    if (code === 'KeyW' || key === 'w') return 'w';
+    if (code === 'KeyA' || key === 'a') return 'a';
+    if (code === 'KeyS' || key === 's') return 's';
+    if (code === 'KeyD' || key === 'd') return 'd';
+    if (code === 'KeyQ' || key === 'q') return 'q';
+    if (code === 'KeyE' || key === 'e') return 'e';
+    if (code === 'ShiftLeft' || code === 'ShiftRight' || key === 'shift') return 'shift';
+    if (code === 'KeyR' || key === 'r') return 'r';
+    return null;
+  }
   function onKeyDown(e) {
     if (destroyed) return;
     const tgt = e.target;
     if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
-    const k = e.key.toLowerCase();
-    if (k === 'w' || k === 'a' || k === 's' || k === 'd' || k === 'q' || k === 'e') {
-      heldKeys.add(k);
-      e.preventDefault();
-    } else if (k === 'shift') {
-      heldKeys.add('shift');
-    } else if (k === 'r') {
+    const action = keyToAction(e);
+    if (!action) return;
+    if (action === 'r') {
       flyToAnchor(currentAnchorIdx);
       e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    heldKeys.add(action);
+    if (action !== 'shift') {
+      e.preventDefault();
+      e.stopPropagation();
     }
   }
   function onKeyUp(e) {
-    const k = e.key.toLowerCase();
-    if (k === 'shift') heldKeys.delete('shift');
-    else heldKeys.delete(k);
+    const action = keyToAction(e);
+    if (!action || action === 'r') return;
+    heldKeys.delete(action);
   }
   function onContextMenu(e) {
     e.preventDefault();
@@ -3702,8 +3852,8 @@
       container.removeEventListener('contextmenu', onContextMenu);
     }
     window.removeEventListener('mouseup', onMouseUp);
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keyup', onKeyUp, true);
     heldKeys.clear();
     isPanning = false;
     lastFrameTime = 0;

@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## b039 — 2026-04-07 — WASD fix + open-air mansion retry (no yellow windows, west drum, taller pavilion, open back archway)
+
+User: "wasd does nothing like keystrokes arent registered whatsoever ... mansion still looks the same as it did before. its not the OPEN AIR modern miami build i thought itd be can we retry ... no doors in the inside. maybe open doors for front and back doors. very cool open air mansion (no yellow windows. not too flat or blocky."
+
+### WASD fix
+- Match by `e.code` (`KeyW`/`KeyA`/etc.) first, fall back to `e.key.toLowerCase()`. e.key arrives mangled or never fires window-level under Vivaldi/Opera/some mouse-gesture extensions; e.code is layout-independent and arrives earlier.
+- Attached the listener at `document` **capture phase** (`document.addEventListener('keydown', onKeyDown, true)`) instead of `window` bubble. Capture fires before any other listener, so browser-level shortcut consumers can't swallow letter keys before the page sees them.
+- Both branches `e.preventDefault()` AND `e.stopPropagation()` so nothing downstream re-handles the key.
+- Extracted `keyToAction(e)` helper for clean mapping; both keydown and keyup use the same map.
+- Destroy now removes from document with the matching capture flag.
+
+### Open-air mansion retry
+The b037 rebuild kept the geometry too closed (front-facing glass spans on every floor) and the warm-yellow `windowMat` made everything still read as "lit yellow windows". This pass actually opens it up.
+
+- **New `glassMat`** at the top of the materials section: cool dusk-tinted glass (color 0x4a6878, low cyan emissive 0x305060). All villa-shell glass uses this; warm `windowMat` is no longer touched by the mansion at all.
+- **Front facade is now fully open** on central + east wing + west wing. Removed all 5 ground-floor glass spans + 3 upper-floor glass spans + 4 wing glass spans. The only solid front element on the central block is a slim plaster strip behind the living-room TV (so the TV doesn't float against the colonnade).
+- **4 internal structural columns** under the central upper floor (visible inside the open ground floor — sells the open-plan beach-house language: upper floor floats on exposed columns).
+- **2 internal structural columns** per wing under each upper floor.
+- **Cantilever upper-floor balcony slab** projecting forward from the central upper floor over the open ground floor (width 15.2, depth 2.4) with a frameless cool-glass rail + marble cap. Modern Miami signature: upper-floor terrace overlooking the pool.
+- **Marble underside band** between floors (now 0.30 tall × 0.6 deep, was 0.16 × 0.4) — reads as the underside of the cantilevered upper floor instead of just a horizontal line.
+- **Second cylindrical drum pavilion on the west wing** (mirror of east). Both ends of the mansion now have curved volumes — kills the all-rectangles read.
+- **East drum's glass band** changed from `windowMat` → `glassMat` (cool not warm).
+- **Rooftop pavilion taller** (height 2.6 → 3.6), sits on a marble plinth, front face is `glassMat` instead of warm `windowMat`. Bigger vertical accent + no more yellow.
+- **Back door is now an open archway** instead of a warm-glow slab. Marble jambs + marble lintel frame the opening; a podium-colored void box overlays the back wall to read as a cut-out at this distance. You can see straight through the mansion front to back.
+
+### Files modified
+- [js/world.js](js/world.js) — `glassMat` declaration, all villa-shell `windowMat` references swapped to `glassMat`, front facade glass spans deleted, internal columns added, upper balcony added, west drum pavilion added, rooftop pavilion lifted + recolored, back door rewritten as open archway, keyboard handler rewrite (`keyToAction` helper, `document` capture-phase attach + cleanup)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b038 → b039`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b038 — 2026-04-07 — Camera freedom: pan, WASD, FP dolly, R reset
 
 User: "i hate the current locked to a point and drag around it and the camera angles for the other views/rooms sucks while we remodle everything (so dont have to touch them but) give me some more freedom pls somehow".
