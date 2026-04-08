@@ -2551,24 +2551,61 @@
     // road from the villa.
     // -----------------------------------------------------
 
-    // ----- Lagoon — west side water -----
-    // b034b — switched from oceanMat (dusk purple, blends into the beach)
-    // to poolMat (cyan glow, vTopMask ripples) so it actually reads as
-    // water at a glance. BoxGeometry with thin slab so the top face gets
-    // the brighter `mix(0.8, 3.6, vTopMask)` boost.
+    // ----- Lagoon — relocated to the pier/yacht area, custom ocean shader -----
+    // b034c — moved from west (-78,0) to centered over the pier (x=8, z=30..66)
+    // and yachts (z=62..92). Replaced poolMat (which read as a pool) with a
+    // dedicated darker teal shader: rolling waves, no caustic grid, no top
+    // boost. Sits at y=0.06 just above the beach so the pier deck
+    // (y=0.65) and yacht hulls (y=0.5..) still float above it correctly.
+    const lagoonMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime:       { value: 0 },
+        uBase:       { value: new THREE.Color(0x08323c) },
+        uHi:         { value: new THREE.Color(0x3a92a8) },
+        uFogColor:   { value: new THREE.Color(0x6a1850) },
+        uFogDensity: { value: 0.003 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying float vFogDepth;
+        void main() {
+          vUv = uv;
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          vFogDepth = -mvPos.z;
+          gl_Position = projectionMatrix * mvPos;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uBase;
+        uniform vec3 uHi;
+        uniform vec3 uFogColor;
+        uniform float uFogDensity;
+        varying vec2 vUv;
+        varying float vFogDepth;
+        void main() {
+          float w1 = sin(vUv.x * 22.0 + uTime * 0.6) * 0.5 + 0.5;
+          float w2 = sin(vUv.y * 14.0 - uTime * 0.4) * 0.5 + 0.5;
+          float w3 = sin((vUv.x + vUv.y) * 9.0 + uTime * 0.3) * 0.5 + 0.5;
+          float wave = w1 * w2 * 0.55 + w3 * 0.18;
+          vec3 col = mix(uBase, uHi, wave);
+          col *= 1.35;
+          float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
+          col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+    });
+    materials.push(lagoonMat);
+    timeUniforms.push(lagoonMat.uniforms.uTime);
+
     const lagoon = new THREE.Mesh(
-      new THREE.BoxGeometry(60, 0.20, 140, 24, 1, 56),
-      poolMat
+      new THREE.PlaneGeometry(82, 68, 1, 1),
+      lagoonMat
     );
-    lagoon.position.set(-78, 0.10, 0);
+    lagoon.rotation.x = -Math.PI / 2;
+    lagoon.position.set(0, 0.06, 62);
     scene.add(lagoon);
-    // Sand rim around the lagoon for a clean shoreline cut
-    const lagoonRim = new THREE.Mesh(
-      new THREE.BoxGeometry(64, 0.16, 144),
-      rimMat
-    );
-    lagoonRim.position.set(-78, 0.05, 0);
-    scene.add(lagoonRim);
 
     // ----- Loop driveway road (east, threaded through the forest) -----
     // b034b — single RingGeometry mesh for the loop instead of 16 tangent
@@ -2600,30 +2637,31 @@
       }
     }
 
-    // Loop ring centered at (62, 5), inner=15.5 outer=20.5 → 5-wide road
-    const ringCx = 62, ringCz = 5;
+    // b034c — Loop relocated. The +z side is owned by pool/pier/yachts/beach
+    // chairs, so the driveway loop goes on the back side (-z) where the only
+    // truly empty land is. Single straight road runs from the villa back wall
+    // (z=-3) outward through the loop and into the dense jungle beyond.
+    const ringCx = 0, ringCz = -58;
     const ringRoad = new THREE.Mesh(
-      new THREE.RingGeometry(15.5, 20.5, 64, 1),
+      new THREE.RingGeometry(13.0, 17.5, 64, 1),
       asphaltMat
     );
     ringRoad.rotation.x = -Math.PI / 2;
     ringRoad.position.set(ringCx, 0.06, ringCz);
     scene.add(ringRoad);
-    // Center stripe — thin RingGeometry on top of the road
+    // Center stripe ring
     const ringStripe = new THREE.Mesh(
-      new THREE.RingGeometry(17.9, 18.1, 64, 1),
+      new THREE.RingGeometry(15.15, 15.35, 64, 1),
       stripeMat
     );
     ringStripe.rotation.x = -Math.PI / 2;
     ringStripe.position.set(ringCx, 0.10, ringCz);
     scene.add(ringStripe);
 
-    // Approach road from the villa front entry to the loop's west edge
-    addRoadSegment(28, 5, 16, Math.PI / 2);
-    addRoadSegment(40, 5, 8,  Math.PI / 2);
-
-    // Garage spur — short connector from the showroom front to the loop
-    addRoadSegment(46, -18, 14, 0);
+    // Approach road — villa back exit (z=-3) → loop north edge (z=-40)
+    addRoadSegment(0, -22, 38, 0);
+    // Continuation past the loop, leading deeper into the jungle
+    addRoadSegment(0, -82, 30, 0);
 
     // ----- Forest — pine cones + extra palms east + north -----
     // b034b — bigger trees + brighter emissive needles so they read at
@@ -2658,32 +2696,57 @@
       }
     }
 
-    // East forest — wraps the loop, avoids garage at (32, -28) and the
-    // showroom interior. Loop interior stays clear (drivable).
+    // b034c — Far Cry 3 jungle: pack pines TIGHT around the loop + road,
+    // not scattered to the horizon. Inner ring just outside the loop
+    // (r≈19), road shoulder rows along x=±6.5, deep forest band beyond
+    // the loop at z<-75. Avoid the garage footprint at (32, -28) ±13×7.
     const forestPines = [
-      // Outer ring east of the loop
-      [86, -32, 5.2], [90,  -8, 6.0], [92,  16, 5.0], [88, 36, 5.6], [80, 50, 5.0],
-      [94, -22, 4.6], [96,   4, 5.4], [98,  24, 4.4],
-      // Northeast band (between garage and back edge)
-      [56, -50, 5.4], [70, -54, 5.0], [78, -46, 5.6], [44, -52, 4.8],
-      // Far north
-      [20, -62, 5.0], [  2, -68, 5.4], [-18, -64, 5.2], [-36, -60, 4.8],
-      // Southeast forest (in front, far +z)
-      [50,  72, 5.2], [66,  68, 5.6], [80,  60, 5.0], [38,  78, 4.8],
-      [22,  82, 5.4], [  4,  78, 5.0], [-18,  74, 5.2], [-36,  72, 4.8],
+      // Tight inner ring hugging the loop's outer edge (r ≈ 19..23)
+      [ 22, -58, 5.4], [ 21, -52, 5.0], [ 21, -64, 5.2],
+      [ 19, -44, 5.6], [ 19, -72, 5.4],
+      [ 14, -38, 5.0], [ 14, -78, 5.2],
+      [  6, -34, 5.4], [  6, -82, 5.6],
+      [ -6, -34, 5.0], [ -6, -82, 5.4],
+      [-14, -38, 5.6], [-14, -78, 5.0],
+      [-19, -44, 5.2], [-19, -72, 5.6],
+      [-21, -52, 5.4], [-21, -64, 5.0], [-22, -58, 5.6],
+      // Second ring just outside the first, denser
+      [ 26, -55, 4.8], [ 25, -47, 5.2], [ 25, -69, 5.0],
+      [-26, -55, 5.4], [-25, -47, 5.0], [-25, -69, 5.2],
+      [ 16, -32, 5.2], [-16, -32, 4.8],
+      [ 16, -84, 5.0], [-16, -84, 5.4],
+      // Road shoulder — rows of trees lining the villa→loop approach
+      [  7, -10, 4.6], [ -7, -10, 5.0],
+      [  7, -16, 5.2], [ -7, -16, 4.8],
+      [  8, -24, 5.0], [ -8, -24, 5.4],
+      // Past the loop — dense back jungle wall
+      [ -4, -94, 5.6], [  4, -94, 5.4],
+      [-12, -92, 5.2], [ 12, -92, 5.6],
+      [-22, -90, 5.0], [ 22, -90, 5.0],
+      [-32, -88, 5.4], [ 32, -88, 5.2],
+      [-42, -84, 5.6], [ 42, -84, 5.0],
+      [-52, -78, 5.0], [ 52, -78, 5.4],
+      [-62, -70, 5.4], [ 62, -70, 5.2],
+      // West/east edges of the jungle band, clearing villa east wing + garage
+      [-36, -50, 5.0], [-44, -42, 5.4], [-52, -32, 5.0],
+      [ 56, -55, 5.2], [ 64, -42, 5.6], [ 70, -30, 5.0],
+      // Front-side forest pockets (away from pool/yacht zone), east of garage
+      [ 70,  20, 5.4], [ 78,  40, 5.0], [ 60,   0, 5.2],
+      // Front-side west pocket (away from pool deck and garden)
+      [-70,  20, 5.4], [-78,  40, 5.0], [-60,   0, 5.2],
     ];
     forestPines.forEach(([x, z, h]) => addPineTree(x, z, h));
 
-    // Mix in tall palms for variety
-    addPalm( 74, -16, 6.2);
-    addPalm( 82,   8, 5.8);
-    addPalm( 76,  30, 6.0);
-    addPalm( 50, -42, 5.6);
-    addPalm( 10, -58, 6.0);
-    addPalm(-26, -56, 5.4);
-    addPalm( 56,  60, 5.8);
-    addPalm( 30,  74, 6.2);
-    addPalm(-10,  70, 5.6);
+    // Mix in tall palms for variety inside the dense jungle
+    addPalm(  9, -48, 6.0);
+    addPalm( -9, -64, 5.8);
+    addPalm( 11, -68, 6.2);
+    addPalm(-11, -48, 5.6);
+    addPalm( 18, -86, 6.0);
+    addPalm(-18, -86, 5.8);
+    addPalm(  0, -100, 6.4);
+    addPalm( 32, -76, 5.8);
+    addPalm(-32, -76, 6.0);
 
     // b029 — Distant Miami skyline REMOVED. The new WORLD vibe is private
     // beach island, no inland city visible on the horizon. Just open ocean

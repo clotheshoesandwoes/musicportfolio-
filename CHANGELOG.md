@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## b034c — 2026-04-07 — Lagoon over the pier, loop on the back side, jungle packed tight
+
+User: "the huge ocean you made looks like a pool. its also positioned wrong it should be near the pier and boats. and more oceany than pool. you put many trees around but theyre all so far away that like it doesnt look like a far cry 3 jungle. that's the intended vibe, and we put that close to the road. you also put the loop on the side of the house not connecting it to the front. circle is the driveway and the straight line should lead outward toward the forest"
+
+Three concrete fixes:
+
+1. **Lagoon — relocated + new shader.** Moved from `(-78, 0)` (west of property, miles from anything) to `(0, 0.06, 62)` — directly under the pier (`x=8, z=30..66`) and beneath the three yachts (`z=62..92`). Replaced `poolMat` (which was reading as a swimming pool with caustic grid + 3.6× brightness boost) with a dedicated `lagoonMat` shader: rolling triple-sine waves, deep teal `0x08323c → 0x3a92a8`, no caustic grid, no top-face boost, modest 1.35× output gain. Reads as ocean, not pool.
+
+2. **Loop driveway — moved to villa back.** The +z side is fully owned by pool / pier / lagoon / beach chairs / yachts, so a "front" driveway loop is impossible there without bulldozing scenery. Moved the ring to `(0, -58)` r=15 on the empty -z side. Single straight road runs `(0, -22)` length 38 from villa back wall (z=-3) through the loop, then `(0, -82)` length 30 continuing past the loop deeper into the jungle.
+
+3. **Forest — packed tight, not scattered.** Old layout was 24 pines spread to the horizon. New layout is ~55 pines + 9 palms in three concentric rings hugging the loop and the road shoulders, with a dense back-jungle wall at z=-90..-100 and side pockets at the east/west edges. Tree positions hand-placed to avoid the garage footprint at `(32, -28) ± 13×7`.
+
+### Files modified
+- [js/world.js](js/world.js) — `lagoonMat` shader + relocated lagoon plane, ring road moved to back, forestPines list rewritten and packed
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b034b → b034c`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b034b — 2026-04-07 — Polish pass on b034: lagoon reads as water, smooth ring road, fuller pines
 
 User: "how do we make it less choppy less ugly". Three concrete causes:
