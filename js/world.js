@@ -150,6 +150,15 @@
       'bed':             17,
       'indoor_pool':     18,
       'sauna':           19,
+      // b042 — Phase 2 mega-mansion room props
+      'aquarium':        20,
+      'koi_pond':        21,
+      'cinema_screen':   22,
+      'trophy_case':    23,
+      'kitchen_island':  24,
+      'recording_console': 25,
+      'dj_booth':        26,
+      'walk_in_closet': 27,
     };
 
     // -----------------------------------------------------
@@ -1547,6 +1556,526 @@
       const neon = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.4, 0.08), neonMat);
       neon.position.set(brCx, brY + 2.4, brCz + 5.5);
       scene.add(neon);
+    }
+
+    // =====================================================
+    // b042 — Phase 2 mega-mansion rooms
+    //
+    // 8 new interior zones inside the b041 56×28 mansion shell. Pure
+    // open-plan: no walls between rooms, just furniture clusters tagged
+    // with click→card targets and camera anchors flying to each zone.
+    // Layouts deliberately non-grid where it makes sense (curved cinema
+    // seating, circular DJ booth, koi pond as a real circle, recording
+    // studio rotated, aquarium tunnel curving through the floor).
+    // =====================================================
+
+    // ----- KITCHEN + DINING (west-mid ground floor, x=-15..-7) -----
+    {
+      const kCx = -11;
+      const kCz = -14;
+      const kY  = podiumTopY;
+
+      // Long marble dining table angled 12° off-axis (non-grid feel)
+      const tableMat = makePS2Material({ color: 0xefe6d2 });
+      const table = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.18, 1.6), tableMat);
+      table.position.set(kCx, kY + 0.85, kCz + 4);
+      table.rotation.y = 0.21;
+      scene.add(table);
+      // 8 dark chairs flanking the long sides of the table
+      const chairMat = makePS2Material({ color: 0x10131a });
+      for (let i = 0; i < 4; i++) {
+        for (const side of [-1, 1]) {
+          const localX = -2.4 + i * 1.6;
+          const localZ = side * 1.1;
+          const cx = kCx + localX * Math.cos(0.21) - localZ * Math.sin(0.21);
+          const cz = (kCz + 4) + localX * Math.sin(0.21) + localZ * Math.cos(0.21);
+          const seat = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.55), chairMat);
+          seat.position.set(cx, kY + 0.30, cz);
+          seat.rotation.y = 0.21;
+          scene.add(seat);
+          const back = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.85, 0.10), chairMat);
+          back.position.set(cx + Math.sin(0.21) * 0.20 * side, kY + 0.85, cz - Math.cos(0.21) * 0.20 * side);
+          back.rotation.y = 0.21;
+          scene.add(back);
+        }
+      }
+
+      // Chef's kitchen island — dark stone slab + pale marble top, behind dining
+      const islandStoneMat = makePS2Material({ color: 0x1a1d28 });
+      const island = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.1, 1.6), islandStoneMat);
+      island.position.set(kCx, kY + 0.55, kCz - 2.5);
+      scene.add(island);
+      const islandTop = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.10, 1.8), tableMat);
+      islandTop.position.set(kCx, kY + 1.15, kCz - 2.5);
+      islandTop.name = 'kitchen_island';
+      scene.add(islandTop);
+      // 3 pendant lights above the island (warm glow)
+      for (const dx of [-1.4, 0, 1.4]) {
+        const cord = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.4, 0.04), railMat);
+        cord.position.set(kCx + dx, kY + 2.3, kCz - 2.5);
+        scene.add(cord);
+        const bulb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), lanternGlowMat);
+        bulb.position.set(kCx + dx, kY + 1.6, kCz - 2.5);
+        scene.add(bulb);
+      }
+      // 3 bar stools facing the island from the south side
+      for (const dx of [-1.4, 0, 1.4]) {
+        const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.95, 8), chairMat);
+        stool.position.set(kCx + dx, kY + 0.475, kCz - 1.4);
+        scene.add(stool);
+      }
+
+      // Wine fridge against the back area (tall narrow glow box)
+      const wineFridge = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.0, 0.8), glassMat);
+      wineFridge.position.set(kCx - 2.6, kY + 1.0, kCz - 4);
+      scene.add(wineFridge);
+    }
+
+    // ----- AQUARIUM TUNNEL (east side, curved through the floor) -----
+    {
+      // Long curved aquarium volume on the east side. Built as 6 box
+      // segments at slight angles to suggest a gentle curve through the
+      // ground floor. Cool blue/cyan emissive glass, fish silhouettes
+      // inside (small dark icosahedrons floating mid-water).
+      const aquMat = makePS2Material({
+        color:       0x1a4060,
+        emissive:    0x2080b0,
+        emissiveAmt: 0.7,
+      });
+      const fishMat = makePS2Material({ color: 0x0a0a14 });
+
+      const segments = [
+        // [cx, cz, w, h, d, rotY]
+        [22, -8,  3.2, 3.2, 4.0, 0.0],
+        [22, -12, 3.2, 3.2, 4.0, 0.05],
+        [22.4, -16, 3.2, 3.2, 4.2, 0.10],
+        [22.6, -20, 3.2, 3.2, 4.2, 0.05],
+        [22.4, -24, 3.2, 3.2, 4.0, -0.05],
+        [22, -27, 3.2, 3.2, 3.0, -0.10],
+      ];
+      for (const [cx, cz, w, h, d, ry] of segments) {
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), aquMat);
+        seg.position.set(cx, podiumTopY + h / 2 + 0.5, cz);
+        seg.rotation.y = ry;
+        scene.add(seg);
+      }
+      // Tag the front-most segment as the aquarium click target
+      // (re-do the front segment with the name attached)
+      const aquFront = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.4, 4.2), aquMat);
+      aquFront.position.set(22, podiumTopY + 2.2, -8);
+      aquFront.name = 'aquarium';
+      scene.add(aquFront);
+
+      // 8 fish silhouettes scattered through the tunnel volume
+      const fishPositions = [
+        [21.6, 1.8, -9],   [22.4, 2.6, -11],
+        [21.8, 1.6, -14],  [22.6, 2.4, -17],
+        [22.2, 2.0, -20],  [21.6, 2.8, -22],
+        [22.4, 1.7, -25],  [22.0, 2.5, -27],
+      ];
+      for (const [fx, fy, fz] of fishPositions) {
+        const fish = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18, 0), fishMat);
+        fish.position.set(fx, fy, fz);
+        scene.add(fish);
+      }
+
+      // Marble plinth running along the floor under the tunnel
+      const aquPlinth = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.30, 21), marbleMat);
+      aquPlinth.position.set(22, podiumTopY + 0.15, -16);
+      scene.add(aquPlinth);
+    }
+
+    // ----- INDOOR JUNGLE / KOI POND / WATERFALL (atrium zone, x=-8..8 z=-29..-17) -----
+    {
+      const aCx = 0;
+      const aCz = -23;
+      const aY  = podiumTopY;
+
+      // Circular koi pond (real circle, not a rectangle)
+      const pondMat = makePS2Material({
+        color:       0x1a4530,
+        emissive:    0x205040,
+        emissiveAmt: 0.4,
+      });
+      const pondRimMat = makePS2Material({ color: 0x4a5040 });
+      // Pond rim (slightly wider ring)
+      const pondRim = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.6, 3.6, 0.35, 24),
+        pondRimMat
+      );
+      pondRim.position.set(aCx, aY + 0.175, aCz);
+      scene.add(pondRim);
+      // Pond water
+      const pondWater = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.4, 3.4, 0.20, 24),
+        pondMat
+      );
+      pondWater.position.set(aCx, aY + 0.30, aCz);
+      pondWater.name = 'koi_pond';
+      scene.add(pondWater);
+      // 6 koi (small orange + white emissive boxes floating on the surface)
+      const koiOrangeMat = makePS2Material({
+        color:       0xff8030,
+        emissive:    0xff6020,
+        emissiveAmt: 0.6,
+      });
+      const koiWhiteMat = makePS2Material({ color: 0xefe8d8 });
+      const koi = [
+        [-1.6, 0.0,  koiOrangeMat],
+        [ 0.8, -1.4, koiOrangeMat],
+        [ 1.8, 0.6,  koiWhiteMat],
+        [-0.6, 1.6,  koiOrangeMat],
+        [ 1.2, -0.8, koiWhiteMat],
+        [-1.8, -1.2, koiOrangeMat],
+      ];
+      for (const [dx, dz, mat] of koi) {
+        const k = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.10, 0.20), mat);
+        k.position.set(aCx + dx, aY + 0.42, aCz + dz);
+        k.rotation.y = Math.atan2(dz, dx);
+        scene.add(k);
+      }
+
+      // Waterfall — 3 tiered marble shelves spilling water into the pond.
+      // The water is a tall thin emissive cyan box cascading down.
+      const wfX = aCx + 4.6;
+      const wfZ = aCz + 2.4;
+      const tier1 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.20, 1.4), marbleMat);
+      tier1.position.set(wfX, aY + 3.2, wfZ);
+      scene.add(tier1);
+      const tier2 = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.20, 1.2), marbleMat);
+      tier2.position.set(wfX - 0.4, aY + 2.0, wfZ);
+      scene.add(tier2);
+      const tier3 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.20, 1.0), marbleMat);
+      tier3.position.set(wfX - 0.8, aY + 0.8, wfZ);
+      scene.add(tier3);
+      // Water cascade (3 thin emissive sheets)
+      const waterSheetMat = makePS2Material({
+        color:       0x80c8e0,
+        emissive:    0x60b0d0,
+        emissiveAmt: 0.9,
+      });
+      const cascade1 = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.2, 0.15), waterSheetMat);
+      cascade1.position.set(wfX - 0.2, aY + 2.6, wfZ + 0.6);
+      scene.add(cascade1);
+      const cascade2 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 0.15), waterSheetMat);
+      cascade2.position.set(wfX - 0.6, aY + 1.4, wfZ + 0.5);
+      scene.add(cascade2);
+
+      // 4 jungle palms in the corners (small, decorative)
+      function addJunglePalm(jx, jz) {
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.24, 3.6, 6),
+          pondRimMat
+        );
+        trunk.position.set(jx, aY + 1.8, jz);
+        scene.add(trunk);
+        // Frond cluster (3 angled boxes)
+        for (let i = 0; i < 5; i++) {
+          const ang = (i / 5) * Math.PI * 2;
+          const frond = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.4), topiaryMat);
+          frond.position.set(jx + Math.cos(ang) * 0.7, aY + 3.5, jz + Math.sin(ang) * 0.7);
+          frond.rotation.y = ang;
+          frond.rotation.z = -0.4;
+          scene.add(frond);
+        }
+      }
+      addJunglePalm(aCx - 5.5, aCz - 4);
+      addJunglePalm(aCx + 5.5, aCz - 4);
+      addJunglePalm(aCx - 5.5, aCz + 4);
+    }
+
+    // ----- TROPHY HALL (back-east, between billiard and aquarium) -----
+    {
+      const tCx = 16;
+      const tCz = -22;
+      const tY  = podiumTopY;
+
+      // 5 marble pedestals in a slight arc with display cases on top
+      // (each case = a thin glassMat box with an emissive prop inside)
+      const goldMat = makePS2Material({
+        color:       0xf0c040,
+        emissive:    0xffb820,
+        emissiveAmt: 1.2,
+      });
+      const platMat = makePS2Material({
+        color:       0xe0e0f0,
+        emissive:    0xc0d0f0,
+        emissiveAmt: 0.8,
+      });
+      const trophyMats = [goldMat, platMat, goldMat, platMat, goldMat];
+      for (let i = 0; i < 5; i++) {
+        const t = (i / 4 - 0.5) * 5.5;  // -2.75 to 2.75
+        const arcZ = tCz - Math.cos(t * 0.4) * 0.8;
+        const px = tCx + t;
+        // Pedestal
+        const ped = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.9), marbleMat);
+        ped.position.set(px, tY + 0.8, arcZ);
+        scene.add(ped);
+        // Display case (glass cube)
+        const caseBox = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.7, 0.85), glassMat);
+        caseBox.position.set(px, tY + 1.95, arcZ);
+        if (i === 2) caseBox.name = 'trophy_case';
+        scene.add(caseBox);
+        // Trophy disc inside (gold or platinum record disc)
+        const disc = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.30, 0.30, 0.06, 16),
+          trophyMats[i]
+        );
+        disc.position.set(px, tY + 1.95, arcZ);
+        disc.rotation.x = Math.PI / 2;
+        scene.add(disc);
+      }
+      // Marble base running under the arc
+      const tBase = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.20, 1.4), marbleMat);
+      tBase.position.set(tCx, tY + 0.10, tCz);
+      scene.add(tBase);
+    }
+
+    // ----- RECORDING STUDIO (west upper floor, rotated 15°) -----
+    {
+      const rsCx = -20;
+      const rsCz = -10;
+      const rsY  = podiumTopY + mansionH1;   // upper floor surface
+      const rsRot = -0.26;  // ~15° rotation off-axis
+
+      // Helper: rotate a local (x, z) into world space around (rsCx, rsCz)
+      function rsPos(localX, localZ) {
+        return [
+          rsCx + localX * Math.cos(rsRot) - localZ * Math.sin(rsRot),
+          rsCz + localX * Math.sin(rsRot) + localZ * Math.cos(rsRot),
+        ];
+      }
+
+      // Mixing console — long dark slab with 3 emissive monitor strips on top
+      const consoleMat = makePS2Material({ color: 0x10121a });
+      const screenMat = makePS2Material({
+        color:       0x4080c0,
+        emissive:    0x60a0e0,
+        emissiveAmt: 1.4,
+      });
+      const [conX, conZ] = rsPos(0, 0);
+      const console_ = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.55, 1.6), consoleMat);
+      console_.position.set(conX, rsY + 0.28, conZ);
+      console_.rotation.y = rsRot;
+      console_.name = 'recording_console';
+      scene.add(console_);
+      // 2 studio monitors flanking the console (tall black boxes)
+      for (const dx of [-1.8, 1.8]) {
+        const [mx, mz] = rsPos(dx, -0.6);
+        const mon = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.6), consoleMat);
+        mon.position.set(mx, rsY + 1.45, mz);
+        mon.rotation.y = rsRot;
+        scene.add(mon);
+        const monGlow = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.04), screenMat);
+        const [gx, gz] = rsPos(dx, -0.30);
+        monGlow.position.set(gx, rsY + 1.45, gz);
+        monGlow.rotation.y = rsRot;
+        scene.add(monGlow);
+      }
+      // Wide central screen displaying a waveform (emissive blue strip)
+      const [sx, sz] = rsPos(0, -1.4);
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.4, 0.10), screenMat);
+      screen.position.set(sx, rsY + 1.7, sz);
+      screen.rotation.y = rsRot;
+      scene.add(screen);
+      // Producer chair facing the console
+      const [chx, chz] = rsPos(0, 1.4);
+      const chair = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.7), consoleMat);
+      chair.position.set(chx, rsY + 0.40, chz);
+      chair.rotation.y = rsRot;
+      scene.add(chair);
+
+      // Iso booth — small glass box at 90° to the main console (the "L" of an L-shaped studio)
+      const [ibX, ibZ] = rsPos(3.6, 1.0);
+      const isoBox = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.6, 2.2), glassMat);
+      isoBox.position.set(ibX, rsY + 1.3, ibZ);
+      isoBox.rotation.y = rsRot;
+      scene.add(isoBox);
+      // Mic stand inside the iso booth (thin pole + ball)
+      const micStand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.6, 0.06), consoleMat);
+      micStand.position.set(ibX, rsY + 0.80, ibZ);
+      scene.add(micStand);
+      const micBall = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), consoleMat);
+      micBall.position.set(ibX, rsY + 1.65, ibZ);
+      scene.add(micBall);
+    }
+
+    // ----- HOME CINEMA (back upper floor, fan-shaped seating) -----
+    {
+      const cnCx = 4;
+      const cnCz = -25;
+      const cnY  = podiumTopY + mansionH1;
+
+      // Big screen against the back wall
+      const screenFrameMat = makePS2Material({ color: 0x05050a });
+      const cinScreenMat = makePS2Material({
+        color:       0x202830,
+        emissive:    0x6080a0,
+        emissiveAmt: 1.0,
+      });
+      const screenFrame = new THREE.Mesh(new THREE.BoxGeometry(11.0, 4.4, 0.18), screenFrameMat);
+      screenFrame.position.set(cnCx, cnY + 2.6, cnCz - 2.4);
+      scene.add(screenFrame);
+      const cinScreen = new THREE.Mesh(new THREE.BoxGeometry(10.4, 4.0, 0.06), cinScreenMat);
+      cinScreen.position.set(cnCx, cnY + 2.6, cnCz - 2.32);
+      cinScreen.name = 'cinema_screen';
+      scene.add(cinScreen);
+
+      // Fan-shaped theater seating — 2 rows of 5 seats each curving toward
+      // the screen. Front row tighter, back row wider.
+      const seatMat = makePS2Material({ color: 0x4a1018 });
+      function addCinSeat(localX, localZ, fanAng) {
+        const sx = cnCx + localX;
+        const sz = cnCz + localZ;
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.45, 0.85), seatMat);
+        seat.position.set(sx, cnY + 0.50, sz);
+        seat.rotation.y = fanAng;
+        scene.add(seat);
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.0, 0.18), seatMat);
+        back.position.set(sx + Math.sin(fanAng) * 0.34, cnY + 1.0, sz - Math.cos(fanAng) * 0.34);
+        back.rotation.y = fanAng;
+        scene.add(back);
+      }
+      // Front row (tighter arc)
+      for (let i = 0; i < 5; i++) {
+        const t = (i / 4 - 0.5) * 4.4;
+        const fanAng = -t * 0.06;
+        addCinSeat(t, 1.4 + Math.abs(t) * 0.08, fanAng);
+      }
+      // Back row (wider arc)
+      for (let i = 0; i < 5; i++) {
+        const t = (i / 4 - 0.5) * 5.6;
+        const fanAng = -t * 0.08;
+        addCinSeat(t, 3.0 + Math.abs(t) * 0.10, fanAng);
+      }
+    }
+
+    // ----- DJ BOOTH / CLUB ROOM (east upper floor, circular platform) -----
+    {
+      const djCx = 20;
+      const djCz = -10;
+      const djY  = podiumTopY + mansionH1;
+
+      // Raised circular platform
+      const platMat = makePS2Material({ color: 0x080810 });
+      const platform = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.4, 2.6, 0.30, 24),
+        platMat
+      );
+      platform.position.set(djCx, djY + 0.15, djCz);
+      scene.add(platform);
+
+      // CDJ deck — wide dark console with 2 cyan emissive jog wheels
+      const deckMat = makePS2Material({ color: 0x141820 });
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.30, 0.9), deckMat);
+      deck.position.set(djCx, djY + 0.55, djCz);
+      deck.name = 'dj_booth';
+      scene.add(deck);
+      const cyanGlowMat = makePS2Material({
+        color:       0x40c0ff,
+        emissive:    0x40c0ff,
+        emissiveAmt: 1.5,
+      });
+      for (const dx of [-0.55, 0.55]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 16), cyanGlowMat);
+        wheel.position.set(djCx + dx, djY + 0.74, djCz + 0.10);
+        scene.add(wheel);
+      }
+
+      // Mirror ball above the platform
+      const mirrorMat = makePS2Material({
+        color:       0xc0c0d0,
+        emissive:    0xc0c0d0,
+        emissiveAmt: 0.5,
+      });
+      const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), mirrorMat);
+      ball.position.set(djCx, djY + 3.6, djCz);
+      scene.add(ball);
+      const cord = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 0.05), railMat);
+      cord.position.set(djCx, djY + 4.15, djCz);
+      scene.add(cord);
+
+      // 4 LED bar uplights around the platform (magenta emissive)
+      const ledBarMat = makePS2Material({
+        color:       0xff40a0,
+        emissive:    0xff40a0,
+        emissiveAmt: 1.8,
+      });
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const lx = djCx + Math.cos(ang) * 3.0;
+        const lz = djCz + Math.sin(ang) * 3.0;
+        const ledBar = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.8, 0.18), ledBarMat);
+        ledBar.position.set(lx, djY + 1.0, lz);
+        scene.add(ledBar);
+      }
+    }
+
+    // ----- MASTER SUITE EXPANSION (walk-in closet + bath next to bedroom) -----
+    {
+      const suiteCx = -4;
+      const suiteCz = -10;
+      const suiteY  = podiumTopY + mansionH1;
+
+      // Walk-in closet — long marble runway with display rods on each side
+      const runway = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.15, 5.0), marbleMat);
+      runway.position.set(suiteCx, suiteY + 0.075, suiteCz);
+      runway.name = 'walk_in_closet';
+      scene.add(runway);
+      // 2 hanging rods (thin horizontal poles) flanking the runway
+      const rodMat = makePS2Material({ color: 0x202028 });
+      for (const dx of [-1.6, 1.6]) {
+        const rod = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 4.4), rodMat);
+        rod.position.set(suiteCx + dx, suiteY + 1.8, suiteCz);
+        scene.add(rod);
+        // 6 garment silhouettes hanging from each rod (thin dark boxes)
+        for (let i = 0; i < 6; i++) {
+          const gz = suiteCz - 2.0 + i * 0.7;
+          const garment = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 0.10), rodMat);
+          garment.position.set(suiteCx + dx, suiteY + 1.10, gz);
+          scene.add(garment);
+        }
+      }
+      // Display shoes on a low marble shelf at the back
+      for (let i = 0; i < 4; i++) {
+        const sx = suiteCx - 0.9 + i * 0.6;
+        const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.18, 0.18), rodMat);
+        shoe.position.set(sx, suiteY + 0.20, suiteCz + 2.6);
+        scene.add(shoe);
+      }
+
+      // Master bath — soaking tub at a 45° angle (luxurious diagonal)
+      const tubCx = suiteCx + 5.5;
+      const tubCz = suiteCz - 1.0;
+      const tubMat = makePS2Material({ color: 0xefe6d2 });
+      const waterMat = makePS2Material({
+        color:       0x6090a8,
+        emissive:    0x4080a0,
+        emissiveAmt: 0.5,
+      });
+      const tub = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.6, 1.4), tubMat);
+      tub.position.set(tubCx, suiteY + 0.30, tubCz);
+      tub.rotation.y = Math.PI / 4;
+      scene.add(tub);
+      const tubWater = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.10, 1.0), waterMat);
+      tubWater.position.set(tubCx, suiteY + 0.55, tubCz);
+      tubWater.rotation.y = Math.PI / 4;
+      scene.add(tubWater);
+      // Marble vanity slab next to the tub
+      const vanity = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 0.8), marbleMat);
+      vanity.position.set(tubCx + 0.6, suiteY + 0.95, tubCz + 2.4);
+      scene.add(vanity);
+      // 2 chrome faucets (small emissive boxes on the vanity)
+      const chromeMat = makePS2Material({
+        color:       0xc8c8d0,
+        emissive:    0xc8c8d0,
+        emissiveAmt: 0.6,
+      });
+      for (const dx of [-0.7, 0.7]) {
+        const faucet = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), chromeMat);
+        faucet.position.set(tubCx + 0.6 + dx, suiteY + 1.13, tubCz + 2.4);
+        scene.add(faucet);
+      }
     }
 
     // -----------------------------------------------------
@@ -3066,11 +3595,20 @@
     // tight spaces, plus the radius clamp makes interior orbits unstable).
     { name: 'pool',     label: 'POOL',     mode: 'orbit',       cx:   0,    cy: 3.0, cz:   2,    yaw: 0.20,         pitch: 0.10, radius: 22  },
     { name: 'beach',    label: 'BEACH',    mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -8,    yaw: 0,            pitch: 0.05, radius: 35  },
-    { name: 'aerial',   label: 'AERIAL',   mode: 'orbit',       cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 42  },
+    { name: 'aerial',   label: 'AERIAL',   mode: 'orbit',       cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 50  },
     { name: 'living',   label: 'LIVING',   mode: 'firstPerson', px:   0,    py: 3.5, pz: -15.8,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
     { name: 'bedroom',  label: 'BEDROOM',  mode: 'firstPerson', px: -11.5,  py: 5.8, pz:  -6.0,  yaw: 0,             pitch: 0.18, fov: 75 },
     { name: 'billiard', label: 'BILLIARD', mode: 'firstPerson', px:  14.5,  py: 3.0, pz: -12.5,  yaw: Math.PI / 2,   pitch: 0.20, fov: 75 },
     { name: 'indoor',   label: 'INDOOR',   mode: 'firstPerson', px:   0,    py: 4.0, pz: -18.0,  yaw: 0,             pitch: 0.12, fov: 78 },
+    // b042 — Phase 2 mega-mansion room anchors
+    { name: 'kitchen',   label: 'KITCHEN',   mode: 'firstPerson', px: -11,   py: 3.5, pz:  -6.0,  yaw: 0,            pitch: 0.10, fov: 75 },
+    { name: 'aquarium',  label: 'AQUARIUM',  mode: 'firstPerson', px:  18,   py: 3.0, pz:  -6.0,  yaw: 0.5,          pitch: 0.05, fov: 78 },
+    { name: 'koi',       label: 'KOI POND',  mode: 'firstPerson', px:   0,   py: 3.0, pz: -18.0,  yaw: 0,            pitch: 0.30, fov: 78 },
+    { name: 'trophy',    label: 'TROPHY',    mode: 'firstPerson', px:  16,   py: 3.0, pz: -18.0,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
+    { name: 'studio',    label: 'STUDIO',    mode: 'firstPerson', px: -20,   py: 8.5, pz:  -6.0,  yaw: 0,            pitch: 0.10, fov: 75 },
+    { name: 'cinema',    label: 'CINEMA',    mode: 'firstPerson', px:   4,   py: 8.5, pz: -19.0,  yaw: 0,            pitch: 0.05, fov: 80 },
+    { name: 'dj',        label: 'DJ BOOTH',  mode: 'firstPerson', px:  20,   py: 8.5, pz:  -6.0,  yaw: 0,            pitch: 0.10, fov: 75 },
+    { name: 'closet',    label: 'CLOSET',    mode: 'firstPerson', px:  -4,   py: 8.0, pz:  -6.0,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
   ];
   let currentAnchorIdx = 0;
   let flyState = null;  // b032: { startTime, fromPos, fromLook, fromFov, toPos, toLook, toFov, target }

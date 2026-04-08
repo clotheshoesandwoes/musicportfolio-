@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## b042 — 2026-04-07 — Mega-mansion Phase 2: 8 new room interiors + camera anchors
+
+User: "a 8 proceed but i want room for more just incase more rooms yknow ... u can do interesting layouts too doesnt have to be super grid based".
+
+Phase 2 of the mega-mansion rebuild. Pure open-plan (no interior walls) — rooms are defined by furniture clusters tagged with click→card targets and camera anchors flying to each zone. Layouts deliberately non-grid where it makes sense (curved aquarium tunnel, fan-shaped cinema seating, circular DJ platform, koi pond as a real circle, recording studio rotated 15° off-axis).
+
+### 8 new rooms
+
+**Ground floor (4):**
+1. **🍽️ Kitchen + Dining** (`kitchen_island`) — west-mid, x=-11 z=-14. Long marble table angled 12° off-axis with 8 dark chairs flanking the long sides. Chef's kitchen island in dark stone behind it with 3 warm pendant lights + 3 bar stools facing south. Tall glass wine fridge against the back area.
+2. **🐠 Aquarium tunnel** (`aquarium`) — east side, 6 box segments at slight angles to suggest a gentle curve through the floor (z=-8 to z=-27). Cool blue/cyan emissive glass walls, 8 dark fish silhouette icosahedrons floating mid-water, marble plinth running underneath.
+3. **🌿 Indoor jungle / Koi pond / Waterfall** (`koi_pond`) — center back, replaces the b029 atrium furniture. Real circular pond (CylinderGeometry r=3.4) with stone rim and 6 orange/white koi rotated to face their swim direction. Three-tier marble waterfall with cyan emissive cascade sheets. 3 jungle palms in the corners (trunks + 5 angled fronds each).
+4. **🏆 Trophy hall** (`trophy_case`) — back-east, between billiard and aquarium. 5 marble pedestals in a slight arc, each with a glass display case containing a gold or platinum record disc (alternating).
+
+**Upper floor (4):**
+5. **🎙️ Recording studio** (`recording_console`) — west upper, **rotated -15° off-axis** for the L-shape feel. Mixing console + 2 studio monitors + central screen + producer chair + glass iso booth at 90° to the main desk with mic stand inside.
+6. **🎬 Home cinema** (`cinema_screen`) — back upper, **fan-shaped seating**. Big emissive screen on the back wall, 2 rows of 5 theater seats curving toward the screen with each seat slightly rotated to face the center.
+7. **🎚️ DJ booth / Club** (`dj_booth`) — east upper, **circular raised platform** (r=2.4 cylinder). Wide CDJ deck with 2 cyan emissive jog wheels, mirror ball hanging above, 4 magenta LED uplight bars positioned around the platform.
+8. **👗 Master suite expansion** (`walk_in_closet`) — adjacent to the existing bedroom. Walk-in closet with marble runway + 2 hanging rods (12 garment silhouettes), display shoes on a back shelf. Master bath with a soaking tub at a 45° angle, marble vanity with 2 chrome faucets.
+
+### New propTracks entries (track indices 20-27)
+`aquarium`, `koi_pond`, `cinema_screen`, `trophy_case`, `kitchen_island`, `recording_console`, `dj_booth`, `walk_in_closet`. Will wrap with `% tracks.length` if config.json has fewer than 28 tracks.
+
+### New camera anchors (8)
+`KITCHEN`, `AQUARIUM`, `KOI POND`, `TROPHY`, `STUDIO`, `CINEMA`, `DJ BOOTH`, `CLOSET` — all first-person mode at the appropriate floor (py=3.0-3.5 for ground, py=8.0-8.5 for upper). The existing 7 anchors (POOL/BEACH/AERIAL/LIVING/BEDROOM/BILLIARD/INDOOR) stay unchanged. AERIAL radius bumped from 42 → 50 to fit the larger 56×28 footprint. Total anchors: 15.
+
+### Room for more (later phases)
+The mansion has plenty of empty space remaining. Phase 3 candidates: foyer + grand staircase, library, speakeasy bar, wine cellar/tasting room, piano + songwriting room, 2 guest bedrooms, rooftop pool + hot tub + open-air DJ deck. Plus the user's wishlist: more palm trees scattered, sky bridge.
+
+### Files modified
+- [js/world.js](js/world.js) — propTracks (+8 entries), 8 room interior blocks (~570 lines added after the BILLIARD block at line 1550), camera anchors (+8 entries, AERIAL radius bump). Net **~600 lines added**.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b041b → b042`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b041b — 2026-04-07 — Move forest pines out of the new mansion footprint
 
 User: "trees inside the mansion gotta be moved elsewhere".
