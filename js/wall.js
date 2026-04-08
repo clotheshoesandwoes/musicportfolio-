@@ -122,19 +122,52 @@
     mx = t.clientX - r.left;
     my = t.clientY - r.top;
   }
-  function onClick() {
-    if (hovered >= 0 && hovered < creatures.length) {
-      const c = creatures[hovered];
-      // b056 — click queues the song (or plays it if nothing's playing).
-      if (typeof playOrQueue === 'function') {
-        const result = playOrQueue(c.trackIndex);
-        toastText = result === 'playing' ? '▶ PLAYING' : '+ QUEUED';
-        toastUntil = performance.now() + 1400;
-      } else if (typeof playTrack === 'function') {
-        playTrack(c.trackIndex);
-        toastText = '▶ PLAYING';
-        toastUntil = performance.now() + 1400;
+  function onClick(e) {
+    // b057 — inline hit test at click time. The previous version
+    // read `hovered` from the draw loop, which on mobile is racy:
+    // a tap fires `click` BEFORE the next requestAnimationFrame runs
+    // hit test, so hovered was still -1 → tap did nothing. We now
+    // compute the position from the event itself and walk creatures
+    // here, with a fatter hit radius for fingers.
+    if (!container || creatures.length === 0) return;
+    const r = container.getBoundingClientRect();
+    let cx, cy;
+    if (e && e.clientX !== undefined) {
+      cx = e.clientX - r.left;
+      cy = e.clientY - r.top;
+    } else if (e && e.changedTouches && e.changedTouches[0]) {
+      cx = e.changedTouches[0].clientX - r.left;
+      cy = e.changedTouches[0].clientY - r.top;
+    } else {
+      cx = mx; cy = my;
+    }
+    if (cx < 0 || cy < 0) return;
+
+    // Find the closest creature within a generous touch radius
+    // (1.7× size on desktop, 2.4× on mobile so fat fingers can land).
+    const radiusMult = isMobile() ? 2.4 : 1.7;
+    let best = -1;
+    let bestD2 = Infinity;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      const dx = cx - c.x;
+      const dy = cy - c.y;
+      const d2 = dx * dx + dy * dy;
+      const rr = c.size * c.scale * radiusMult;
+      if (d2 <= rr * rr && d2 < bestD2) {
+        bestD2 = d2;
+        best = i;
       }
+    }
+    if (best < 0) return;
+
+    // b057 — user said: forget queue, new icon just plays new song.
+    // Always replace the currently-playing track, no queueing.
+    const c = creatures[best];
+    if (typeof playTrack === 'function') {
+      playTrack(c.trackIndex);
+      toastText = '▶ PLAYING';
+      toastUntil = performance.now() + 1400;
     }
   }
 
@@ -154,31 +187,32 @@
 
   // -------------------------------------------------------
   // NEBULAS — large soft drifting radial gradients layered
-  // between the base magenta and the checker. Cheap "bloom"
-  // for a 2D canvas — gives the background depth and color
-  // variation without an actual GL bloom pass.
+  // between the base magenta and the checker. b057: dialed
+  // way down vs b056 (alpha 0.40-0.55 → 0.14-0.20, radius
+  // 280-560 → 480-880) so the bloom reads as a mood, not as
+  // concentrated hot spots.
   // -------------------------------------------------------
   function buildNebulas() {
     nebulas = [];
     const colors = [
-      'rgba(74, 216, 255, 0.55)',   // cyan
-      'rgba(156, 255, 58, 0.45)',   // lime
-      'rgba(168, 85, 247, 0.55)',   // purple
-      'rgba(255, 232, 51, 0.40)',   // yellow
-      'rgba(10, 255, 156, 0.45)',   // mint
-      'rgba(255, 122, 26, 0.40)',   // orange
+      'rgba(74, 216, 255, 0.18)',   // cyan
+      'rgba(156, 255, 58, 0.14)',   // lime
+      'rgba(168, 85, 247, 0.20)',   // purple
+      'rgba(255, 232, 51, 0.13)',   // yellow
+      'rgba(10, 255, 156, 0.15)',   // mint
+      'rgba(255, 122, 26, 0.14)',   // orange
     ];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const h = hash('neb' + i, 33);
       nebulas.push({
         baseX: (h % 1000) / 1000 * W,
         baseY: ((h >> 8) % 1000) / 1000 * H,
-        radius: 280 + (h % 280),
+        radius: 480 + (h % 400),     // bigger + softer
         color: colors[i % colors.length],
-        speedX: 0.05 + (h % 100) / 1500,
-        speedY: 0.04 + ((h >> 4) % 100) / 1800,
-        ampX: 60 + (h % 80),
-        ampY: 50 + ((h >> 6) % 70),
+        speedX: 0.04 + (h % 100) / 1800,
+        speedY: 0.03 + ((h >> 4) % 100) / 2000,
+        ampX: 80 + (h % 100),
+        ampY: 60 + ((h >> 6) % 80),
         phase: ((h >> 12) % 1000) / 1000 * Math.PI * 2,
       });
     }
@@ -215,7 +249,10 @@
       const h1 = hash(title + '#' + i, 1);
       const h2 = hash(title + '#' + i, 7);
       const h3 = hash(title + '#' + i, 13);
-      const type = CREATURE_TYPES[h1 % CREATURE_TYPES.length];
+      // b057 — type distribution: pure h1 % len was clustering. Stride
+      // by i so consecutive creatures land on different types, and mix
+      // in h1 so it doesn't read as a perfect grid pattern.
+      const type = CREATURE_TYPES[(i * 7 + h1) % CREATURE_TYPES.length];
 
       // Loose poisson-ish: hash-based grid + jitter. Avoids
       // perfect grid look but mostly no overlaps.
@@ -228,12 +265,20 @@
       const baseX = margin + cellW * (col + 0.5) + ((h1 % 100) - 50) * 0.4;
       const baseY = margin + cellH * (row + 0.5) + ((h2 % 100) - 50) * 0.4;
 
+      // b057 — wider size range so creatures don't all look "same".
+      // ~70% small (14-26), ~30% larger hero (28-44). Larger ones
+      // anchor the eye and break up the uniform-grid feel.
+      const sizeRoll = (h2 % 100);
+      const size = sizeRoll < 70
+        ? 14 + (h1 % 13)        // 14-26 small
+        : 28 + (h1 % 17);       // 28-44 larger
+
       creatures.push({
         type,
         baseX, baseY,
         x: baseX, y: baseY,
-        size: 16 + (h1 % 14),
-        colorIdx: h1 % PALETTE.length,
+        size,
+        colorIdx: (i * 3 + h1) % PALETTE.length,  // also stride colors
         driftPhase: (h2 % 1000) / 1000 * Math.PI * 2,
         driftSpeedX: 0.3 + (h2 % 100) / 240,
         driftSpeedY: 0.25 + (h3 % 100) / 280,
@@ -311,10 +356,10 @@
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
 
-    // Soft corner vignette
-    const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.75);
+    // Soft corner vignette — b057 dialed 0.40 → 0.25
+    const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.30, W / 2, H / 2, Math.max(W, H) * 0.85);
     vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.40)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.25)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
   }
@@ -1173,18 +1218,21 @@
     const [light, dark] = PALETTE[c.colorIdx];
     const wingT = t + c.wingPhase;
 
-    // b056 — soft additive glow halo behind the creature for
-    // a cheap bloom feel. One radial gradient draw per
-    // creature is fine perf-wise. Stronger on hover.
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const haloR = c.size * c.scale * (isHover ? 2.6 : 2.0);
-    const halo = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, haloR);
-    halo.addColorStop(0, hexToRgba(light, isHover ? 0.55 : 0.30));
-    halo.addColorStop(1, hexToRgba(light, 0));
-    ctx.fillStyle = halo;
-    ctx.fillRect(c.x - haloR, c.y - haloR, haloR * 2, haloR * 2);
-    ctx.restore();
+    // b057 — soft additive glow halo, much subtler than b056
+    // (alpha 0.30/0.55 → 0.10/0.28, radius 2.0×/2.6× → 1.5×/2.1×).
+    // Mobile skips the per-creature halo entirely to keep frame
+    // time down on phones with 100 creatures.
+    if (!isMobile()) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const haloR = c.size * c.scale * (isHover ? 2.1 : 1.5);
+      const halo = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, haloR);
+      halo.addColorStop(0, hexToRgba(light, isHover ? 0.28 : 0.10));
+      halo.addColorStop(1, hexToRgba(light, 0));
+      ctx.fillStyle = halo;
+      ctx.fillRect(c.x - haloR, c.y - haloR, haloR * 2, haloR * 2);
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(c.x, c.y);

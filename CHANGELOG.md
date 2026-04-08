@@ -1,5 +1,81 @@
 # CHANGELOG
 
+## b057 — 2026-04-08 — Wall: tone bloom, fix mobile click, drop queue, more variety
+
+User on b056: *"bloomy too heavy and ugly and concentrated also on mobile still cant click the little things to play a new song and many elements are the same it feels like"* + follow-up *"forget queue just new icon plays new song"*.
+
+Four targeted fixes in one commit. No new features.
+
+### 1. Forget queue → click just plays the new song
+
+User explicitly reverted the b056 click-to-queue behavior. New click handler in [js/wall.js](js/wall.js) `onClick` calls `playTrack(c.trackIndex)` directly — same effect as the player's prev/next buttons, just driven from a creature click. The toast always reads `▶ PLAYING`.
+
+The b056 queue plumbing in [js/player.js](js/player.js) (`playQueue`, `queueTrack`, `playOrQueue`, `getQueueLength`, the `ended`-handler queue drain) is left intact but unused. It's behind a `playQueue.length > 0` guard so it has zero effect when nothing's queued. Easy to delete later if it stays unused, but the cost of leaving it is one if-check per `ended` event.
+
+### 2. Mobile click finally works
+
+The b056 `onClick` was racy on mobile. It read `hovered`, which is set by the draw loop's `hitTest()`, which depends on `mx`/`my`, which on mobile is only set by `touchstart`/`touchmove`. The race: a tap fires `click` BEFORE the next requestAnimationFrame runs `hitTest()`, so `hovered` was still `-1` and the click did nothing.
+
+[js/wall.js](js/wall.js) `onClick` is now self-contained:
+- Reads the position from the **event** itself (`e.clientX`/`e.changedTouches[0].clientX`), not from the cached `mx`/`my`
+- Walks all creatures right there with a circular distance check
+- Uses a fatter touch radius — `1.7×` size on desktop, **`2.4×`** on mobile so fingers can land
+- No dependency on the draw loop's `hovered` state at all
+
+That same fix means clicks are also more forgiving on desktop.
+
+### 3. Bloom dialed way down
+
+The b056 nebulas + halos read as "concentrated hot spots" instead of mood lighting. b057 dropped the intensity ~60% across the board:
+
+- **Nebula alphas** 0.40–0.55 → **0.13–0.20**
+- **Nebula radius** 280–560 → **480–880** (bigger + softer)
+- **Nebula count** 6 → **8** (more spread, no fewer big bright zones)
+- **Per-creature halo alpha** 0.30/0.55 → **0.10/0.28**
+- **Per-creature halo radius** 2.0×/2.6× → **1.5×/2.1×**
+- **Mobile skips per-creature halos entirely** — `if (!isMobile())` guard around the halo block in `drawCreature`. 100 additive radial gradients per frame is too much on phones, and the nebula layer alone is enough atmosphere.
+- **Corner vignette** 0.40 → **0.25**
+
+The result reads as a slow color wash across the magenta instead of a bunch of bright glowing puddles.
+
+### 4. More creature variety
+
+User said "many elements are the same it feels like". Three changes:
+
+- **Type distribution**: was `CREATURE_TYPES[h1 % 20]`, which clustered when `h1` mod-collided. Now `CREATURE_TYPES[(i * 7 + h1) % 20]`. The `i * 7` stride guarantees consecutive creatures land on different types, while `h1` keeps it from looking like a perfect rotation. With 20 types and a stride of 7 (coprime), every 20 consecutive creatures cycle through every type exactly once.
+- **Color distribution**: same fix — `colorIdx` was `h1 % PALETTE.length`, now `(i * 3 + h1) % PALETTE.length`. Spreads colors more evenly across neighbors.
+- **Wider size range**: was `16 + (h1 % 14)` (16–29). Now ~70% small (`14 + (h1 % 13)`, 14–26) and ~30% larger hero (`28 + (h1 % 17)`, 28–44). The size split is rolled from `h2 % 100`. Larger creatures anchor the eye and break the uniform-grid feel.
+
+### Files modified
+- [js/wall.js](js/wall.js) — `onClick` rewritten as self-contained inline hit test (mobile fix), nebula intensity dialed down + count bumped, halo intensity dialed down + mobile-skipped, vignette dialed down, type/color distribution stride fix, wider size range with hero/small split
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b056 → b057`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+[js/player.js](js/player.js) is **unchanged** in this commit — the b056 queue plumbing stays in but is unused by the wall now.
+
+### How to test
+1. Hard refresh `cantmute.me/` on desktop → background should look subtler, no concentrated bloom hot spots, but still atmospheric. Creatures should feel more varied (size + type).
+2. Click any creature → it should play that track immediately, replacing whatever's currently playing. Info panel flashes `▶ PLAYING`.
+3. **Mobile**: tap a creature → should now actually start the track. Touch radius is fatter so small creatures should still be hittable.
+4. The 20 creature types should all be visible in any reasonable cluster (no huge runs of the same type).
+
+### Knobs (all in [js/wall.js](js/wall.js))
+- Nebula alphas in `buildNebulas()` color list — currently 0.13–0.20
+- Nebula radius `480 + (h % 400)`
+- Nebula count `8`
+- Halo alphas `0.10` / `0.28` and radius `1.5× / 2.1×` in `drawCreature`
+- Vignette alpha `0.25` in `drawBackground`
+- Touch radius `1.7` desktop / `2.4` mobile in `onClick`
+- Type stride `i * 7` in `buildCreatures` (must be coprime with 20 — try 3, 7, 9, 11, 13)
+- Color stride `i * 3` (coprime with 8)
+- Size split — `< 70` threshold + small `14 + (h1 % 13)` / hero `28 + (h1 % 17)`
+
+### What this is NOT
+- Not a queue feature — explicitly removed by user request
+- Not new creature types — variety came from distribution, not new shapes
+- Not a UX change — same drift, same hover, same info panel
+
 ## b056 — 2026-04-08 — Wall: queue-on-click, 12 new creatures, bloomy nebula bg
 
 User on b055: *"if i click an icon, queue the song associated with it, or play it if nothings playing. id love a lot more cool icons and stuff add much much more but love the vibe so far. can we make the background cooler as well, maybe not a crazy bloom but something bloomy"*
