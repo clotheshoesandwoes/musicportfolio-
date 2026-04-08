@@ -1,5 +1,79 @@
 # CHANGELOG
 
+## b054 — 2026-04-08 — "the WALL" sticker view (new default landing page)
+
+User after b053: *"can we just make a quick view (like neural mind map) and include have that be the main landing page. itll be a cool music portfolio site vibe like 100 gecs and other artists in that lane"* → confirmed `sure` to my proposal of WALL / open detail panel / 5th tab in front. The 3D villa direction has been on a long iteration loop; this commit pivots the landing experience to a fast, cheap, vibe-forward 2D canvas view that fits the hyperpop aesthetic.
+
+### New file: [js/wall.js](js/wall.js) (~325 lines)
+Self-contained 2D canvas view, mirrors the [js/neural.js](js/neural.js) IIFE pattern (`init` / `destroy` / `registerView`). No Three.js, no postprocessing, no shaders.
+
+### What it draws
+- **Background** — solid hot magenta `#ff2bd6` with a slowly scrolling diagonal checker overlay (cheap CSS-y Y2K texture) and faint scanlines
+- **60 (24 on mobile) decorative pixel glyphs** scattered across the background — stars, sparkles, crosses, arrows, lightning bolts, dots — drifting on sine offsets, slowly rotating, in a tight palette (white / lime / cyan / yellow / black)
+- **Every track is a sticker** — colorful tilted rectangle with:
+  - Random rotation ±~13° (deterministic from track title hash so layout is stable)
+  - Vertical gradient fill from one of 8 hyperpop color pairs (lime / cyan / yellow / hot pink / electric purple / orange / white / mint)
+  - Hard 3px black outline + 6px offset drop shadow
+  - Inner highlight stripe across the top
+  - Chunky uppercase title in `Syne 900` with hard black drop shadow
+  - Badge corner: `#01`, `★`, `!!`, etc. (or `★ NEW` / `✦ HOT` if the track has those flags)
+  - Pixel "torn corner" notch on the top-right
+  - Slow sine bob (4–10px amplitude)
+- **Hover state** — sticker scales to 1.18, rotation lerps to 0°, draws on top of the stack, reveals an `▶ KANI` artist line in the corner
+- **Audio reactive** — pulls a single beat-strength scalar from `getFrequencyData()` (already shared by player.js) and applies a gentle 1.04× scale pulse to all stickers when something is playing
+- **Big corner wordmark** — `// THE WALL` rendered in giant `Syne 900` (140px desktop / 60px mobile) with stacked black + lime + white shadow layers, anchored bottom-left
+
+### Layout
+Loose grid (jittered for chaos) sized to fit the canvas. Cell ~190×110 desktop, ~130×80 mobile. Sticker w/h: 155×78 desktop, 105×56 mobile. The grid auto-sizes to columns based on canvas width, deterministic per-track jitter (hash of title) keeps positions stable across resize.
+
+### Click → track detail
+Hit test is an inverse-rotation axis-aligned check against the tilted box (cheap, accurate enough for a sticker UI). On click of a hovered sticker, calls `window.showTrackDetail(trackIndex)` to open the official site track-detail panel — same flow as every other view. Falls back to direct `playTrack(i)` if the global isn't available.
+
+### Wired in as the new default
+- [index.html](index.html) — added `<button class="view-tab active" data-view="wall">Wall</button>` as the **first** tab in both the desktop `.view-tabs` and the `.mobile-view-tabs` (the previously-active `villa` button lost its `active` class). Added `<script src="js/wall.js"></script>` after neural.js.
+- [js/app.js](js/app.js):
+  - `subs` map gained `wall: '// the wall · N stickers'`
+  - Boot block default view changed `villa` → `'wall'`. The `?paint=1` and `?style=v2` flags still take precedence. Added a new `?legacy=villa` flag so the old villa landing is one URL away.
+  - Keyboard digits shifted: `Digit1`→wall, `Digit2`→terrain, `Digit3`→deepsea, `Digit4`→neural, `Digit5`→villa
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b053 → b054`
+
+### Files modified
+- [js/wall.js](js/wall.js) — NEW, ~325 lines
+- [index.html](index.html) — Wall tab in both tab bars (desktop + mobile), script tag
+- [js/app.js](js/app.js) — subs map entry, default boot view, keyboard shortcut shift, `?legacy=villa` flag
+- [js/helpers.js](js/helpers.js) — build bump
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### What this is NOT
+- Not a replacement for any existing view — Villa, Neural, Terrain, Deep Sea all still work and live in the same tab bar
+- Not a search-filtered view yet — `onSearch` is wired but currently only updates the meta line. Future: filter the wall in/out
+- Not a drag-to-rearrange interface — stickers drift on a fixed pattern, they're not draggable
+- Not GPU accelerated — pure 2D canvas, every frame is a redraw. Should run fine at 60fps on any laptop. Mobile glyph count is halved.
+
+### How to test
+1. Hard refresh `cantmute.me/` → boots into THE WALL (no flag needed). Should see hot magenta canvas with every track as a tilted colorful sticker.
+2. Hover a sticker → it straightens, scales up, shows artist line
+3. Click a sticker → official track-detail panel opens with play button
+4. Press `1`–`5` to cycle views
+5. Hard refresh `cantmute.me/?legacy=villa` → boots straight into the old villa view (escape hatch)
+6. `cantmute.me/?paint=1` → painterly POC, untouched
+7. `cantmute.me/?style=v2` → Marathon cryo bay, untouched
+
+### Knobs
+All in [js/wall.js](js/wall.js):
+- `PALETTE` — 8 color pairs at the top of the file
+- Background magenta `#ff2bd6` in `drawBackground()`
+- Checker `size = 36`, scroll speed `* 18`
+- Glyph count `60 / 24` in `buildGlyphs()`
+- Sticker dimensions in `buildStickers()` — `cellW`, `cellH`, `w`, `h`
+- Rotation range `±π/14` in `buildStickers()`
+- Hover scale `1.18`, beat pulse `0.04` in `drawSticker()`
+- Wordmark text `// THE WALL` and font size in `drawWordmark()`
+
+### Next
+Wait for the user's reaction. If the direction lands → next steps are: search filtering on the wall, drag-to-rearrange, "shuffle layout" button, more decoration density, custom per-track stickers (cover art if config provides it), maybe a "rip the sticker off the wall" interaction. If the direction is wrong → easy revert, all changes are additive except the boot view default and tab order.
+
 ## b053 — 2026-04-08 — Marathon cryo bay POC (?style=v2 repurposed)
 
 User on b052: post-processing pipeline went live, but the pool whiteout from its 3.6× emissive boost firing into the bloom pass made it look worse, not better. They followed up with a stack of Marathon (Bungie 2026) reference imagery — character render, glowing mushrooms, lime-green inflatable + perforated wall, halftone wireframe figure, hazard-stripe banner, blue cyberpunk catwalk interior, moon + Marathon hull. Quote: *"can we make the v2 scene a lot more like bungies 2026 marathon... yes del v2 and replace with our current... marathon game has planets with different POIs and a huge spaceship called The Marathon, you can find details googling marathon cryo bungie 2026"*

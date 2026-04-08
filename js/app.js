@@ -65,6 +65,7 @@ function switchView(name) {
   }
 
   const subs = {
+    wall: `// the wall · ${tracks.length} stickers`,
     terrain: `Sound terrain / ${tracks.length} tracks`,
     deepsea: `Deep dive / ${tracks.length} tracks`,
     neural: `Neural map / ${tracks.length} tracks`,
@@ -283,10 +284,11 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'Escape':
         closeTrackDetail();
         break;
-      case 'Digit1': switchView('terrain'); break;
-      case 'Digit2': switchView('deepsea'); break;
-      case 'Digit3': switchView('neural'); break;
-      case 'Digit4': switchView('villa'); break;
+      case 'Digit1': switchView('wall'); break;
+      case 'Digit2': switchView('terrain'); break;
+      case 'Digit3': switchView('deepsea'); break;
+      case 'Digit4': switchView('neural'); break;
+      case 'Digit5': switchView('villa'); break;
     }
   });
 
@@ -303,12 +305,15 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('load', async () => {
   await loadConfig();
   document.getElementById('trackCount').textContent = tracks.length;
-  // b051 — ?paint=1 URL flag boots into the painterly POC instead of villa
+  // b054 — default landing view is now 'wall' (sticker view, hyperpop vibe).
+  // b051 — ?paint=1 URL flag boots into the painterly POC
   // b053 — ?style=v2 URL flag boots into the Marathon cryo bay POC
+  // b054 — ?legacy=villa boots straight into the old default (Villa)
   window.tracks = tracks;
   const params = new URLSearchParams(window.location.search);
-  let bootView = 'villa';
+  let bootView = 'wall';
   if (params.get('paint') === '1') bootView = 'paint';
   else if (params.get('style') === 'v2') bootView = 'marathon';
+  else if (params.get('legacy') === 'villa') bootView = 'villa';
   switchView(bootView);
 });
