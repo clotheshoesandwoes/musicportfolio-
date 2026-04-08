@@ -11,10 +11,6 @@
   let container, canvas, renderer, scene, camera, animId;
   let lowResTarget, postScene, postCamera, postMaterial;
   let onResize, destroyed = false;
-  // b052 — ?style=v2 stylization pipeline (additive, gated). When active:
-  // ACES tone mapping + bloom + vignette/grain/grade post pass via
-  // EffectComposer. composer === null means render path is unchanged.
-  let composer = null, stylized = false;
   // b014 — proper orbit camera input: drag to rotate, scroll/pinch to zoom
   // b032 — dual-mode camera: 'orbit' (exterior anchors) and 'firstPerson'
   // (interior anchors). Orbit uses center+yaw+pitch+radius spherical math.
@@ -95,10 +91,6 @@
 
     if (destroyed) { loader.remove(); return; }
 
-    // b052 — ?style=v2 opt-in stylization (post-processing pipeline + ACES
-    // tone mapping). Default villa view (no flag) is unchanged.
-    stylized = new URLSearchParams(window.location.search).get('style') === 'v2';
-
     canvas = document.createElement('canvas');
     canvas.className = 'world-canvas';
     container.appendChild(canvas);
@@ -116,17 +108,6 @@
     // b028 — richer pink-magenta clear color, was muddy indigo 0x1a1238
     renderer.setClearColor(0x2a0a35, 1);
 
-    // b052 — stylization: ACES tone mapping + sRGB output for ?style=v2.
-    // RenderPass writes linear HDR into a float-ish target; OutputPass
-    // reads renderer.toneMapping / outputColorSpace to do the final
-    // conversion to display. Exposure 1.15 brightens dusk without blowing
-    // out the neons.
-    if (stylized) {
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.15;
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-    }
-
     scene = new THREE.Scene();
     // b028 — fog density slashed 0.009 → 0.003 and color shifted from
     // muddy purple 0x40285a to a richer magenta 0x382048. The old fog was
@@ -142,131 +123,6 @@
     // skips animate.
     camera.position.set(0, 12, 26);
     camera.lookAt(0, 4, -2);
-
-    // ============================================================
-    // b052 — STYLIZATION POST-PROCESSING (?style=v2 only)
-    // ============================================================
-    // Pipeline: RenderPass -> UnrealBloomPass -> custom Vignette+Grain+Grade
-    // ShaderPass -> OutputPass (ACES + sRGB).
-    //
-    // All modules lazy-loaded from the same unpkg CDN as the core three.js
-    // build. The bare 'three' specifier resolves through the importmap added
-    // to index.html in this build.
-    //
-    // If any import fails we silently fall back to direct rendering — the
-    // composer stays null and animate() takes the legacy renderer.render()
-    // path. The user just sees the unstyled scene rather than a crash.
-    if (stylized) {
-      try {
-        const [
-          { EffectComposer },
-          { RenderPass },
-          { UnrealBloomPass },
-          { ShaderPass },
-          { OutputPass },
-        ] = await Promise.all([
-          import('three/addons/postprocessing/EffectComposer.js'),
-          import('three/addons/postprocessing/RenderPass.js'),
-          import('three/addons/postprocessing/UnrealBloomPass.js'),
-          import('three/addons/postprocessing/ShaderPass.js'),
-          import('three/addons/postprocessing/OutputPass.js'),
-        ]);
-
-        const w = container.clientWidth, h = container.clientHeight;
-        composer = new EffectComposer(renderer);
-        composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        composer.setSize(w, h);
-
-        const renderPass = new RenderPass(scene, camera);
-        composer.addPass(renderPass);
-
-        // UnrealBloom: strength / radius / threshold. Threshold 0.85 means
-        // only the brightest neons (pool, lambo emissives, lamps, signs)
-        // bloom — keeps the plaster walls clean.
-        const bloomPass = new UnrealBloomPass(
-          new THREE.Vector2(w, h),
-          0.85,   // strength
-          0.55,   // radius
-          0.85    // threshold
-        );
-        composer.addPass(bloomPass);
-
-        // Custom finishing pass: vignette + film grain + lift/gamma/gain
-        // color grade. One full-screen draw, all in fragment.
-        const finishShader = {
-          uniforms: {
-            tDiffuse:   { value: null },
-            uTime:      { value: 0 },
-            uVignette:  { value: 1.05 },     // higher = darker corners
-            uGrain:     { value: 0.045 },    // grain intensity
-            uLift:      { value: new THREE.Vector3(0.01, 0.005, 0.025) },  // shadows tint cool
-            uGamma:     { value: new THREE.Vector3(1.00, 0.99, 1.02) },    // mids
-            uGain:      { value: new THREE.Vector3(1.06, 1.02, 1.10) },    // highlights warmer/cooler split
-          },
-          vertexShader: `
-            varying vec2 vUv;
-            void main() {
-              vUv = uv;
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-          fragmentShader: `
-            uniform sampler2D tDiffuse;
-            uniform float uTime;
-            uniform float uVignette;
-            uniform float uGrain;
-            uniform vec3  uLift;
-            uniform vec3  uGamma;
-            uniform vec3  uGain;
-            varying vec2  vUv;
-
-            // Hash for grain
-            float hash(vec2 p) {
-              p = fract(p * vec2(443.897, 441.423));
-              p += dot(p, p + 19.19);
-              return fract((p.x + p.y) * p.x);
-            }
-
-            // ASC CDL lift/gamma/gain
-            vec3 lgg(vec3 c) {
-              c = c * uGain + uLift;
-              c = pow(max(c, 0.0), 1.0 / max(uGamma, vec3(0.001)));
-              return c;
-            }
-
-            void main() {
-              vec3 col = texture2D(tDiffuse, vUv).rgb;
-
-              // color grade
-              col = lgg(col);
-
-              // vignette — radial darkening from center
-              vec2 d = vUv - 0.5;
-              float vig = 1.0 - dot(d, d) * uVignette;
-              vig = clamp(vig, 0.0, 1.0);
-              col *= vig;
-
-              // animated film grain
-              float g = hash(vUv * vec2(1920.0, 1080.0) + uTime * 60.0);
-              col += (g - 0.5) * uGrain;
-
-              gl_FragColor = vec4(col, 1.0);
-            }
-          `,
-        };
-        const finishPass = new ShaderPass(finishShader);
-        composer.addPass(finishPass);
-        // Stash a reference so animate() can update uTime each frame.
-        composer._finishPass = finishPass;
-
-        // OutputPass: applies renderer.toneMapping (ACES) + outputColorSpace
-        // (sRGB). MUST be the final pass.
-        composer.addPass(new OutputPass());
-      } catch (e) {
-        console.warn('[world] b052 stylization pipeline failed to load, falling back to direct render', e);
-        composer = null;
-      }
-    }
 
     // ===================================================================
     // b047 — REAL LIGHTING (Path A pipeline swap)
@@ -4211,8 +4067,6 @@
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      // b052 — keep the stylization composer in lockstep with the renderer.
-      if (composer) composer.setSize(w, h);
     };
     window.addEventListener('resize', onResize);
 
@@ -4908,17 +4762,8 @@
     // dither + scanlines + CA + vignette) is gone. PBR + shadow maps
     // do the heavy lifting now; the post pipeline was layering
     // effects on top of an already-stylized base and wasn't working.
-    //
-    // b052 — when ?style=v2 is active, render through the EffectComposer
-    // chain (RenderPass → UnrealBloom → vignette/grain/grade → OutputPass).
-    // Otherwise the legacy direct-render path is identical to b051.
     renderer.setRenderTarget(null);
-    if (composer) {
-      if (composer._finishPass) composer._finishPass.uniforms.uTime.value = now * 0.001;
-      composer.render();
-    } else {
-      renderer.render(scene, camera);
-    }
+    renderer.render(scene, camera);
   }
 
   function destroy() {
@@ -4952,14 +4797,6 @@
     lastFrameTime = 0;
     materials.forEach(m => m.dispose && m.dispose());
     materials = [];
-    // b052 — release stylization composer if it was built. The composer's
-    // internal render targets need explicit dispose so we don't leak GPU
-    // memory across view switches.
-    if (composer) {
-      if (composer.dispose) composer.dispose();
-      composer = null;
-    }
-    stylized = false;
     timeUniforms = [];
     if (lowResTarget) { lowResTarget.dispose(); lowResTarget = null; }
     if (postMaterial) { postMaterial.dispose(); postMaterial = null; }

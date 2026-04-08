@@ -304,8 +304,11 @@ window.addEventListener('load', async () => {
   await loadConfig();
   document.getElementById('trackCount').textContent = tracks.length;
   // b051 — ?paint=1 URL flag boots into the painterly POC instead of villa
+  // b053 — ?style=v2 URL flag boots into the Marathon cryo bay POC
   window.tracks = tracks;
   const params = new URLSearchParams(window.location.search);
-  const bootView = params.get('paint') === '1' ? 'paint' : 'villa';
+  let bootView = 'villa';
+  if (params.get('paint') === '1') bootView = 'paint';
+  else if (params.get('style') === 'v2') bootView = 'marathon';
   switchView(bootView);
 });

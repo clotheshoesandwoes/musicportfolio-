@@ -1,5 +1,138 @@
 # CHANGELOG
 
+## b053 — 2026-04-08 — Marathon cryo bay POC (?style=v2 repurposed)
+
+User on b052: post-processing pipeline went live, but the pool whiteout from its 3.6× emissive boost firing into the bloom pass made it look worse, not better. They followed up with a stack of Marathon (Bungie 2026) reference imagery — character render, glowing mushrooms, lime-green inflatable + perforated wall, halftone wireframe figure, hazard-stripe banner, blue cyberpunk catwalk interior, moon + Marathon hull. Quote: *"can we make the v2 scene a lot more like bungies 2026 marathon... yes del v2 and replace with our current... marathon game has planets with different POIs and a huge spaceship called The Marathon, you can find details googling marathon cryo bungie 2026"*
+
+The "cryo" hint locked the scene concept.
+
+### Honest read on b052
+Marathon's actual look isn't a post-processing trick — it's:
+- Cool blue base + lime green accent emissives + magenta/red warning accents
+- Heavy volumetric haze + god rays
+- Real PBR + bold stencil decals (hazard stripes, "TRAXUS", numbers, QR codes) painted onto industrial surfaces
+- Crushed shadows, cinematic vignette, strong rim light
+- Bloom only on accent emissives, NOT surface materials
+
+The b052 approach (slap a composer on top of the existing villa) couldn't get there by tuning knobs. The villa's pool shader is already firing 3.6× into a low bloom threshold — wrong base scene to layer Marathon styling on. So we deleted b052 and rebuilt as a fresh isolated POC.
+
+### What got deleted
+The b052 stylization pipeline in [js/world.js](js/world.js) is fully reverted:
+- `composer` / `stylized` declarations gone
+- `?style=v2` URL flag check inside `init()` gone
+- ACES tone mapping setup gone
+- ~110-line composer build block (RenderPass + UnrealBloomPass + finishing ShaderPass + OutputPass) gone
+- `animate()` render branch back to single direct call
+- `onResize` composer line gone
+- `destroy()` composer cleanup gone
+
+`world.js` is now byte-identical to b051 except for the b047 comment trail.
+
+The importmap added to [index.html](index.html) in b052 STAYS — it's needed by the new POC for its own composer chain.
+
+### New file: [js/world-marathon.js](js/world-marathon.js) (~840 lines)
+Self-contained Marathon-style cryo bay scene. Same isolation pattern as `world-paint.js`. Registers as a 6th view named `'marathon'`. Loads its own copy of three.js from the same CDN.
+
+### Scene
+A small interior cryo bay on The Marathon ship. ~30×30×9 box.
+- **Floor** — dark gunmetal blue PBR with a 1024×1024 procedural decal texture: panel grid, hazard stripe band, "CRYO BAY 04" stencil, "TRAXUS // SECTOR W6" subtitle, warning triangle, directional arrows, random rivets
+- **Ceiling** — bone white PBR + 3 emissive strip lights running x-axis
+- **Back wall** — bone white PBR with a 1024×512 procedural decal texture: perforated dot grid, big "TRAXUS" stencil block on lime, subtitle text, QR code with finder corners, barcode + serial number, lime accent connect strip
+- **Side walls** — flat bone white PBR
+- **Front wall** — solid wall built as 4 strips around a 14×5 viewport cutout. Black metal frame around the cutout.
+- **Viewport backdrop** (visible through cutout):
+  - Black space dome
+  - 600-point starfield on a 200-radius sphere
+  - Large emissive moon disc offset to one side
+  - Marathon ship hull silhouette — long dark slab + tower + 20 magenta/lime hull lights
+- **3 cryo pods** along the back wall (click→track triggers, track 0/1/2):
+  - Gunmetal pedestal
+  - `MeshPhysicalMaterial` glass cylinder (transmission 0.85, clearcoat)
+  - Bone dome top
+  - Lime emissive status sphere on the dome (intensity 4)
+  - Internal dark capsule "subject" silhouette
+  - Procedural label panel on the front: "CRYO-04/05/06" in lime stencil, SUBJECT/STATUS/TEMP/DUR fields, hazard stripe footer, mini QR
+  - Local lime PointLight (intensity 8, range 6)
+- **2 wall terminals** — frame + cyan emissive screen + magenta warning strip below
+- **Ceiling conduits** — 4 horizontal pipes + hangers, plus a single lime accent emissive pipe
+- **God rays** — 4 stacked additive cone planes shooting from the window into the bay, falloff in custom shader
+- **Dust particles** — 220 drifting points across the bay, animated each frame, sized to catch the bloom
+- **Lighting** — cool blue ambient (0x1a2a40 @ 0.55) + cool hemisphere + cyan-white directional sun coming through the window (with shadow map) + 2 magenta warning point lights on the side walls
+
+### Materials
+Real PBR throughout — `MeshStandardMaterial` for everything except the cryo glass which uses `MeshPhysicalMaterial` for transmission. NO custom lighting shaders. NO cel shading. The Marathon look comes from the *combination* of PBR + bold decal textures + tight palette + heavy fog + god rays + bloom on accents only — not from a stylized shading model.
+
+Palette is locked tight in a `PAL` constant at the top of the file. Five hero colors:
+- `floor` — gunmetal blue 0x1a2230
+- `wall` — bone white 0xe8e6dc
+- `limeEmissive` — 0x9cff3a
+- `magWarning` — 0xff2a6e
+- `cyanRim` — 0x4ad8ff
+
+### Procedural decal textures
+Three canvas-drawn textures generated at boot, no external assets:
+- `makeFloorDecalTexture()` — 1024² with stripes, stencils, warning triangle, rivets
+- `makeWallDecalTexture()` — 1024×512 with TRAXUS block, perforated grid, QR code, barcode
+- `makePodLabelTexture(podNumber)` — 512×256 per-pod label with SUBJECT/STATUS fields and hazard footer
+
+The QR codes are random fill with hand-drawn finder corners — they're just there for the look, they don't decode to anything.
+
+### Post-processing
+Same module set as b052 (loaded via the importmap), but tuned completely differently:
+- **`UnrealBloomPass`** — strength 1.05, radius 0.7, threshold **0.92**. The high threshold is the key fix from b052: only the brightest emissives (lime status lights, cyan terminals, ceiling strip lights, moon, hull lights) bloom. PBR surfaces never trip the threshold so there's no whiteout.
+- **Custom finishing ShaderPass** — adds chromatic aberration on top of the b052 vignette + grain + lift/gamma/gain. CA is radial (sample R offset out, B offset in along the radial direction). Vignette bumped to 1.45 (much darker corners), grain to 0.06.
+- **`OutputPass`** — applies ACES tone mapping (set on renderer) + sRGB.
+- Renderer exposure 1.05.
+- If any composer module fails to load, falls back to direct render with a console warning.
+
+### Camera
+Constrained orbit, no WASD, no anchors. Radius clamped 8–38 (small interior). Pitch clamped -0.10 to 1.20. Always inside the bay.
+
+### Click→card
+Cryo pods have invisible 2.5×5.5×2.5 hit boxes for easier clicking. On click, raycaster finds the pod and calls `window.showTrackDetail(trackIndex)` — the official site track-detail panel — so playback wires through the existing player exactly like the rest of the site. If `showTrackDetail` isn't available, falls back to a local Marathon-themed popover (lime border, JetBrains Mono, "CRYO-04 // SUBJECT R273" header).
+
+### Routing
+[js/app.js](js/app.js) boot block now checks both URL flags:
+- `?paint=1` → `'paint'` view (unchanged)
+- `?style=v2` → `'marathon'` view (new)
+- otherwise → `'villa'`
+
+### Files modified
+- [js/world-marathon.js](js/world-marathon.js) — NEW, ~840 lines
+- [js/world.js](js/world.js) — fully reverted from b052 (5 edits, all subtractive)
+- [js/app.js](js/app.js) — boot block now routes `?style=v2` to the marathon view alongside the existing `?paint=1` flag
+- [index.html](index.html) — added `<script src="js/world-marathon.js"></script>`. The b052 importmap stays.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b052 → b053`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/?style=v2` → loads the cryo bay
+2. Click any of the 3 cryo pods → official track detail panel opens with track 0/1/2
+3. Drag to orbit, scroll to zoom (constrained — you can't escape the bay)
+4. Hard refresh `cantmute.me/` → unchanged b051 villa
+5. Hard refresh `cantmute.me/?paint=1` → painterly POC, untouched
+
+### Knobs
+All in [js/world-marathon.js](js/world-marathon.js):
+- `PAL.*` — palette colors at the top of the file
+- `buildComposer()` — bloom strength (1.05) / radius (0.7) / threshold (0.92), vignette (1.45), grain (0.06), chroma (0.0025), grade vec3s
+- `renderer.toneMappingExposure` (1.05) in `init()`
+- `scene.fog` density (0.045) in `init()`
+- Cryo pod positions in `init()` — currently `(-6/0/+6, 0, -10)`
+- God ray intensity in `buildGodRays()` shader uniform (0.18)
+- Dust particle count (220) in `buildDust()`
+
+### What this is NOT
+- Not a permanent replacement for the villa — it's a POC behind a flag, same as `?paint=1`
+- Not the full Marathon ship — just one cryo bay
+- Not a port of the villa's interior zoning, props, or click system
+- Not toon/cel — fully PBR
+- Not lower-poly — uses real PBR with shadows. Shouldn't be a perf problem on desktop, mobile may struggle with the transmission glass on the cryo pods (can drop to MeshStandardMaterial if needed)
+
+### Next
+Wait for the user's reaction at `?style=v2`. If the direction is right → next step is more rooms (engineering bay, bridge, supply cargo) connected by short walks, more click targets, real Marathon typography + signage. If the direction is wrong → revisit Marathon refs and tune palette/lighting/decals before adding scope.
+
 ## b052 — 2026-04-08 — Stylization pipeline (?style=v2): ACES + bloom + grade
 
 User after b051: villa "looks like ugly runescape," wants a Destiny-grade visual upgrade. Honest read: Destiny is unreachable in-browser, but the *mood* (atmospheric haze, rim light, bloom-soaked horizon, color grading) is 100% reachable via post-processing. The current scene has zero tone mapping and zero post — that's most of why it reads as flat. Recommended path was post-processing first because it's the highest visible jump per hour and doesn't touch geometry.
