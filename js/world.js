@@ -2617,15 +2617,14 @@
     materials.push(lagoonMat);
     timeUniforms.push(lagoonMat.uniforms.uTime);
 
-    // b035c — Lagoon pulled in so the pier (z=30..66) actually extends OVER
-    // the water instead of sitting on sand. Front edge at z≈32, back edge
-    // at z≈202. Still doesn't touch the pool deck (deck z range -36..16).
-    // Top y=0.30 dominates beach top (0.00) — no z-fight where they overlap.
+    // b035d — front edge pulled back to z=50 (was 32, too far inland). Pier
+    // (z=30..66) still extends over water for the outer ~16 units. Beach
+    // chairs at z=32..40 are now back on dry sand.
     const lagoon = new THREE.Mesh(
       new THREE.BoxGeometry(260, 0.40, 170),
       lagoonMat
     );
-    lagoon.position.set(0, 0.10, 117);  // top y = 0.30, z range 32..202
+    lagoon.position.set(0, 0.10, 135);  // top y = 0.30, z range 50..220
     scene.add(lagoon);
 
     // ----- Loop driveway road (east, threaded through the forest) -----

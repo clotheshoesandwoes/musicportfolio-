@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## b035d — 2026-04-07 — Pull lagoon back (b035c overcorrected)
+
+User: "now too much lagoon". b035c put the front edge at z=32 which ate the beach chair zone. Moved center z 117 → 135 → front edge now z=50. Pier (z=30..66) still has its outer ~16 units over water; beach chairs back on dry sand.
+
 ## b035c — 2026-04-07 — Pull lagoon front edge in so the pier extends over water
 
 User: "we need to move the lagoon in closer because the bridge is too much on the sand". The pier runs z=30..66 but the b035b lagoon front edge was at z=60, so basically the entire pier was on sand with only the very tip over water.
