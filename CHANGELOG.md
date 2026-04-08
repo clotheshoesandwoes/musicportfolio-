@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## b041b — 2026-04-07 — Move forest pines out of the new mansion footprint
+
+User: "trees inside the mansion gotta be moved elsewhere".
+
+The forest pine array `forestPines` had 6 "road shoulder" trees at `[±7, -10]`, `[±7, -16]`, `[±8, -24]` — sized for the old 32×14 mansion (back wall at z=-17) so they sat just behind it. The new b041 56×28 mansion has its back wall at z=-31, putting all 6 trees INSIDE the new mansion footprint. Plus the inner-ring trees at `[±16, -32]` were just barely outside (-32 vs back wall -31) — pushed back to `-36` for breathing room.
+
+### Files modified
+- [js/world.js:2336-2340](js/world.js#L2336-L2340) — 6 road-shoulder trees deleted, 2 inner-ring trees pushed from z=-32 to z=-36
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b041 → b041b`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b041 — 2026-04-07 — Mega-mansion Phase 1: tripled footprint, full upper-floor slab, single open volume
 
 User: "i lowkey still hate the new mansion it only has the rooms we mentioned. time to talk new mansion, its gotta be huge to be honest ... no basement cuz itll fuck with the flooring. but we can multi level the open air design but make sure theres floors for second layer ... build it im curious".

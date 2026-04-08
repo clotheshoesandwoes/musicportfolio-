@@ -2330,12 +2330,13 @@
       // Second ring just outside the first, denser
       [ 26, -55, 4.8], [ 25, -47, 5.2], [ 25, -69, 5.0],
       [-26, -55, 5.4], [-25, -47, 5.0], [-25, -69, 5.2],
-      [ 16, -32, 5.2], [-16, -32, 4.8],
+      [ 16, -36, 5.2], [-16, -36, 4.8],
       [ 16, -84, 5.0], [-16, -84, 5.4],
-      // Road shoulder — rows of trees lining the villa→loop approach
-      [  7, -10, 4.6], [ -7, -10, 5.0],
-      [  7, -16, 5.2], [ -7, -16, 4.8],
-      [  8, -24, 5.0], [ -8, -24, 5.4],
+      // b041b — Road shoulder rows (z=-10/-16/-24) DELETED — they were
+      // sized for the old 32×14 mansion (back wall at z=-17) and now sit
+      // inside the new 56×28 mansion footprint (back wall at z=-31).
+      // Inner ring trees at z=-32 also pushed back to z=-36 to clear the
+      // new mansion back wall + give the rear elevation some breathing room.
       // Past the loop — dense back jungle wall
       [ -4, -94, 5.6], [  4, -94, 5.4],
       [-12, -92, 5.2], [ 12, -92, 5.6],
