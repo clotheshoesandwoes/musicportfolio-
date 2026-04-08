@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## b049 — 2026-04-07 — Rounded box geometry pass on the mansion shell
+
+Second half of the b047 screenshot diagnosis. Where b048 fixed the cardboard palms, b049 fixes the **hard 90° corners** that were the other loud "Roblox" tell. The mansion shell is now built from a chamfered box helper instead of raw `BoxGeometry`.
+
+### New helper: `roundedBoxGeometry(w, h, d, r)` ([js/world.js:787](js/world.js#L787))
+Self-contained, ~30 lines. Builds a fully chamfered rounded box using `THREE.ExtrudeGeometry` on a rounded-rect `Shape` with beveled extrusion (`bevelSegments: 3`, `curveSegments: 4`). Fully chamfered on all 12 edges in a single mesh — no fragile stitching, no extra material allocations.
+
+- **No external import.** Tried importing `RoundedBoxGeometry` from `three/examples/jsm/geometries` but the unpkg path requires an import map (the example file does a bare `from 'three'` resolve). The inline ExtrudeGeometry approach avoids that whole rabbit hole.
+- **Auto-clamps the radius** so a thin wall (`wallT=0.4`, max safe radius 0.18) doesn't get a too-large bevel that eats the geometry. Falls back to plain `BoxGeometry` if the clamped radius drops below 0.01.
+- **Translate fix:** ExtrudeGeometry with bevel spans `z ∈ [-r, d-r]`, so the geometry has to be translated by `(r - d/2)` to center on the local origin. Got the math wrong on the first pass (translated by `-d/2` which centered at `-r`); fixed before any callsites ran.
+
+### Mansion shell BoxGeometry → roundedBoxGeometry
+Surgical swap on the visible exterior pieces. Furniture, water shaders, decorative trim, sconces, and the ground/beach/ocean are all left alone — those aren't the offenders.
+
+- **`addWallBox` + `addWallBoxOpenFront`** → `r=0.10` for all 4 wall sides on both floors. The ground floor + upper floor mansion shells now have softened vertical corners + softened top/bottom edges.
+- **`upperFloorSlab`** → `r=0.12`. The cantilever floor edge visible from the front entrance is no longer a knife edge.
+- **`addFlatRoofWithParapet`** → roof slab `r=0.10`, parapet sides `r=0.07`. The parapet now reads as a real architectural detail instead of stacked boxes.
+- **Front cantilever balcony** (`balSlab` + `railCap`) → `r=0.10`/`0.04`.
+- **Rooftop pavilion** (`pavRoom` + `pavPlinth` + `canopy`) → `r=0.18`/`0.12`/`0.10`. The pavilion box was one of the most prominent boxy elements in the b047 screenshot.
+- **Front colonnade eyebrow** (`ebSlab`) → `r=0.10`. The 56-wide horizontal cantilever spanning the colonnade is now soft-edged.
+- **Back archway** (jambs + lintel) → `r=0.06`/`0.10`.
+- **Garage showcase plinth** → `r=0.08`.
+- **Grand entrance steps + planters** → `r=0.06`/`0.14`. The 4 marble steps + 2 corner planters at the front entrance.
+- **`cFloorLine`** marble cantilever band → `r=0.10`.
+
+### Left as plain BoxGeometry (intentional)
+- The big sand `ground` plane (already flat, no edges visible)
+- Pool / jacuzzi / pool rim (water + travertine, edges hidden by water)
+- Wall sconces, LED strips, cove glow (too small to show chamfering, would just cost polys)
+- Glass panes (`railPane`, `pavFront`, `voidBox`) — flat panes, no thickness to chamfer meaningfully
+- The interior furniture across all 22 rooms (out of scope for this commit; if the rounded shell looks right, furniture can be a follow-up)
+
+### What this should change visually
+- Every wall corner of the mansion now reads as a soft chamfer instead of a knife edge — that's the single biggest "stops looking like Roblox" delta available without changing the architecture.
+- The cantilever balcony, the upper floor slab, the colonnade eyebrow, and the rooftop pavilion all get soft edges that catch the directional sun's specular highlight differently along the chamfer than along a flat face. This was invisible under the b045 PS2 shader; under b047 PBR it should produce visible edge highlights.
+- The grand entrance steps + planters at the front of the mansion are the closest geometry to the camera in the orbit-front view — they'll show the chamfering most prominently.
+
+### Risk
+- ExtrudeGeometry produces more verts than BoxGeometry (~120 vs 24 per box). ~25-30 mansion pieces converted ≈ 3000 extra verts in the shell. Should be invisible to perf.
+- If the b048 palm meshes already pushed the GPU close to its budget, this might be the straw that breaks the camel's back. Watch the framerate — if it drops, the palm fix can stay (it's the more important visual win) and the rounded shell can revert.
+- Bevel artifacts on extremely thin pieces (<0.04 thick) — the auto-clamp + the plain-BoxGeometry fallback at `r<=0.01` should prevent this, but worth visual-checking.
+
+### Files modified
+- [js/world.js](js/world.js) — `roundedBoxGeometry` helper added, `addWallBox`/`addWallBoxOpenFront`/`addFlatRoofWithParapet` swapped, ~12 standalone mansion shell meshes swapped
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b048 → b049`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Next
+b048 + b049 are the two-prong fix for the b047 "still looks like Roblox" screenshot. Wait for the user's reaction before doing anything else. If they like the direction, the next obvious moves are: (a) procedural canvas textures (L3) for plaster/marble/sand/wood, (b) detailed cars (L4), or (c) ground variation (L5). If they don't like it, both commits are independently revertable.
+
 ## b048 — 2026-04-07 — Rebuild palm trees: real 3D fronds + drooping curve + coconuts
 
 User on b047: "graphically, it looks blocky like Unturned or roblox. still ugly." Diagnosed from screenshot: lighting is fixed but the geometry blockiness is now fully exposed. Two loudest tells were (a) hard 90° corners on every mansion box and (b) the palm fronds being literal flat PlaneGeometry cards reading as cardboard cutouts from any angle. b048 fixes (b); b049 will fix (a).

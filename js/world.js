@@ -782,20 +782,58 @@
     scene.add(podium);
 
     // -------------------------------------------------------------------
+    // b049 — Rounded box geometry helper. Builds a fully-chamfered box
+    // using ExtrudeGeometry on a rounded-rect Shape with beveled extrusion.
+    // No external imports needed (RoundedBoxGeometry from three/examples
+    // would require an import map). Auto-clamps the radius so a thin wall
+    // (wallT=0.4) doesn't get a too-large bevel that eats the geometry.
+    // Falls back to plain BoxGeometry if the clamped radius is negligible.
+    // -------------------------------------------------------------------
+    function roundedBoxGeometry(w, h, d, r) {
+      r = Math.min(r, w / 2 - 0.02, h / 2 - 0.02, d / 2 - 0.02);
+      if (r <= 0.01) return new THREE.BoxGeometry(w, h, d);
+      const shape = new THREE.Shape();
+      shape.moveTo(-w / 2, -h / 2 + r);
+      shape.lineTo(-w / 2,  h / 2 - r);
+      shape.quadraticCurveTo(-w / 2,  h / 2, -w / 2 + r,  h / 2);
+      shape.lineTo( w / 2 - r,  h / 2);
+      shape.quadraticCurveTo( w / 2,  h / 2,  w / 2,  h / 2 - r);
+      shape.lineTo( w / 2, -h / 2 + r);
+      shape.quadraticCurveTo( w / 2, -h / 2,  w / 2 - r, -h / 2);
+      shape.lineTo(-w / 2 + r, -h / 2);
+      shape.quadraticCurveTo(-w / 2, -h / 2, -w / 2,  -h / 2 + r);
+      const geom = new THREE.ExtrudeGeometry(shape, {
+        depth: d - 2 * r,
+        bevelEnabled: true,
+        bevelSize: r,
+        bevelThickness: r,
+        bevelSegments: 3,
+        curveSegments: 4,
+        steps: 1,
+      });
+      // ExtrudeGeometry with bevel spans z ∈ [-r, (d - 2r) + r] = [-r, d - r],
+      // so its center is at (d/2 - r). Translate by (r - d/2) to center at 0.
+      geom.translate(0, 0, r - d / 2);
+      geom.computeVertexNormals();
+      return geom;
+    }
+
+    // -------------------------------------------------------------------
     // Helper: 4-sided wall box around a footprint
     // -------------------------------------------------------------------
     function addWallBox(cx, cz, w, d, h, yBase, mat) {
       const cy = yBase + h / 2;
-      const front = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallT), mat);
+      const wr = 0.10;
+      const front = new THREE.Mesh(roundedBoxGeometry(w, h, wallT, wr), mat);
       front.position.set(cx, cy, cz + d / 2 - wallT / 2);
       scene.add(front);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallT), mat);
+      const back = new THREE.Mesh(roundedBoxGeometry(w, h, wallT, wr), mat);
       back.position.set(cx, cy, cz - d / 2 + wallT / 2);
       scene.add(back);
-      const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, h, d), mat);
+      const left = new THREE.Mesh(roundedBoxGeometry(wallT, h, d, wr), mat);
       left.position.set(cx - w / 2 + wallT / 2, cy, cz);
       scene.add(left);
-      const right = new THREE.Mesh(new THREE.BoxGeometry(wallT, h, d), mat);
+      const right = new THREE.Mesh(roundedBoxGeometry(wallT, h, d, wr), mat);
       right.position.set(cx + w / 2 - wallT / 2, cy, cz);
       scene.add(right);
     }
@@ -806,13 +844,14 @@
     // -------------------------------------------------------------------
     function addWallBoxOpenFront(cx, cz, w, d, h, yBase, mat) {
       const cy = yBase + h / 2;
-      const back = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallT), mat);
+      const wr = 0.10;
+      const back = new THREE.Mesh(roundedBoxGeometry(w, h, wallT, wr), mat);
       back.position.set(cx, cy, cz - d / 2 + wallT / 2);
       scene.add(back);
-      const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, h, d), mat);
+      const left = new THREE.Mesh(roundedBoxGeometry(wallT, h, d, wr), mat);
       left.position.set(cx - w / 2 + wallT / 2, cy, cz);
       scene.add(left);
-      const right = new THREE.Mesh(new THREE.BoxGeometry(wallT, h, d), mat);
+      const right = new THREE.Mesh(roundedBoxGeometry(wallT, h, d, wr), mat);
       right.position.set(cx + w / 2 - wallT / 2, cy, cz);
       scene.add(right);
     }
@@ -857,7 +896,7 @@
     function addFlatRoofWithParapet(cx, cz, w, d, yTop) {
       // Roof slab (slightly oversized — projects 0.2 past walls)
       const slab = new THREE.Mesh(
-        new THREE.BoxGeometry(w + 0.4, 0.20, d + 0.4),
+        roundedBoxGeometry(w + 0.4, 0.20, d + 0.4, 0.10),
         villaMat
       );
       slab.position.set(cx, yTop + 0.10, cz);
@@ -876,16 +915,17 @@
       const py = yTop + 0.20 + ph / 2;
       const pw = w + 0.4;
       const pd = d + 0.4;
-      const front = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, pt), villaMat);
+      const pr = 0.07;
+      const front = new THREE.Mesh(roundedBoxGeometry(pw, ph, pt, pr), villaMat);
       front.position.set(cx, py, cz + pd / 2 - pt / 2);
       scene.add(front);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, pt), villaMat);
+      const back = new THREE.Mesh(roundedBoxGeometry(pw, ph, pt, pr), villaMat);
       back.position.set(cx, py, cz - pd / 2 + pt / 2);
       scene.add(back);
-      const left = new THREE.Mesh(new THREE.BoxGeometry(pt, ph, pd), villaMat);
+      const left = new THREE.Mesh(roundedBoxGeometry(pt, ph, pd, pr), villaMat);
       left.position.set(cx - pw / 2 + pt / 2, py, cz);
       scene.add(left);
-      const right = new THREE.Mesh(new THREE.BoxGeometry(pt, ph, pd), villaMat);
+      const right = new THREE.Mesh(roundedBoxGeometry(pt, ph, pd, pr), villaMat);
       right.position.set(cx + pw / 2 - pt / 2, py, cz);
       scene.add(right);
     }
@@ -940,7 +980,7 @@
     // for — a real walkable horizontal slab spanning the entire 56×28
     // footprint, structural box + travertine plane on top). =====
     const upperFloorSlab = new THREE.Mesh(
-      new THREE.BoxGeometry(mansionW - wallT * 2, 0.30, mansionD - wallT * 2),
+      roundedBoxGeometry(mansionW - wallT * 2, 0.30, mansionD - wallT * 2, 0.12),
       villaMat
     );
     upperFloorSlab.position.set(mansionCx, podiumTopY + mansionH1 - 0.15, mansionCz);
@@ -973,7 +1013,7 @@
     // Marble floor-line eyebrow on the front (slim band reading as the
     // underside of the cantilevered upper floor)
     const cFloorLine = new THREE.Mesh(
-      new THREE.BoxGeometry(mansionW + 0.6, 0.30, 0.6),
+      roundedBoxGeometry(mansionW + 0.6, 0.30, 0.6, 0.10),
       marbleMat
     );
     cFloorLine.position.set(mansionCx, podiumTopY + mansionH1 - 0.05, mansionFrontZ + 0.30);
@@ -986,7 +1026,7 @@
       const balY = mansionRoofY + 0.10;
       const balZ = mansionFrontZ + balD / 2 - 0.2;
       const balSlab = new THREE.Mesh(
-        new THREE.BoxGeometry(balW, 0.22, balD),
+        roundedBoxGeometry(balW, 0.22, balD, 0.10),
         villaMat
       );
       balSlab.position.set(mansionCx, balY - 0.11, balZ);
@@ -998,7 +1038,7 @@
       railPane.position.set(mansionCx, balY + 0.45, balZ + balD / 2 - 0.05);
       scene.add(railPane);
       const railCap = new THREE.Mesh(
-        new THREE.BoxGeometry(balW - 0.3, 0.10, 0.16),
+        roundedBoxGeometry(balW - 0.3, 0.10, 0.16, 0.04),
         marbleMat
       );
       railCap.position.set(mansionCx, balY + 0.95, balZ + balD / 2 - 0.05);
@@ -1055,14 +1095,14 @@
       const pavH = 4.0;
 
       const pavPlinth = new THREE.Mesh(
-        new THREE.BoxGeometry(pavW + 1.0, 0.30, pavD + 1.0),
+        roundedBoxGeometry(pavW + 1.0, 0.30, pavD + 1.0, 0.12),
         marbleMat
       );
       pavPlinth.position.set(pavCx, pavY + 0.15, pavCz);
       scene.add(pavPlinth);
 
       const pavRoom = new THREE.Mesh(
-        new THREE.BoxGeometry(pavW, pavH, pavD),
+        roundedBoxGeometry(pavW, pavH, pavD, 0.18),
         villaMat
       );
       pavRoom.position.set(pavCx, pavY + 0.30 + pavH / 2, pavCz);
@@ -1077,7 +1117,7 @@
       scene.add(pavFront);
 
       const canopy = new THREE.Mesh(
-        new THREE.BoxGeometry(pavW + 5.0, 0.20, pavD + 3.0),
+        roundedBoxGeometry(pavW + 5.0, 0.20, pavD + 3.0, 0.10),
         villaMat
       );
       canopy.position.set(pavCx, pavY + 0.30 + pavH + 0.10, pavCz + 0.6);
@@ -1103,7 +1143,7 @@
         addColumn(x, colZ, colH, colY);
       }
       const ebSlab = new THREE.Mesh(
-        new THREE.BoxGeometry(mansionW + 0.8, 0.22, 1.6),
+        roundedBoxGeometry(mansionW + 0.8, 0.22, 1.6, 0.10),
         villaMat
       );
       ebSlab.position.set(mansionCx, colY + colH + 0.11, colZ);
@@ -1123,19 +1163,19 @@
       const archY = podiumTopY + archH / 2;
       const archZ = mansionBackZ - 0.30;
       const lj = new THREE.Mesh(
-        new THREE.BoxGeometry(0.32, archH, 0.6),
+        roundedBoxGeometry(0.32, archH, 0.6, 0.06),
         marbleMat
       );
       lj.position.set(mansionCx - archW / 2 - 0.16, archY, archZ);
       scene.add(lj);
       const rj = new THREE.Mesh(
-        new THREE.BoxGeometry(0.32, archH, 0.6),
+        roundedBoxGeometry(0.32, archH, 0.6, 0.06),
         marbleMat
       );
       rj.position.set(mansionCx + archW / 2 + 0.16, archY, archZ);
       scene.add(rj);
       const lintel = new THREE.Mesh(
-        new THREE.BoxGeometry(archW + 0.96, 0.30, 0.6),
+        roundedBoxGeometry(archW + 0.96, 0.30, 0.6, 0.10),
         marbleMat
       );
       lintel.position.set(mansionCx, podiumTopY + archH + 0.15, archZ);
@@ -1153,7 +1193,7 @@
     // accent strip on the back wall. Same spot as the b040 standalone garage.
     {
       const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(6.0, 0.18, 3.4),
+        roundedBoxGeometry(6.0, 0.18, 3.4, 0.08),
         marbleMat
       );
       plinth.position.set(-22, podiumTopY + 0.10, -9);
@@ -1184,7 +1224,7 @@
         const stepY = 0.10 + i * 0.20;
         const stepZ = mansionFrontZ + 0.5 + (3 - i) * 0.55;
         const step = new THREE.Mesh(
-          new THREE.BoxGeometry(10.0, 0.20, 0.55),
+          roundedBoxGeometry(10.0, 0.20, 0.55, 0.06),
           marbleMat
         );
         step.position.set(mansionCx, stepY, stepZ);
@@ -1192,7 +1232,7 @@
       }
       function addEntryPlanter(px) {
         const planter = new THREE.Mesh(
-          new THREE.BoxGeometry(1.4, 1.4, 1.4),
+          roundedBoxGeometry(1.4, 1.4, 1.4, 0.14),
           marbleMat
         );
         planter.position.set(px, 0.7, mansionFrontZ + 1.6);
