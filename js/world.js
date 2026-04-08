@@ -1230,22 +1230,89 @@
     // -----------------------------------------------------
     const trunkMat = makePS2Material({ color: 0x4a3868 });
     const frondMat = makePS2Material({ color: 0x7a3aa8 });
+    const coconutMat = makePS2Material({ color: 0x2a1a3a });
 
+    // b048 — palms rebuilt. The b023 version was a 5-side cylinder trunk +
+    // 9 flat PlaneGeometry frond cards radiating from the top — every angle
+    // showed a paper-thin cardboard cutout (the loudest "Roblox" tell in
+    // the b047 screenshot). Now: smoother 10-side trunk with subtle taper +
+    // bend, fronds rebuilt as long thin tapered 6-side prisms (real 3D
+    // volume from any angle), drooping with a slight downward curve via a
+    // 2-segment chain so the silhouette reads as a real palm. A small
+    // central coconut cluster fills the crown.
     function addPalm(x, z, height) {
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.16, 0.30, height, 5),
-        trunkMat
-      );
-      trunk.position.set(x, height / 2, z);
-      scene.add(trunk);
-      const fronds = 9;
+      const trunkSegs = 8;
+      for (let s = 0; s < trunkSegs; s++) {
+        const t0 = s / trunkSegs;
+        const t1 = (s + 1) / trunkSegs;
+        const r0 = 0.34 - t0 * 0.20;
+        const r1 = 0.34 - t1 * 0.20;
+        const segH = height / trunkSegs;
+        const seg = new THREE.Mesh(
+          new THREE.CylinderGeometry(r1, r0, segH, 10),
+          trunkMat
+        );
+        // subtle S-curve lean
+        const lean = Math.sin(t0 * Math.PI) * 0.18;
+        seg.position.set(x + lean, t0 * height + segH / 2, z);
+        scene.add(seg);
+      }
+      // Frond crown — 10 long tapered prisms drooping outward + downward.
+      // Each frond is a 2-segment chain so it curves instead of being a
+      // straight stick. Built as ConeGeometry (long thin cone, 6 sides)
+      // for real 3D volume.
+      const crownX = x + 0.18; // matches the S-curve top
+      const crownY = height - 0.05;
+      const fronds = 10;
       for (let i = 0; i < fronds; i++) {
-        const a = (i / fronds) * Math.PI * 2;
-        const f = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.55, 1, 1), frondMat);
-        f.position.set(x + Math.cos(a) * 1.4, height - 0.15, z + Math.sin(a) * 1.4);
-        f.rotation.y = -a;
-        f.rotation.z = -0.7;
-        scene.add(f);
+        const a = (i / fronds) * Math.PI * 2 + (i % 2) * 0.15;
+        const len1 = 1.7;
+        const len2 = 1.6;
+        // upper segment — angled outward + slightly down
+        const tilt1 = -0.55;
+        const f1 = new THREE.Mesh(
+          new THREE.ConeGeometry(0.18, len1, 6),
+          frondMat
+        );
+        f1.rotation.order = 'YXZ';
+        f1.rotation.y = -a;
+        f1.rotation.z = -Math.PI / 2 + tilt1;
+        const m1x = Math.cos(a) * (len1 / 2) * Math.cos(tilt1);
+        const m1y = Math.sin(tilt1) * (len1 / 2);
+        const m1z = Math.sin(a) * (len1 / 2) * Math.cos(tilt1);
+        f1.position.set(crownX + m1x, crownY + m1y, z + m1z);
+        scene.add(f1);
+        // lower segment — droops more steeply, attached at the tip of seg1
+        const tipX = crownX + Math.cos(a) * len1 * Math.cos(tilt1);
+        const tipY = crownY + Math.sin(tilt1) * len1;
+        const tipZ = z + Math.sin(a) * len1 * Math.cos(tilt1);
+        const tilt2 = -1.15;
+        const f2 = new THREE.Mesh(
+          new THREE.ConeGeometry(0.11, len2, 6),
+          frondMat
+        );
+        f2.rotation.order = 'YXZ';
+        f2.rotation.y = -a;
+        f2.rotation.z = -Math.PI / 2 + tilt2;
+        const m2x = Math.cos(a) * (len2 / 2) * Math.cos(tilt2);
+        const m2y = Math.sin(tilt2) * (len2 / 2);
+        const m2z = Math.sin(a) * (len2 / 2) * Math.cos(tilt2);
+        f2.position.set(tipX + m2x, tipY + m2y, tipZ + m2z);
+        scene.add(f2);
+      }
+      // Coconut cluster — small dark sphere bunch nestled in the crown
+      for (let c = 0; c < 5; c++) {
+        const ca = (c / 5) * Math.PI * 2;
+        const co = new THREE.Mesh(
+          new THREE.SphereGeometry(0.22, 8, 6),
+          coconutMat
+        );
+        co.position.set(
+          crownX + Math.cos(ca) * 0.35,
+          crownY - 0.15,
+          z + Math.sin(ca) * 0.35
+        );
+        scene.add(co);
       }
     }
 

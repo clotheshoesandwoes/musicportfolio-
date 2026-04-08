@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## b048 — 2026-04-07 — Rebuild palm trees: real 3D fronds + drooping curve + coconuts
+
+User on b047: "graphically, it looks blocky like Unturned or roblox. still ugly." Diagnosed from screenshot: lighting is fixed but the geometry blockiness is now fully exposed. Two loudest tells were (a) hard 90° corners on every mansion box and (b) the palm fronds being literal flat PlaneGeometry cards reading as cardboard cutouts from any angle. b048 fixes (b); b049 will fix (a).
+
+### `addPalm` rewritten ([js/world.js:1234](js/world.js#L1234))
+- Trunk: was a single 5-side cylinder. Now an 8-segment 10-side stack with subtle radius taper (0.34 → 0.14) + a sin-curve S-lean across its height. Reads as a real bowed palm trunk.
+- Fronds: was 9 flat `PlaneGeometry(3.0, 0.55)` cards radiating from the top. Now 10 fronds, each built as a **2-segment chain of 6-side `ConeGeometry` prisms** — upper segment angled out + slightly down, lower segment droops more steeply at the tip of the upper. Real 3D volume from any angle, with a curve instead of a straight stick.
+- New: small **coconut cluster** in the crown — 5 dark sphere bunches around the trunk top.
+- `coconutMat` declared once at the top of the palm section (alongside `trunkMat`/`frondMat`) to avoid 13× allocation across the addPalm callsites.
+
+### What this should change visually
+- The forest of cardboard X's around the mansion + pool + lawn becomes a forest of actual palms with volumetric drooping fronds and coconuts.
+- Cast shadows from b047 will now project frond-shaped shadows on the ground instead of stick-shadows.
+- The S-curve trunk + droop curve makes them read as Caribbean/Miami palms instead of generic upright sticks.
+
+### Risk
+- 13 palms × (8 trunk segments + 20 frond cones + 5 coconut spheres) = ~430 new meshes from this change. The b047 PBR pipeline + cast shadows will eat that. If FPS dies, drop to 6 fronds + 4 trunk segments.
+- The coconuts might read as too dark if the directional sun isn't hitting them — they're using a near-black material.
+
+### Files modified
+- [js/world.js](js/world.js) — `addPalm` rewritten, `coconutMat` declaration added
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b047 → b048`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Next
+b049: RoundedBoxGeometry pass on the mansion shell. This commit is isolated so the user can judge the palm change on its own before the bigger shell change lands.
+
 ## b047 — 2026-04-07 — Path A art-style rebuild: real PBR + cast shadows + full resolution + conifer trees
 
 User: "path a but with some geometry changes yknow can u build it out and git commit so when i come back from showr 10 mins i can see something we can do in new chat give me the prompt tho".
