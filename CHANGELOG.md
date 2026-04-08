@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## b046 — 2026-04-07 — Revert b044 toon shading + massive HANDOFF.md rewrite (b017 → b046)
+
+User: "cel shading looks terrible. and the art style graphics themselves look blocky and awful. is there anything we can do to rebuild or change? update files to u have better memory like a working final md or something this chats context getting heavy".
+
+### Reverted b044 toon/cel shading
+The 3-band stepped lighting in `makePS2Material` was producing visible color banding on every flat surface and looked worse than the smooth original. Reverted both:
+- `pointLight()` N·L term back to smooth `0.18 + ndl * 1.05` (was `0.10 + toonRamp(ndl) * 1.20`)
+- Directional sun term back to smooth `sunNL` (was `toonRamp(sunNL, 3.0)`)
+- Ambient back to `0.18, 0.12, 0.28` (was `0.14, 0.10, 0.24`)
+- Hemi multiplier back to `0.85` (was `0.80`)
+- Sun color back to `1.20, 0.75, 0.45` × 0.65 (was `1.30, 0.78, 0.45` × 0.85)
+
+### KEPT from b045 (these were the wins)
+- DELETED b026b debug yellow BoxHelper outlines (35 yellow wireframes drawn over the scene every frame — secret root cause of the persistent "Roblox" feeling)
+- Sobel outline shader from depth buffer
+- Animated film grain (uTime-driven)
+- Chromatic aberration at start of post pass
+- Stronger color grade (gamma 0.85, sat +45%, contrast +18%, split-tone)
+- Stronger vignette (cool tinted)
+- Cooler fog color (`0x6a1850` → `0x382048`)
+
+### KEPT from b044 (these were also wins)
+- Sky shader sun disc + glow + flare + cloud bands
+- (The smooth lighting hemi/sun terms are now back to b043 values)
+
+### Massive HANDOFF.md rewrite
+Was last updated at b017. Currently at b046. **28 builds out of date.** Rewrote the entire file with current state — render pipeline, mansion architecture (b041 mega rebuild), all 22 interior rooms (b029 + Phase 2 b042 + Phase 3 b043), camera system (b014/b032/b038/b039 dual-mode + WASD + pan + dolly), click→card system, what's been deleted, the 28-build art-style attempt history, and a clear section 8 capturing the current open problem (art style still wrong) with the rebuild options on the table. Also added section 14 with approximate line ranges for the major sections of [js/world.js](js/world.js) (~3900 lines now) so a future chat can navigate without grepping for an hour.
+
+### Files modified
+- [js/world.js](js/world.js) — `makePS2Material` frag shader: removed `toonRamp` helper, reverted `pointLight()` to smooth, reverted sun term to smooth, reverted ambient + hemi multiplier + sun color to b043 values
+- [HANDOFF.md](HANDOFF.md) — full rewrite, 271 lines → ~440 lines, updated through b046
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b045 → b046`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Next step (NOT this commit)
+Section 8 of the new HANDOFF lays out the current open problem (art style) and the options on the table. The user needs to pick a direction before more code is written. Do NOT just attempt another art-style fix without discussing it first — three failed mansion rebuilds + one failed cel shading is enough.
+
 ## b045 — 2026-04-07 — Kill debug outlines + Tier 1 post-process overhaul (Sobel outlines, film grain, CA, stronger grading, cooler fog)
 
 User: "still too blandy blocky and roblox like i think we gotta improve and upgrade overall artstyle honestly".

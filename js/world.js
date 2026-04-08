@@ -365,41 +365,25 @@
           varying vec3 vViewDir;
           varying float vFogDepth;
 
-          // b044 — TOON RAMP. Quantizes a smooth 0..1 light value into N
-          // stepped bands with a small smoothstep at each band edge so the
-          // transition reads as a soft contour line, not aliased. Replaces
-          // the smooth lighting with a Borderlands/Sable cel-shaded look.
-          float toonRamp(float v, float bands) {
-            float scaled = v * bands;
-            float idx = floor(scaled);
-            float t = smoothstep(0.42, 0.58, scaled - idx);
-            return (idx + t) / bands;
-          }
-
-          // b044 — toon-stepped point light (3 bands). Same falloff math
-          // as before but the N·L term is quantized so each surface reads
-          // as 3 distinct light steps instead of a smooth gradient.
+          // b046 — REVERTED b044 toon ramp. The 3-band cel shading looked
+          // worse than the smooth original (visible color banding on every
+          // flat surface). Back to smooth N·L lighting from b028.
           vec3 pointLight(vec3 lp, vec3 lc, float lr, vec3 base) {
             vec3 d = lp - vWorldPos;
             float dist = length(d);
             float fall = max(0.0, 1.0 - dist / lr);
             fall = pow(fall, 1.7);
             float ndl = max(dot(vNormal, normalize(d)), 0.0);
-            float toonNdl = toonRamp(ndl, 3.0);
-            return base * lc * fall * (0.10 + toonNdl * 1.20);
+            return base * lc * fall * (0.18 + ndl * 1.05);
           }
 
           void main() {
-            // b044 — slightly darker ambient so the toon bands pop harder
-            vec3 ambient = vec3(0.14, 0.10, 0.24);
+            // b028 — darker, cooler ambient so pools of light pop
+            vec3 ambient = vec3(0.18, 0.12, 0.28);
             vec3 col = uColor * ambient;
 
-            // b029 — HEMISPHERIC SKY FILL, now blended between sunset and
-            // night palettes by uCycle. Sunset = warm peach top + warm sand
-            // bounce. Night = cool magenta top + hot pink ground bounce.
-            // b044 — kept SMOOTH (not toon-stepped). The hemi term is
-            // ambient/global, not directional, so banding it would look
-            // like noise. Toon ramp is applied only to directional terms.
+            // b029 — HEMISPHERIC SKY FILL, blended between sunset and night
+            // palettes by uCycle.
             vec3 hemiTopSunset = vec3(0.55, 0.32, 0.40);
             vec3 hemiBotSunset = vec3(0.70, 0.45, 0.30);
             vec3 hemiTopNight  = vec3(0.45, 0.16, 0.42);
@@ -407,18 +391,15 @@
             vec3 hemiTop = mix(hemiTopSunset, hemiTopNight, uCycle);
             vec3 hemiBot = mix(hemiBotSunset, hemiBotNight, uCycle);
             float upDot = vNormal.y * 0.5 + 0.5;
-            vec3 hemi = mix(hemiBot, hemiTop, upDot) * 0.80;
+            vec3 hemi = mix(hemiBot, hemiTop, upDot) * 0.85;
             col += uColor * hemi;
 
-            // b029/b044 — DIRECTIONAL "SUN" term, toon-stepped (3 bands).
-            // Only at sunset (uCycle close to 0). Fakes a low warm sun
-            // coming from the +x/+y horizon. Toon banding gives the
-            // mansion + ground hard sun-cast contour shadows.
+            // b029 — DIRECTIONAL "SUN" term (smooth, b046 reverted toon).
+            // Only at sunset. Fakes a low warm sun from the +x/+y horizon.
             float sunAmt = 1.0 - smoothstep(0.0, 0.5, uCycle);
             vec3 sunDir = normalize(vec3(0.5, 0.3, 0.2));
             float sunNL = max(dot(normalize(vNormal), sunDir), 0.0);
-            float toonSun = toonRamp(sunNL, 3.0);
-            col += uColor * vec3(1.30, 0.78, 0.45) * toonSun * sunAmt * 0.85;
+            col += uColor * vec3(1.20, 0.75, 0.45) * sunNL * sunAmt * 0.65;
 
             // b029 — point lights brighter at night, dim at sunset.
             // Multiplier ramps from 0.35 (sunset) to 1.15 (night).
