@@ -208,6 +208,18 @@
           return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
         }
 
+        // b044 — value noise for soft cloud bands
+        float noise2(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          float a = hash(i);
+          float b = hash(i + vec2(1.0, 0.0));
+          float c = hash(i + vec2(0.0, 1.0));
+          float d = hash(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+        }
+
         void main() {
           // b029 — interpolate sunset → night by uCycle
           vec3 topColor    = mix(sunsetTop,    nightTop,    uCycle);
@@ -220,6 +232,43 @@
             col = mix(midColor, topColor, smoothstep(0.0, 0.85, h));
           } else {
             col = mix(midColor, bottomColor, smoothstep(0.0, -0.25, h));
+          }
+
+          // b044 — SUN DISC. Hard bright disc + softer hot glow around it.
+          // Sun is positioned in the +x/+y horizon direction so it lines up
+          // with the directional sun term in makePS2Material. Hot at sunset,
+          // fades to a faint moon at night.
+          vec3 sunWorldDir = normalize(vec3(0.5, 0.30, 0.20));
+          float sunCos = dot(normalize(vDir), sunWorldDir);
+          // Hard sun disc
+          float sunDisc = smoothstep(0.984, 0.995, sunCos);
+          vec3 sunsetSunCol = vec3(1.10, 0.75, 0.45);
+          vec3 nightMoonCol = vec3(0.80, 0.70, 0.95);
+          vec3 sunCol = mix(sunsetSunCol, nightMoonCol, uCycle);
+          col += sunCol * sunDisc * 1.6;
+          // Soft hot glow around the sun (only at sunset)
+          float sunGlow = pow(max(sunCos, 0.0), 28.0);
+          col += sunsetSunCol * sunGlow * 0.55 * (1.0 - uCycle);
+          // Wider warm flare at the horizon (lifts the gradient near the sun)
+          float flare = pow(max(sunCos, 0.0), 6.0);
+          col += sunsetSunCol * flare * 0.18 * (1.0 - uCycle * 0.6);
+
+          // b044 — CLOUD BANDS. Low-frequency value noise sampled at the
+          // horizon level produces drifting horizontal cloud streaks. Only
+          // visible in the lower-mid sky (h between -0.05 and 0.45). Tinted
+          // by the current sky palette so they read as part of the sunset.
+          if (h > -0.05 && h < 0.50) {
+            // Project view direction onto a "sky plane" for cloud sampling
+            float az = atan(vDir.z, vDir.x);
+            vec2 cloudUv = vec2(az * 1.6, h * 6.0);
+            float n = noise2(cloudUv) * 0.60 + noise2(cloudUv * 2.3) * 0.40;
+            float cloudMask = smoothstep(0.45, 0.78, n);
+            // Fade the cloud band in at the horizon, out at the zenith
+            float bandFade = smoothstep(-0.05, 0.05, h) * (1.0 - smoothstep(0.30, 0.50, h));
+            vec3 cloudColSunset = vec3(0.95, 0.55, 0.45);
+            vec3 cloudColNight  = vec3(0.55, 0.18, 0.42);
+            vec3 cloudCol = mix(cloudColSunset, cloudColNight, uCycle);
+            col = mix(col, cloudCol, cloudMask * bandFade * 0.55);
           }
 
           // b029 — stars fade in only at night (uCycle > ~0.5)
@@ -316,27 +365,41 @@
           varying vec3 vViewDir;
           varying float vFogDepth;
 
-          // b028 — brighter pool of light. ndl term weighted heavier so lit
-          // surfaces really pop, unlit ones go nearly black instead of just
-          // dimmer. Bumped fall^2 to fall^1.7 to make the falloff feel less
-          // mathematical and more cinematic.
+          // b044 — TOON RAMP. Quantizes a smooth 0..1 light value into N
+          // stepped bands with a small smoothstep at each band edge so the
+          // transition reads as a soft contour line, not aliased. Replaces
+          // the smooth lighting with a Borderlands/Sable cel-shaded look.
+          float toonRamp(float v, float bands) {
+            float scaled = v * bands;
+            float idx = floor(scaled);
+            float t = smoothstep(0.42, 0.58, scaled - idx);
+            return (idx + t) / bands;
+          }
+
+          // b044 — toon-stepped point light (3 bands). Same falloff math
+          // as before but the N·L term is quantized so each surface reads
+          // as 3 distinct light steps instead of a smooth gradient.
           vec3 pointLight(vec3 lp, vec3 lc, float lr, vec3 base) {
             vec3 d = lp - vWorldPos;
             float dist = length(d);
             float fall = max(0.0, 1.0 - dist / lr);
             fall = pow(fall, 1.7);
             float ndl = max(dot(vNormal, normalize(d)), 0.0);
-            return base * lc * fall * (0.18 + ndl * 1.05);
+            float toonNdl = toonRamp(ndl, 3.0);
+            return base * lc * fall * (0.10 + toonNdl * 1.20);
           }
 
           void main() {
-            // b028 — darker, cooler ambient so pools of light pop
-            vec3 ambient = vec3(0.18, 0.12, 0.28);
+            // b044 — slightly darker ambient so the toon bands pop harder
+            vec3 ambient = vec3(0.14, 0.10, 0.24);
             vec3 col = uColor * ambient;
 
             // b029 — HEMISPHERIC SKY FILL, now blended between sunset and
             // night palettes by uCycle. Sunset = warm peach top + warm sand
             // bounce. Night = cool magenta top + hot pink ground bounce.
+            // b044 — kept SMOOTH (not toon-stepped). The hemi term is
+            // ambient/global, not directional, so banding it would look
+            // like noise. Toon ramp is applied only to directional terms.
             vec3 hemiTopSunset = vec3(0.55, 0.32, 0.40);
             vec3 hemiBotSunset = vec3(0.70, 0.45, 0.30);
             vec3 hemiTopNight  = vec3(0.45, 0.16, 0.42);
@@ -344,16 +407,18 @@
             vec3 hemiTop = mix(hemiTopSunset, hemiTopNight, uCycle);
             vec3 hemiBot = mix(hemiBotSunset, hemiBotNight, uCycle);
             float upDot = vNormal.y * 0.5 + 0.5;
-            vec3 hemi = mix(hemiBot, hemiTop, upDot) * 0.85;
+            vec3 hemi = mix(hemiBot, hemiTop, upDot) * 0.80;
             col += uColor * hemi;
 
-            // b029 — DIRECTIONAL "SUN" term, only at sunset (uCycle close to
-            // 0). Fakes a low warm sun coming from the +x/-y horizon. Cheap
-            // fill that gives sunset its golden hour, fades out at night.
+            // b029/b044 — DIRECTIONAL "SUN" term, toon-stepped (3 bands).
+            // Only at sunset (uCycle close to 0). Fakes a low warm sun
+            // coming from the +x/+y horizon. Toon banding gives the
+            // mansion + ground hard sun-cast contour shadows.
             float sunAmt = 1.0 - smoothstep(0.0, 0.5, uCycle);
             vec3 sunDir = normalize(vec3(0.5, 0.3, 0.2));
             float sunNL = max(dot(normalize(vNormal), sunDir), 0.0);
-            col += uColor * vec3(1.20, 0.75, 0.45) * sunNL * sunAmt * 0.65;
+            float toonSun = toonRamp(sunNL, 3.0);
+            col += uColor * vec3(1.30, 0.78, 0.45) * toonSun * sunAmt * 0.85;
 
             // b029 — point lights brighter at night, dim at sunset.
             // Multiplier ramps from 0.35 (sunset) to 1.15 (night).

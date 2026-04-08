@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## b044 — 2026-04-07 — Tier 3 art-style upgrade: toon-stepped lighting + sun disc + cloud bands
+
+User: "everything still looks so friggin robloxly and blocky, what can we do to change the art style? ... id love to see tier 3 in action first honestly".
+
+Tier 3 of the recommended fix list. Replaces the smooth N·L lighting in `makePS2Material` with a **stepped toon ramp** (Borderlands / Sable / Death's Door look), and gives the sky an actual **sun disc + drifting cloud bands** instead of a flat 3-color gradient.
+
+### Toon shading in makePS2Material
+- New `toonRamp(v, bands)` GLSL helper — quantizes a smooth 0..1 light value into N stepped bands with a small `smoothstep(0.42, 0.58, ...)` at each band edge so the transition reads as a soft contour line, not aliased.
+- **`pointLight()`** — N·L term now wrapped in `toonRamp(ndl, 3.0)` instead of the smooth `0.18 + ndl * 1.05`. Each surface reads as 3 distinct light steps (shadow / mid / lit) in the pool of light from each lamp/window/glow source.
+- **Directional sun term** — `sunNL` wrapped in `toonRamp(sunNL, 3.0)`. Sunset now casts hard contour shadows on the mansion walls + ground from the +x/+y "sun" direction. Sun color bumped slightly (`vec3(1.30, 0.78, 0.45)` vs `1.20, 0.75, 0.45`) and intensity 0.65 → 0.85.
+- **Hemispheric fill** — kept SMOOTH (it's ambient/global, banding it would look like noise). Toon ramp is applied only to directional terms.
+- Ambient slightly darker (`0.18, 0.12, 0.28` → `0.14, 0.10, 0.24`) so the toon bands pop harder.
+- `pointLight()` band weight 0.18+ndl·1.05 → 0.10+ndl·1.20 for sharper contrast between shadow and lit bands.
+
+### Sky shader upgrade
+- New `noise2()` GLSL helper — value noise with smooth interpolation for soft cloud sampling.
+- **Sun disc** — `smoothstep(0.984, 0.995, dot(vDir, sunDir))` produces a hard bright circle in the sunset direction. Color crossfades from warm sunset orange to cool moon at night via `uCycle`.
+- **Sun glow** — `pow(sunCos, 28.0)` softer hot halo around the disc, fades out at night.
+- **Sun flare** — `pow(sunCos, 6.0)` even wider warm gradient lifting the horizon palette near the sun.
+- **Cloud bands** — value noise sampled across `(atan(vDir.z, vDir.x), h)`, two octaves (`uv` and `uv * 2.3`), masked to the lower-mid sky (h between -0.05 and 0.50) with a smooth band fade. Tinted by current sky palette so they read as part of the dusk.
+
+### What this changes visually
+- Mansion + ground get **3-band cel-shaded sun lighting** at sunset — hard contour shadows where the sun catches the upper floors / cantilever balcony / colonnade. Walls visibly STEP in brightness instead of fading smoothly.
+- Lamp / pool / window light pools also step in 3 bands — each pool of light has a clear "core / mid / edge" instead of a smooth gradient.
+- Sky has an **actual visible sun** instead of a flat horizon gradient.
+- Drifting **cloud bands** at the horizon instead of dead flat colors.
+- The whole scene reads "stylized" not "engine output".
+
+### What's NOT in this commit
+- Real cast shadow maps (Tier 3 also lists this — too risky in one commit, the PS2 shader doesn't use Three's lighting system so plumbing shadow maps in is invasive)
+- Texture atlas (Tier 3 also lists this — major work, unclear payoff with the PS2 aesthetic)
+
+### Files modified
+- [js/world.js](js/world.js) — `makePS2Material` frag shader (toon ramp helper, stepped pointLight + sun term, ambient/contrast tweaks), sky frag shader (noise2 helper, sun disc + glow + flare + cloud bands)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b043 → b044`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Next planned tiers
+- **b045 — Tier 2**: rounded box geometry helper + apply to mansion shell + key furniture (kills the sharp 90° corner look). Plus optional vertex displacement noise on big flat surfaces.
+- **b046 — Tier 1**: post-process overhaul (Sobel outline shader + animated film grain + vignette + chromatic aberration + stronger color grading)
+
 ## b043 — 2026-04-07 — Mega-mansion Phase 3: foyer + staircase + speakeasy + wine cellar + library + piano + guest bedroom + rooftop pool + 12 more palms
 
 User: "proceed".
