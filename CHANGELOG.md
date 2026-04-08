@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## b035 — 2026-04-07 — Kill the ground-stack z-fighting (real y separation, thick boxes)
+
+User: "look at how much things glitch on the floor. sand blends with water with pool with floor of pool. can we give these different y axis heights and if needed make it rectangular instead of 2d flat planes to address any gaps in height."
+
+Diagnosis confirmed: every big horizontal surface lived within ~0.06y of the others (ground 0.04, beach 0.02, ocean -0.05, pool 0.10, rim 0.06, lagoon 0.06). With camera radius up to 80 and far plane 320, even the b033 24-bit depth texture can't reliably resolve gaps that small. Result was the visible flicker between sand/water/deck the user kept seeing.
+
+### Fix — establish a real y stack with thick boxes
+
+| Layer | Old y | New y (top) |
+|---|---|---|
+| Ocean (plane, 600×600) | -0.05 | -1.50 |
+| Beach (now thick box 200×1.20×200) | 0.02 (plane) | 0.00 |
+| Garden lawn (now box) | 0.05 (plane) | 0.10 |
+| Garden marble paths | 0.10 | 0.18 |
+| Villa ground/deck (now thick box 56×0.40×52) | 0.04 (plane) | 0.20 |
+| Showroom floor (now thick slab 1.20 tall) | 0.18 | 0.20 |
+| Pool rim | 0.17 | 0.36 |
+| Pool / jacuzzi water | 0.20 | 0.45 |
+| Lagoon (now thick box 82×0.40×68) | 0.06 (plane) | 0.05 |
+| Ring road | 0.06 | 0.16 |
+| Asphalt road segments (thicker box 0.30 tall) | 0.06 | 0.15 |
+
+The flat `PlaneGeometry` for ground/beach/lagoon/lawn → `BoxGeometry` so the SIDES of the box hide any visible drop and there's no possibility of two coplanar planes flickering against each other. Big y gaps (0.10–0.40 between adjacent layers) put everything well outside the depth-buffer noise floor.
+
+### Prop bumps to match the new deck top
+- `addCar` gained a `baseY` param (default 0.20 = deck top). Lambo callsites use the default; showroom callsites also use the default since the showroom floor top is also 0.20.
+- `addDeckLantern` gained `baseY` (default 0.20). Pool deck callsites use the default; garden lantern callsites pass `0.10` for the lawn top.
+- `addPathLight` gained `baseY` (default 0.20). All current callers are deck-side. Ground spot now sits at `baseY + 0.02` so it can't fight the deck top.
+- Daybeds bumped from y=0.05 → 0.20.
+- Beach chairs bumped from y=0.05 → 0.00 (now sit on the new beach top).
+
+Daybeds, lanterns, path lights, lambos, and showroom cars now all rest cleanly on the deck top with no clipping or floating. Tiki bar / fire pit / BBQ are still at their old y values — they sit on the beach near y=0.05, which is 0.05 above the new beach top (still a small gap from the deck). They'll look slightly low against the new layered terrain but won't z-fight; can be polished separately.
+
+### Files modified
+- [js/world.js](js/world.js) — ground/beach/ocean/lagoon/lawn box conversions, pool/rim y bumps, addCar/addDeckLantern/addPathLight `baseY` params, daybed + beach chair y bumps, showroom floor thickened, ring road + road segment y bumps
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b034c → b035`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b034c — 2026-04-07 — Lagoon over the pier, loop on the back side, jungle packed tight
 
 User: "the huge ocean you made looks like a pool. its also positioned wrong it should be near the pier and boats. and more oceany than pool. you put many trees around but theyre all so far away that like it doesnt look like a far cry 3 jungle. that's the intended vibe, and we put that close to the road. you also put the loop on the side of the house not connecting it to the front. circle is the driveway and the straight line should lead outward toward the forest"

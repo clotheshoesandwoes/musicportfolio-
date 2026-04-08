@@ -357,12 +357,18 @@
     // villa footprint + pool deck. The new 360° beach wraps around it.
     // y bumped slightly above the beach (0.04 vs beach 0.02) so the deck
     // sits on top as an elevated patio.
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(56, 52, 24, 20), groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(0, 0.04, -10);
+    // b035 — converted from a flat PlaneGeometry to a thick BoxGeometry so
+    // its top sits at y=0.20 (well above the beach top at 0.00 and the
+    // lowered ocean at -1.50). Big y gaps eliminate the coplanar z-fight
+    // that was making the deck/sand/water flicker as the camera moved.
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(56, 0.40, 52), groundMat);
+    ground.position.set(0, 0.00, -10);  // top y = 0.20
     scene.add(ground);
 
     // -----------------------------------------------------
+    // b035 — DECK_TOP_Y is the new y for the villa deck top surface. Used
+    // by everything that "sits on the deck" so the y stack stays consistent
+    // and we never have coplanar fights. Beach top = 0.00, deck top = 0.20.
     // Pool — custom water shader with tile lines + ripples
     // -----------------------------------------------------
     const poolMat = new THREE.ShaderMaterial({
@@ -425,27 +431,30 @@
 
     // b016 — main pool stays the long infinity-edge bar from b014, but
     // gets a circular jacuzzi attached at the east end for shape variety
+    // b035 — pool stack raised so it sits cleanly above the deck (top 0.20).
+    // pool rim top 0.36 (small lip above deck), pool water top 0.45 (clear
+    // separation from rim so the two never z-fight along the overlap area).
     const pool = new THREE.Mesh(new THREE.BoxGeometry(22, 0.2, 6, 28, 1, 10), poolMat);
-    pool.position.set(0, 0.10, 5);
+    pool.position.set(0, 0.35, 5);
     scene.add(pool);
     // Circular jacuzzi — attached at the +x end of the main pool
     const jacuzzi = new THREE.Mesh(
       new THREE.CylinderGeometry(2.4, 2.4, 0.20, 24),
       poolMat
     );
-    jacuzzi.position.set(13.5, 0.10, 5);
+    jacuzzi.position.set(13.5, 0.35, 5);
     scene.add(jacuzzi);
 
     // Pool rim — white travertine matching the villa
     const rimMat = makePS2Material({ color: 0xe8e4dc });
     const rim = new THREE.Mesh(new THREE.BoxGeometry(22.6, 0.22, 6.6), rimMat);
-    rim.position.set(0, 0.06, 5);
+    rim.position.set(0, 0.25, 5);
     scene.add(rim);
     const jacuzziRim = new THREE.Mesh(
       new THREE.CylinderGeometry(2.7, 2.7, 0.22, 24),
       rimMat
     );
-    jacuzziRim.position.set(13.5, 0.06, 5);
+    jacuzziRim.position.set(13.5, 0.25, 5);
     scene.add(jacuzziRim);
 
     // -----------------------------------------------------
@@ -1117,27 +1126,29 @@
     // (b025 — lanternBaseMat + lanternGlowMat declarations moved up to
     //  the top of the material section so the villa sconces can use them)
     // -----------------------------------------------------
-    function addDeckLantern(x, z) {
+    // b035 — baseY param so pool-deck callsites (deck top 0.20) and garden
+    // callsites (lawn top ~0.10) place lanterns at the right height.
+    function addDeckLantern(x, z, baseY = 0.20) {
       // Tiny base
       const base = new THREE.Mesh(
         new THREE.BoxGeometry(0.30, 0.12, 0.30),
         lanternBaseMat
       );
-      base.position.set(x, 0.06, z);
+      base.position.set(x, baseY + 0.06, z);
       scene.add(base);
       // Glowing glass body
       const body = new THREE.Mesh(
         new THREE.BoxGeometry(0.25, 0.6, 0.25),
         lanternGlowMat
       );
-      body.position.set(x, 0.42, z);
+      body.position.set(x, baseY + 0.42, z);
       scene.add(body);
       // Tiny dark cap on top
       const cap = new THREE.Mesh(
         new THREE.BoxGeometry(0.32, 0.06, 0.32),
         lanternBaseMat
       );
-      cap.position.set(x, 0.75, z);
+      cap.position.set(x, baseY + 0.75, z);
       scene.add(cap);
     }
 
@@ -1155,7 +1166,7 @@
     // Lambo — wedge supercar. b015: built into a Group so we can rotate it
     // around its own center via the rotY parameter (CCW radians around Y).
     // -----------------------------------------------------
-    function addCar(cx, cz, bodyColorHex, rotY = 0, name = null) {
+    function addCar(cx, cz, bodyColorHex, rotY = 0, name = null, baseY = 0.20) {
       const bodyMat = makePS2Material({
         color:       bodyColorHex,
         emissive:    bodyColorHex,
@@ -1218,7 +1229,9 @@
         g.add(t);
       });
 
-      g.position.set(cx, 0, cz);
+      // b035 — baseY lifts the car so its wheels touch the deck/showroom-
+      // floor top instead of the old y=0 ground. Default 0.20 = deck top.
+      g.position.set(cx, baseY, cz);
       g.rotation.y = rotY;
       if (name) g.name = name;
       scene.add(g);
@@ -1675,7 +1688,7 @@
       const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.14, 0.85), daybedPillowMat);
       pillow.position.set(-0.65, 0.65, 0);
       g.add(pillow);
-      g.position.set(x, 0.05, z);
+      g.position.set(x, 0.20, z);  // b035 — deck top
       g.rotation.y = rotY;
       scene.add(g);
     }
@@ -1716,10 +1729,11 @@
       return mat;
     }
 
-    function addPathLight(x, z, colorHex) {
+    // b035 — baseY so deck-area path lights sit on deck top (0.20)
+    function addPathLight(x, z, colorHex, baseY = 0.20) {
       const poleMat = makePS2Material({ color: 0x080808 });
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 4), poleMat);
-      pole.position.set(x, 0.275, z);
+      pole.position.set(x, baseY + 0.275, z);
       scene.add(pole);
 
       const bulbMat = makePS2Material({
@@ -1728,14 +1742,14 @@
         emissiveAmt: 2.4,
       });
       const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.20, 0.22), bulbMat);
-      bulb.position.set(x, 0.62, z);
+      bulb.position.set(x, baseY + 0.62, z);
       scene.add(bulb);
 
-      // Ground spot puddle — circular emissive disc on the patio
-      // (y=0.06 so it sits above the beach sand at y=0.04)
+      // Ground spot puddle — circular emissive disc, lifted above the
+      // deck top so it doesn't z-fight the deck surface.
       const spot = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.8), makeGroundSpotMat(colorHex));
       spot.rotation.x = -Math.PI / 2;
-      spot.position.set(x, 0.06, z);
+      spot.position.set(x, baseY + 0.02, z);
       spot.renderOrder = 1;
       scene.add(spot);
     }
@@ -1810,20 +1824,21 @@
     // Big sand plane — covers ~200×200 around the villa, eats the old
     // ground plane visually. The existing ground plane underneath stays
     // for the deck immediately around the pool/house.
+    // b035 — beach is now a thick BoxGeometry (top y=0.00, bottom y=-1.20)
+    // so its sides hide the gap down to the lowered ocean and there's no
+    // coplanar plane fighting the deck above.
     const beach = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200, 40, 40),
+      new THREE.BoxGeometry(200, 1.20, 200),
       beachMat
     );
-    beach.rotation.x = -Math.PI / 2;
-    beach.position.set(0, 0.02, -10);  // centered on villa
+    beach.position.set(0, -0.60, -10);  // top y = 0.00
     scene.add(beach);
 
-    // Ocean — big square plane beyond the beach in every direction.
-    // 600×600 so it reads as horizon-to-horizon ocean from any angle.
-    // y is slightly below the beach so the sand cuts the water cleanly.
+    // Ocean — big plane far below the beach so it never z-fights with sand.
+    // The beach box's sides hide the air gap from the camera at all angles.
     const ocean = new THREE.Mesh(new THREE.PlaneGeometry(600, 600, 50, 50), oceanMat);
     ocean.rotation.x = -Math.PI / 2;
-    ocean.position.set(0, -0.05, -10);
+    ocean.position.set(0, -1.50, -10);
     scene.add(ocean);
 
     // -----------------------------------------------------
@@ -1850,7 +1865,7 @@
         leg.position.set(lx, 0.16, lz);
         g.add(leg);
       });
-      g.position.set(x, 0.05, z);
+      g.position.set(x, 0.00, z);  // b035 — beach top
       g.rotation.y = rotY;
       scene.add(g);
     }
@@ -2199,9 +2214,10 @@
       const halfW = gw / 2, halfD = gd / 2;
 
       // ----- 1. Bright lawn plane (the actual grass, finally) -----
-      const lawn = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), lawnMat);
-      lawn.rotation.x = -Math.PI / 2;
-      lawn.position.set(cx, 0.05, cz);
+      // b035 — lawn raised to y=0.10 (above the new beach top at 0.00,
+      // but below the deck top at 0.20). Path thickness (0.08) sits above.
+      const lawn = new THREE.Mesh(new THREE.BoxGeometry(gw, 0.08, gd), lawnMat);
+      lawn.position.set(cx, 0.06, cz);
       scene.add(lawn);
 
       // ----- 2. Manicured hedge perimeter (taller + brighter) -----
@@ -2222,10 +2238,10 @@
       // ----- 3. Marble cross paths -----
       const pathW = 2.6;
       const pathLong = new THREE.Mesh(new THREE.BoxGeometry(pathW, 0.08, gd - 0.6), marbleMat);
-      pathLong.position.set(cx, 0.10, cz);
+      pathLong.position.set(cx, 0.18, cz);  // b035 — above lawn top (0.10)
       scene.add(pathLong);
       const pathCross = new THREE.Mesh(new THREE.BoxGeometry(gw - 0.6, 0.08, pathW), marbleMat);
-      pathCross.position.set(cx, 0.10, cz);
+      pathCross.position.set(cx, 0.18, cz);
       scene.add(pathCross);
 
       // ----- 4. 3-tier ornate marble fountain (the centerpiece) -----
@@ -2485,21 +2501,23 @@
       addPergola(cx, cz + halfD);
 
       // ----- 17. 6 pathway lanterns lining the marble paths -----
-      addDeckLantern(cx - 5.5, cz - 1.6);
-      addDeckLantern(cx - 5.5, cz + 1.6);
-      addDeckLantern(cx + 5.5, cz - 1.6);
-      addDeckLantern(cx + 5.5, cz + 1.6);
-      addDeckLantern(cx - 1.6, cz - 5.5);
-      addDeckLantern(cx + 1.6, cz - 5.5);
+      // b035 — garden lawn top is ~0.10, pass that as baseY
+      addDeckLantern(cx - 5.5, cz - 1.6, 0.10);
+      addDeckLantern(cx - 5.5, cz + 1.6, 0.10);
+      addDeckLantern(cx + 5.5, cz - 1.6, 0.10);
+      addDeckLantern(cx + 5.5, cz + 1.6, 0.10);
+      addDeckLantern(cx - 1.6, cz - 5.5, 0.10);
+      addDeckLantern(cx + 1.6, cz - 5.5, 0.10);
     }
     addGarden(-32, 13);
 
     // ----- East lot: supercar showroom (b034 — enlarged + relocated NE) -----
     function addCarShowroom(cx, cz) {
       const sw = 28, sd = 16, sh = 5;
-      // Stage floor (lighter stone slab)
-      const floor = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.18, sd), rimMat);
-      floor.position.set(cx, 0.09, cz);
+      // b035 — thick raised slab so the showroom reads as a stone podium on
+      // the sand, and bottom sits well below beach top (0.00) — top y=0.20.
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(sw, 1.20, sd), rimMat);
+      floor.position.set(cx, -0.40, cz);
       scene.add(floor);
       // Roof slab
       const roof = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.3, sd), villaMat);
@@ -2599,12 +2617,14 @@
     materials.push(lagoonMat);
     timeUniforms.push(lagoonMat.uniforms.uTime);
 
+    // b035 — lagoon is a thick BoxGeometry, top y=0.05, well above the
+    // beach top (0.00) but well below the deck top (0.20). Doesn't overlap
+    // the deck footprint (deck z range [-36, 16]; lagoon centered at z=62).
     const lagoon = new THREE.Mesh(
-      new THREE.PlaneGeometry(82, 68, 1, 1),
+      new THREE.BoxGeometry(82, 0.40, 68),
       lagoonMat
     );
-    lagoon.rotation.x = -Math.PI / 2;
-    lagoon.position.set(0, 0.06, 62);
+    lagoon.position.set(0, -0.15, 62);  // top y = 0.05
     scene.add(lagoon);
 
     // ----- Loop driveway road (east, threaded through the forest) -----
@@ -2618,18 +2638,20 @@
       emissiveAmt: 0.6,
     });
 
+    // b035 — road slab is THICKER (height 0.30) and sits with top at 0.15,
+    // well above the beach top (0.00). Stripes lifted to 0.18 so the dashes
+    // sit above the road surface without coplanar fight.
     function addRoadSegment(x, z, len, rotY) {
-      const seg = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.05, len), asphaltMat);
-      seg.position.set(x, 0.06, z);
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.30, len), asphaltMat);
+      seg.position.set(x, 0.00, z);  // top y = 0.15
       seg.rotation.y = rotY;
       scene.add(seg);
-      // dashed center stripe (3 small bars), lifted to avoid z-fighting
       for (let k = -1; k <= 1; k++) {
         const dash = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, len * 0.18), stripeMat);
         const offset = k * len * 0.30;
         dash.position.set(
           x + Math.sin(rotY) * offset,
-          0.10,
+          0.18,
           z + Math.cos(rotY) * offset
         );
         dash.rotation.y = rotY;
@@ -2642,20 +2664,22 @@
     // truly empty land is. Single straight road runs from the villa back wall
     // (z=-3) outward through the loop and into the dense jungle beyond.
     const ringCx = 0, ringCz = -58;
+    // b035 — ring road raised to top y=0.16 (above new beach top 0.00).
+    // RingGeometry stays a thin disk (no sides) but the y separation alone
+    // is enough since nothing else overlaps it at this z.
     const ringRoad = new THREE.Mesh(
       new THREE.RingGeometry(13.0, 17.5, 64, 1),
       asphaltMat
     );
     ringRoad.rotation.x = -Math.PI / 2;
-    ringRoad.position.set(ringCx, 0.06, ringCz);
+    ringRoad.position.set(ringCx, 0.16, ringCz);
     scene.add(ringRoad);
-    // Center stripe ring
     const ringStripe = new THREE.Mesh(
       new THREE.RingGeometry(15.15, 15.35, 64, 1),
       stripeMat
     );
     ringStripe.rotation.x = -Math.PI / 2;
-    ringStripe.position.set(ringCx, 0.10, ringCz);
+    ringStripe.position.set(ringCx, 0.20, ringCz);
     scene.add(ringStripe);
 
     // Approach road — villa back exit (z=-3) → loop north edge (z=-40)
