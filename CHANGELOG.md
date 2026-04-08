@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## b035e — 2026-04-07 — Loop = driveway, single road heading outward only
+
+User: "the loop isnt correct. the driveway should be the loop, and then 1 road leading outward towards the background. currently theres a loop and this tiny little road leading to the front of the house i dont like that".
+
+Removed the villa→loop connector segment. The loop itself IS the driveway now, with one road extending outward from its back edge into the deep jungle. Two segments at z=-85 and z=-110 to give the road some length without a single very long box.
+
 ## b035d — 2026-04-07 — Pull lagoon back (b035c overcorrected)
 
 User: "now too much lagoon". b035c put the front edge at z=32 which ate the beach chair zone. Moved center z 117 → 135 → front edge now z=50. Pier (z=30..66) still has its outer ~16 units over water; beach chairs back on dry sand.

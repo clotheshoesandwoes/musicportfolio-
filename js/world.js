@@ -2682,10 +2682,11 @@
     ringStripe.position.set(ringCx, 0.20, ringCz);
     scene.add(ringStripe);
 
-    // Approach road — villa back exit (z=-3) → loop north edge (z=-40)
-    addRoadSegment(0, -22, 38, 0);
-    // Continuation past the loop, leading deeper into the jungle
-    addRoadSegment(0, -82, 30, 0);
+    // b035e — single road leading outward from the loop into the deep
+    // jungle. No more villa→loop connector — the loop IS the driveway,
+    // so the only road is the one heading away from the house.
+    addRoadSegment(0, -85, 40, 0);
+    addRoadSegment(0, -110, 12, 0);
 
     // ----- Forest — pine cones + extra palms east + north -----
     // b034b — bigger trees + brighter emissive needles so they read at
