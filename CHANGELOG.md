@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## b037 — 2026-04-07 — Modern Miami beach mansion rebuild
+
+User: "lowkey still super robloxy cuz its super blocky. also mansion is not an open design. fack the windows i want a huge white mansion, crazy looking almost like some vacation resort type shit by the beach. modern miami yes that correct."
+
+Full surface rewrite of the villa shell. Preserved the b025 U-footprint constants (`centralW=14`, `wingW=9`, `centralH1=4`, `wingH1=3`, etc.) so the LIVING/BEDROOM/BILLIARD interior rooms keep working untouched, and preserved the `bell_tower` click→card target on the new rooftop pavilion so the existing track card still wires. Everything else about the shell is new.
+
+### What got ripped out
+- Stone ground floor walls (whole building was stone+plaster two-tone)
+- Hipped terracotta roofs on central + east wing + west wing (`addHippedRoof` + `terracottaMat` calls inside the villa shell — material declaration kept, garden statues etc. still use it)
+- Arched windows + marble surrounds + 3-bar mullion grids on every facade (`addArchedWindow` helper deleted)
+- `addCornice` helper (the marble band wrapping every floor — too fussy)
+- Arched main entry with round marble columns + capital blocks + marble header
+- Wrought-iron balustrade balcony above the entry (14 front posts + side rails)
+- Bell tower campanile in the back-west corner (3-stage: stone base + plaster shaft + 4-pillar belfry with bell + terracotta cap pyramid)
+
+### What replaced it
+- **All-white plaster walls** on every section, both floors. New `addWallBoxOpenFront` helper builds 3 walls (back + 2 sides) instead of 4 — every front face is glass, not plaster.
+- **Floor-to-ceiling frameless glass spans** via new `addGlassSpan` helper: single big pane + slim marble reveal at top and bottom only. No mullion grids, no side frames. Central upper floor = 3 spans across the full width. Central ground floor = 2 spans flanking a solid plaster strip behind the existing living-room TV (TV is at x=0±2.5, z≈-3.6 — strip is 5.4 wide so the TV doesn't read against the colonnade beyond). Each wing = 4 spans (2 per floor).
+- **Flat roofs with rooftop terraces** via new `addFlatRoofWithParapet` helper: white slab + travertine deck plane + knee-high parapet on all 4 sides. Central rooftop also gets two marble planters with topiary cones flanking the front edge.
+- **Rooftop pavilion** on the central terrace — small white cube + warm-glow front face + horizontal cantilever canopy slab supported by two slim white columns. Carries `name = 'bell_tower'` so the b025 click→card target survives.
+- **Open colonnade** across the full 32-wide front: 7 slim round white columns at z=0 (forward of the front wall at z=-3) supporting a horizontal cantilever eyebrow slab spanning the whole façade, with a warm cove glow strip on the eyebrow underside. The "resort entry" silhouette — kills the boxy read.
+- **Cylindrical drum pavilion** at the front-east corner of the east wing: full-wing-height white cylinder (r=2.4) with a wraparound glass band at the upper floor, marble floor-line ring between floors, and a flat circular canopy roof on top. The single non-rectangular volume in the whole composition.
+- **Slim marble floor-line eyebrows** between the ground and upper floors of central + each wing — modern Miami's signature horizontal shadow line.
+- New `addColumn` helper (slim round white CylinderGeometry) and `addEyebrow` helper (declared but unused — kept for future facade tweaks).
+
+### What was kept
+- `villaCx`/`villaCz`/`podiumTopY`/`wallT`/all footprint + derived constants
+- Podium box
+- `addWallBox` helper (no longer called by the shell — kept in case future blocks want a fully-walled section)
+- `addSconce` helper + most sconce positions
+- Central interior floor + interior ceiling planes
+- East + west wing side doors (slab door + marble surround)
+- Back door on the central back wall
+- GRAND ENTRANCE block (4 marble steps + flanking planters at the new central entry, lines ~1075-1115) — fits modern Miami fine, no changes
+- `stoneMat` + `terracottaMat` declarations (still used by garden statues, fountain ring, neighbor villas elsewhere in the file)
+
+### Files modified
+- [js/world.js](js/world.js) — villa shell rewrite, lines ~534-1080 (helpers + central block + east wing + drum pavilion + west wing + open colonnade + rooftop pavilion + sconces). +280 net lines.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b036 → b037`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump + villa design notes refresh
+
 ## b036 — 2026-04-07 — De-Robloxification: bloom pass + surface noise + heavier fog + lower camera
 
 User: "everything looks super roblox idk how to feel about it all. whaty can we do". Diagnosed root causes as (1) huge unbroken flat-color slabs, (2) emissives without bloom render as flat neon parts, (3) hard contact edges, (4) top-down orbit angle. Three cheap fixes that hit ~80% of the issue without touching geometry:

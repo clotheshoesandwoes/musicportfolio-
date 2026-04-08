@@ -1,6 +1,6 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b036
+**Build:** b037
 **Updated:** 2026-04-07
 
 ## Design references
@@ -58,7 +58,7 @@ Stored in [js/helpers.js](js/helpers.js) as `window.BUILD_NUMBER`. Bump every co
 - Pool has its own water shader with tile-line UV grid, moving caustic bands, vertex ripple displacement on the top face, and a 3.6× brightness boost on the top face for the strong cyan glow
 - Ocean is a single shader plane far from the patio with horizontal/vertical sin ripples
 - Distant skyline = ~100 emissive box "dots" with 4 shared materials (4 neon colors): 60 back at z=-90 + 40 front at z=140. Every 4th-to-5th building is a taller "high-rise" box for the city silhouette feel.
-- Villa architecture (b013): two stacked white plaster boxes — 32×6×18 lower volume + 22×4.5×12 upper volume hanging 1.8 forward over the pool deck (the cantilever signature). **Lower volume is a HOLLOW SHELL** (4 walls + interior floor + interior ceiling), front face open by design, walkable interior space. 5 stacked-stone columns at the lower front (x=±13.5/±6.75/0). 4 FTG glass panes between the columns. Front door at x=-10.125 (leftmost gap), new back door on the rear wall facing the Miami neighborhood. Recessed cove light strip on the underside of the upper cantilever. Interior is empty for now, ready for prop click-targets in b014 (piano, records, etc.).
+- Villa architecture (b037, modern Miami beach mansion rebuild): U-shaped footprint preserved from b025 (central 14×14 block + east/west 9×14 wings, full width 32), but the surface language is now all-white plaster, flat roofs with rooftop terraces + parapets, floor-to-ceiling frameless glass spans across every front face (no mullion grids), slim marble floor-line eyebrows between floors. Open colonnade across the full 32-wide front: 7 slim round white columns at z=0 supporting a horizontal cantilever eyebrow slab with a warm cove glow strip on the underside. Cylindrical white drum pavilion at the front-east corner of the east wing (the only non-rectangular volume). Rooftop pavilion on the central terrace (small white cube + cantilever canopy on slim columns) carries the `bell_tower` click→card target preserved from b025. Interior LIVING/BEDROOM/BILLIARD rooms still placed via the same footprint constants — untouched by this rebuild. Solid plaster strip behind the existing living-room TV at x=0±2.7 z=-3 so the TV doesn't read against the open colonnade beyond.
 - Front of pool: pool → boulders/lanterns → deck → front beach (z=30) → front ocean (z=90) → horizon. No more hard cutout.
 - Back of house: 12 neighbor villas in 3 z-bands, scattered palms, dense skyline. Beach behind villa pushed to z=-42 with bigger footprint.
 - Camera (b014): proper orbit input — **drag to rotate, scroll to zoom, touch drag + pinch to zoom on mobile**. Yaw/pitch accumulate from drag deltas (no longer hover-position-based). Pitch clamped (-0.10 to 1.30) so camera can't flip upside-down. Radius clamped (8 to 80). Spherical orbit math: position = center + (sin yaw·cos pitch·r, sin pitch·r, cos yaw·cos pitch·r). Center at (0, 4, -2). Initial yaw=0, pitch=0.30, radius=26. Camera y is clamped >=1.0 so it never dips below ground. Far plane 320 to render the back skyline at z=-100.
