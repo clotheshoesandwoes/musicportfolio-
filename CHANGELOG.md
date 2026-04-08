@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## b038 — 2026-04-07 — Camera freedom: pan, WASD, FP dolly, R reset
+
+User: "i hate the current locked to a point and drag around it and the camera angles for the other views/rooms sucks while we remodle everything (so dont have to touch them but) give me some more freedom pls somehow".
+
+Diagnosed: orbit mode dragged around a fixed `camCenterX/Y/Z` that no input could move; first-person mode locked the camera position completely, leaving only direction rotation + FOV zoom (which doesn't help you escape a bad position). Anchor presets were the only way to change focus point.
+
+### What's new
+- **RMB drag = pan** in both orbit and first-person modes. Translates `camCenter` along the camera's right + up basis vectors. In orbit this slides the look-at target; in FP this strafes/lifts the camera.
+- **Shift+LMB drag = pan** as an alt for laptop trackpad users without a right button.
+- **WASD + QE keyboard movement** while villa view is active. W/S = forward/back along view direction (projected to ground in orbit so W doesn't fly the look-at into the dirt; full 3D in FP so you can fly through a room), A/D = strafe, Q/E = world down/up. Hold **Shift = 3× boost**. Skipped while typing in any input/textarea (the top-bar search keeps working).
+- **R = reset**. Re-flies to whichever anchor is currently active. Use it when you've panned/walked too far and want to snap back.
+- **First-person wheel** is now **dolly forward/back along the view direction**, replacing the b032 FOV-zoom behavior. FOV zoom didn't help users navigate; dolly does. Wheel in orbit mode is unchanged (still adjusts radius).
+- **First-person pinch-zoom on touch** also became dolly to match the wheel.
+- **2-finger touch drag = pan**. The pinch gesture now handles both zoom (distance change) AND pan (center movement) per frame, composed via delta tracking. 1-finger drag still rotates.
+
+### Implementation details
+- New state: `isPanning`, `lastPanX/Y`, `heldKeys` Set, `lastFrameTime`, `twoFingerLastCx/Cy`, `pinchLastDist`.
+- New helpers: `panCamera(dx, dy)`, `dollyForward(amount)`, `applyKeyMovement(dt)`, `onKeyDown`, `onKeyUp`, `onContextMenu`.
+- `panCamera` reads camera right + up via `setFromMatrixColumn(camera.matrix, 0/1)` so pan is always screen-aligned regardless of yaw/pitch. Speed scales with `radius` in orbit mode (so panning at radius=80 moves further per pixel than at radius=8) and is fixed in FP.
+- `applyKeyMovement` integrates with frame `dt` (capped at 100ms so a long tab-out doesn't fling the camera). Forward dir comes from `camera.getWorldDirection`, projected to ground in orbit.
+- `onMouseDown` detects `e.button === 2 || (e.button === 0 && e.shiftKey)` and routes to the pan path.
+- `contextmenu` listener prevents the browser right-click menu from popping up over the canvas.
+- `keydown`/`keyup` listeners on `window` (not container — canvas can't focus). Skipped when `e.target.tagName === 'INPUT' || 'TEXTAREA' || isContentEditable` so the top-bar search isn't hijacked. R triggers `flyToAnchor(currentAnchorIdx)`.
+- `animate(now)` reads `now - lastFrameTime` for dt and calls `applyKeyMovement(dt)` before the existing camera positioning math (skipped during anchor fly-tween so the user can't fight the tween).
+- `destroy()` removes contextmenu/keydown/keyup listeners, clears `heldKeys`, resets `isPanning` + `lastFrameTime`. The villa view registers/unregisters cleanly so WASD only fires while the villa view is mounted.
+
+### What did NOT change
+- Anchor preset positions (POOL/BEACH/AERIAL/LIVING/BEDROOM/BILLIARD/INDOOR) — pan/WASD just lets you move from there.
+- Click→card system, hover detection, drag-vs-click threshold.
+- Orbit wheel zoom (still adjusts radius).
+- Touch 1-finger drag (still rotates).
+
+### Files modified
+- [js/world.js](js/world.js) — camera state + helpers + mouse/wheel/touch/key handlers + animate dt + destroy cleanup. ~150 net lines added.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b037b → b038`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump + camera control notes refresh
+
 ## b037b — 2026-04-07 — Fix asphalt road protruding into loop driveway interior
 
 User: "pertruding out of the circle (inner)". Diagnosed: outward road segment 1 was at `z=-85 length=40` (spans z=-65 to z=-105) while the loop ring's back outer edge is at `ringCz - outerR = -58 - 17.5 = -75.5`. Front 10 units of the segment were inside the donut hole.

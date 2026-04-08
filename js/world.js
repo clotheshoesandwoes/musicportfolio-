@@ -22,6 +22,16 @@
   let fov = 70;                  // perspective FOV (first-person zoom target)
   let isDragging = false;
   let lastDragX = 0, lastDragY = 0;
+  // b038 — RMB drag (or shift+LMB) pans camCenter; held WASD/QE moves it.
+  // Both work in orbit AND first-person mode — orbit pans the look-at point,
+  // first-person dollies/strafes the camera position. Anchor presets are
+  // unchanged; pan just moves the camera away from the snapped starting pose.
+  let isPanning = false;
+  let lastPanX = 0, lastPanY = 0;
+  const heldKeys = new Set();    // 'w','a','s','d','q','e','shift'
+  let lastFrameTime = 0;
+  let twoFingerLastCx = 0, twoFingerLastCy = 0;  // touch pan center tracking
+  let pinchLastDist = 0;         // touch pinch incremental tracking
   let touchMode = null;          // 'drag' | 'pinch' | null
   let pinchStartDist = 0;
   let pinchStartRadius = 0;
@@ -3006,6 +3016,11 @@
     container.addEventListener('touchmove', onTouchMove, { passive: false });
     container.addEventListener('touchend', onTouchEnd);
     container.addEventListener('touchcancel', onTouchEnd);
+    // b038 — RMB drag = pan, so suppress the browser context menu on the canvas
+    container.addEventListener('contextmenu', onContextMenu);
+    // b038 — keyboard nav: WASD/QE move, R resets to current anchor
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
     // Hint cursor
     (canvas || container).style.cursor = 'grab';
 
@@ -3038,6 +3053,89 @@
     return Math.max(MIN_FOV, Math.min(MAX_FOV, f));
   }
 
+  // b038 — pan: slides camCenter perpendicular to the camera view direction
+  // using the camera's right + up basis vectors. In orbit mode this moves
+  // the look-at target; in first-person mode this moves the camera position
+  // (since camCenter IS the camera position in FP). Sign convention: drag
+  // right → world slides right under cursor → camCenter moves left.
+  function panCamera(dx, dy) {
+    if (!camera || !THREE_lib) return;
+    const right = new THREE_lib.Vector3().setFromMatrixColumn(camera.matrix, 0);
+    const up    = new THREE_lib.Vector3().setFromMatrixColumn(camera.matrix, 1);
+    const speed = (camMode === 'orbit') ? Math.max(0.01, radius * 0.0018) : 0.018;
+    camCenterX += (-right.x * dx + up.x * dy) * speed;
+    camCenterY += (-right.y * dx + up.y * dy) * speed;
+    camCenterZ += (-right.z * dx + up.z * dy) * speed;
+  }
+
+  // b038 — dolly: slides camCenter along the camera forward direction. Used
+  // by FP wheel/pinch in place of FOV-zoom (FOV zoom didn't help users
+  // escape locked room positions; dolly does).
+  function dollyForward(amount) {
+    if (!camera || !THREE_lib) return;
+    const dir = new THREE_lib.Vector3();
+    camera.getWorldDirection(dir);
+    camCenterX += dir.x * amount;
+    camCenterY += dir.y * amount;
+    camCenterZ += dir.z * amount;
+  }
+
+  // b038 — keyboard movement, called from animate() with frame dt. WASD =
+  // forward/back/strafe, QE = down/up, Shift = 3× boost. In orbit mode the
+  // forward direction is projected to the ground plane so W doesn't fly the
+  // look-at into the ground. In first-person mode forward is full 3D so the
+  // user can fly through the room.
+  function applyKeyMovement(dt) {
+    if (heldKeys.size === 0 || !camera || !THREE_lib) return;
+    let f = 0, s = 0, v = 0;
+    if (heldKeys.has('w')) f += 1;
+    if (heldKeys.has('s')) f -= 1;
+    if (heldKeys.has('d')) s += 1;
+    if (heldKeys.has('a')) s -= 1;
+    if (heldKeys.has('e')) v += 1;
+    if (heldKeys.has('q')) v -= 1;
+    if (f === 0 && s === 0 && v === 0) return;
+    const boost = heldKeys.has('shift') ? 3 : 1;
+    const baseSpeed = (camMode === 'orbit') ? Math.max(8, radius * 0.6) : 6;
+    const speed = baseSpeed * boost * dt;
+
+    const dir = new THREE_lib.Vector3();
+    camera.getWorldDirection(dir);
+    if (camMode === 'orbit') { dir.y = 0; dir.normalize(); }
+    const right = new THREE_lib.Vector3().setFromMatrixColumn(camera.matrix, 0);
+
+    camCenterX += (dir.x * f + right.x * s) * speed;
+    camCenterY += (dir.y * f) * speed + v * speed;
+    camCenterZ += (dir.z * f + right.z * s) * speed;
+  }
+
+  // b038 — keyboard listeners. WASD/QE add to heldKeys, R re-flies to the
+  // current anchor (reset). Skip while typing in any input/textarea so the
+  // top-bar search doesn't intercept letters as movement.
+  function onKeyDown(e) {
+    if (destroyed) return;
+    const tgt = e.target;
+    if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'w' || k === 'a' || k === 's' || k === 'd' || k === 'q' || k === 'e') {
+      heldKeys.add(k);
+      e.preventDefault();
+    } else if (k === 'shift') {
+      heldKeys.add('shift');
+    } else if (k === 'r') {
+      flyToAnchor(currentAnchorIdx);
+      e.preventDefault();
+    }
+  }
+  function onKeyUp(e) {
+    const k = e.key.toLowerCase();
+    if (k === 'shift') heldKeys.delete('shift');
+    else heldKeys.delete(k);
+  }
+  function onContextMenu(e) {
+    e.preventDefault();
+  }
+
   // b026 — convert mouse position to normalized device coordinates
   function updateMouseNDC(e) {
     if (!mouseNDC || !container) return;
@@ -3064,7 +3162,17 @@
   }
 
   function onMouseDown(e) {
-    if (!container || e.button !== 0) return;
+    if (!container) return;
+    // b038 — RMB or Shift+LMB starts a pan instead of a rotate
+    if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+      isPanning = true;
+      lastPanX = e.clientX;
+      lastPanY = e.clientY;
+      (canvas || container).style.cursor = 'move';
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
     isDragging = true;
     lastDragX = e.clientX;
     lastDragY = e.clientY;
@@ -3074,6 +3182,15 @@
     (canvas || container).style.cursor = 'grabbing';
   }
   function onMouseMove(e) {
+    // b038 — pan path (RMB or shift+LMB)
+    if (isPanning) {
+      const dx = e.clientX - lastPanX;
+      const dy = e.clientY - lastPanY;
+      panCamera(dx, dy);
+      lastPanX = e.clientX;
+      lastPanY = e.clientY;
+      return;
+    }
     if (isDragging) {
       const dx = e.clientX - lastDragX;
       const dy = e.clientY - lastDragY;
@@ -3098,6 +3215,7 @@
   }
   function onMouseUp(e) {
     isDragging = false;
+    isPanning = false;
     if (container) (canvas || container).style.cursor = hoveredProp ? 'pointer' : 'grab';
     // b026b — click dispatch moved to onCanvasClick (real `click` event).
     // The browser only fires `click` when mousedown→mouseup happened on the
@@ -3265,8 +3383,10 @@
     if (camMode === 'orbit') {
       radius = clampRadius(radius + e.deltaY * ZOOM_SPEED);
     } else {
-      // b032 — first-person zoom adjusts FOV instead of orbit distance
-      fov = clampFov(fov + e.deltaY * FOV_ZOOM_SPEED);
+      // b038 — first-person wheel now dollies the camera forward/back along
+      // the view direction instead of changing FOV. FOV zoom didn't help
+      // users escape locked room positions; dolly does.
+      dollyForward(-e.deltaY * 0.012);
     }
   }
 
@@ -3287,8 +3407,12 @@
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       pinchStartDist = Math.hypot(dx, dy) || 1;
+      pinchLastDist = pinchStartDist;
       pinchStartRadius = radius;
       pinchStartFov = fov;
+      // b038 — also track 2-finger center for pan
+      twoFingerLastCx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      twoFingerLastCy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
     }
   }
   function onTouchMove(e) {
@@ -3311,13 +3435,24 @@
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.hypot(dx, dy) || 1;
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+      // b038 — pinch handles BOTH zoom (distance change) AND pan (center
+      // movement) per frame. Tracking deltas instead of start values so
+      // pan + zoom can compose smoothly.
+      const distDelta = dist - pinchLastDist;
       if (camMode === 'orbit') {
-        // pinch out (dist increases) → smaller radius (zoom in)
-        radius = clampRadius(pinchStartRadius * (pinchStartDist / dist));
+        // pinch out (dist grows) → smaller radius (zoom in)
+        radius = clampRadius(radius - distDelta * 0.12);
       } else {
-        // b032 — first-person pinch zoom: pinch out → smaller fov (zoom in)
-        fov = clampFov(pinchStartFov * (pinchStartDist / dist));
+        // b038 — FP pinch dollies forward instead of FOV zoom (matches wheel)
+        dollyForward(distDelta * 0.04);
       }
+      panCamera(cx - twoFingerLastCx, cy - twoFingerLastCy);
+      pinchLastDist = dist;
+      twoFingerLastCx = cx;
+      twoFingerLastCy = cy;
     }
   }
   function onTouchEnd(e) {
@@ -3335,6 +3470,8 @@
       }
       touchMode = null;
       isDragging = false;
+      twoFingerLastCx = 0;
+      twoFingerLastCy = 0;
     }
   }
 
@@ -3447,6 +3584,13 @@
     if (destroyed || !renderer) return;
     animId = requestAnimationFrame(animate);
 
+    const t = now || performance.now();
+    // b038 — frame dt for keyboard movement integration. Cap at 100ms so a
+    // long tab-out doesn't fling the camera on the first frame back.
+    const dt = lastFrameTime === 0 ? 1 / 60 : Math.min(0.1, (t - lastFrameTime) / 1000);
+    lastFrameTime = t;
+    if (!flyState) applyKeyMovement(dt);
+
     const elapsed = (now || 0) / 1000;
     for (let i = 0; i < timeUniforms.length; i++) {
       timeUniforms[i].value = elapsed;
@@ -3555,8 +3699,14 @@
       container.removeEventListener('touchmove', onTouchMove);
       container.removeEventListener('touchend', onTouchEnd);
       container.removeEventListener('touchcancel', onTouchEnd);
+      container.removeEventListener('contextmenu', onContextMenu);
     }
     window.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keyup', onKeyUp);
+    heldKeys.clear();
+    isPanning = false;
+    lastFrameTime = 0;
     materials.forEach(m => m.dispose && m.dispose());
     materials = [];
     timeUniforms = [];
