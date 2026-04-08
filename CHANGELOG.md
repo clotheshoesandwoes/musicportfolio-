@@ -1,5 +1,102 @@
 # CHANGELOG
 
+## b055 — 2026-04-08 — Wall: kill stickers + wordmark, replace with creatures
+
+User on b054: *"i love the moving little things in the center. not a big fan of the wall huge text. the background and moving little things remind me of marathon. can we have small futurey space butterflies flying around and some other cool small animation like things on screen. with them being clickable, and that brings up different music cards"* + follow-up *"one for each track"*.
+
+The b054 stickers were the wrong unit. The user loved the ambient drifting glyphs (which read as Marathon-y to them) and hated the giant `// THE WALL` wordmark in the corner. So this commit:
+- DELETES the sticker rendering entirely (`drawSticker`, `roundRect`, `pickBadge`, the sticker hit test)
+- DELETES the giant `drawWordmark()` function and its 140px text
+- KEEPS the magenta + scrolling checker background (the user called this out as a love)
+- KEEPS the ambient decorative glyphs underneath everything (the "moving little things in the center")
+- ADDS 8 creature types as new clickable elements — one per track
+
+### Creatures
+[js/wall.js](js/wall.js) is rewritten end-to-end (~700 lines, was ~325). Each track in `window.tracks` becomes one creature. Type is picked deterministically from a hash of the title so the same track always renders the same creature.
+
+The 8 types each have their own ~30-line canvas drawing routine + per-frame animation:
+
+- **butterfly** — 4 wing ellipses with eye-spots, body capsule, antennae. Wings flap on `sin(wingT * 6)`, scaling wing width 0.10→1.0.
+- **drone** — flat ellipse disc + dome top + 4 rim lights that alternate-blink + translucent yellow beam underneath
+- **jellyfish** — half-bell with highlight + 7 wavy tentacles drawn as polylines that swim on sine
+- **fish** — ovoid body + tail that wags via `sin(wingT * 5)` + top fin + eye with pupil
+- **comet** — 6 trailing alpha-decreasing ellipses + bright head + white-hot core + 3 sparks orbiting at radius
+- **beetle** — 6 wiggling legs + round body with split line + lighter highlight + small head + antennae
+- **eye** — sclera + iris that **tracks the cursor** in canvas space (computed each frame from `mx`/`my` minus creature position) + pupil + glint + occasional blink
+- **crystal** — rotating hexagon + inner facet lines from center + highlight wash + 3 diamond sparkle dots orbiting
+
+### Layout + drift
+Loose grid sized to fit the canvas (cols based on width / 110), one cell per track, with ±40px hash-based jitter so it doesn't read as a perfect grid. Each creature has a `baseX/baseY` anchor and bobs around it via:
+
+```js
+c.x = baseX + sin(t * driftSpeedX + driftPhase) * driftAmpX;
+c.y = baseY + cos(t * driftSpeedY + driftPhase * 0.7) * driftAmpY;
+```
+
+Speeds + amplitudes + phases are all hash-derived per creature, so the motion looks chaotic but is deterministic. They never drift off-canvas because the anchors are bounded.
+
+### Hit test + tooltip
+Cheap circular distance check against `creature.size * scale * 1.1`. 117-iteration mousemove is nothing. Hovered creature scales to 1.35×, draws on top of the stack, and gets a small lime-on-black `JetBrains Mono` tooltip with its title positioned to one side. Cursor switches to `pointer` while hovering.
+
+The info panel in the bottom-left now updates dynamically — shows `// type` + the track title in caps when hovering, falls back to `// hover a creature · THE WALL` when not.
+
+### Click → track detail
+Same as b054: `window.showTrackDetail(trackIndex)` opens the official site track-detail panel. Falls back to `playTrack(i)` if the global isn't available.
+
+### Audio reactive
+Same beat scalar from `getFrequencyData()` as b054, applied as a 1.06× scale pulse on all creatures when something is playing.
+
+### Files modified
+- [js/wall.js](js/wall.js) — full rewrite, ~700 lines (was 325). Stickers + wordmark gone, creatures + 8 type drawers in.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b054 → b055`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+Routing/index.html/app.js are unchanged from b054 — the wall is still the default landing view, still tab #1, still falls through to `?paint=1` / `?style=v2` / `?legacy=villa`.
+
+### What carries over from b054
+- Hot magenta `#ff2bd6` background
+- Scrolling diagonal checker overlay
+- 75 ambient decorative glyphs (stars / sparkles / crosses / arrows / bolts / dots) drifting underneath
+- IIFE pattern, `init` / `destroy` / `onSearch` / `registerView('wall', ...)`
+- Audio-reactive pulse on `getFrequencyData()`
+
+### What's gone
+- Sticker rectangles
+- `drawWordmark()` and the giant `// THE WALL` text
+- The "click a sticker" info copy (replaced with "hover a creature")
+
+### How to test
+1. Hard refresh `cantmute.me/` → no flag, boots into the new wall
+2. Should see one creature per track drifting around — each is a different type (butterfly, drone, jelly, fish, comet, beetle, eye, crystal)
+3. Hover any creature → it scales up, lime tooltip appears with title, info panel updates
+4. Click → official track detail panel opens
+5. Eye creatures should track your cursor with their pupils
+6. Background checker should still scroll, ambient glyphs should still drift
+7. Wordmark should be GONE
+
+### Knobs
+All in [js/wall.js](js/wall.js):
+- Background color in `drawBackground()` (currently `#ff2bd6`)
+- Glyph count `75 / 30` in `buildGlyphs()`
+- Cell width `110px` and margin `60px` in `buildCreatures()`
+- Creature size `18 + (h % 14)` in `buildCreatures()` — bump for bigger creatures
+- Drift amplitudes `driftAmpX/Y` in `buildCreatures()`
+- Hover scale `1.35` in `drawCreature()`
+- Beat pulse `0.06` in `drawCreature()`
+- `CREATURE_TYPES` array — add/remove types or weight by duplicating entries
+- Per-type drawing in `drawButterfly` / `drawDrone` / etc.
+
+### What this is NOT
+- Not a fixed 117 — `N === tracks.length`. With 8 tracks today there are 8 creatures. Scales to as many as `window.tracks` carries.
+- Not draggable — creatures drift on a fixed sine pattern, not click-and-drag
+- Not collision-aware — they bob around their anchors and CAN overlap visually
+- Not WebGL — pure 2D canvas, redraws every frame at 60fps
+- Not perf-optimized for thousands of creatures — at 117 it's fine, beyond that the type-specific drawers might need batching
+
+### Next
+Wait for the user's reaction. If the direction lands → next steps could be: more creature variety, per-creature trail effects, "swarm to cursor" mode, sound-reactive creature behaviors (butterflies flap faster on bass), creature-type filters in the bottom bar, hand-drawn sprites instead of canvas paths. If wrong → easy revert via git, or just iterate on creature shapes.
+
 ## b054 — 2026-04-08 — "the WALL" sticker view (new default landing page)
 
 User after b053: *"can we just make a quick view (like neural mind map) and include have that be the main landing page. itll be a cool music portfolio site vibe like 100 gecs and other artists in that lane"* → confirmed `sure` to my proposal of WALL / open detail panel / 5th tab in front. The 3D villa direction has been on a long iteration loop; this commit pivots the landing experience to a fast, cheap, vibe-forward 2D canvas view that fits the hyperpop aesthetic.
