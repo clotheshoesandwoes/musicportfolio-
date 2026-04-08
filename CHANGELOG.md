@@ -1,5 +1,100 @@
 # CHANGELOG
 
+## b056 — 2026-04-08 — Wall: queue-on-click, 12 new creatures, bloomy nebula bg
+
+User on b055: *"if i click an icon, queue the song associated with it, or play it if nothings playing. id love a lot more cool icons and stuff add much much more but love the vibe so far. can we make the background cooler as well, maybe not a crazy bloom but something bloomy"*
+
+Three things in one commit: queue behavior, more creatures + density, bloomy background.
+
+### 1. Click → queue or play (player.js + wall.js)
+
+[js/player.js](js/player.js) gained a real queue API:
+- Module-level `playQueue` array
+- `queueTrack(index)` — push to queue, no immediate play
+- `playOrQueue(index)` — if nothing's playing OR `currentTrack === -1`, calls `loadTrack` + `play` and returns `'playing'`. Otherwise pushes to the queue and returns `'queued'`. The view uses the return value to flash the right toast.
+- `getQueueLength()` — convenience getter
+- The existing `playerAudio.addEventListener('ended', ...)` handler now drains `playQueue.shift()` BEFORE falling through to the existing `repeat`/`shuffle`/`playNext` logic. So queued tracks play in order after the current one ends, and once the queue is empty the existing repeat/all behavior takes over.
+
+[js/wall.js](js/wall.js) `onClick` handler now calls `playOrQueue(c.trackIndex)` instead of `showTrackDetail`. The return value drives a 1.4-second toast in the info panel — `▶ PLAYING` (green) or `+ QUEUED` (lime). Toast state is `toastUntil` + `toastText`, checked each frame in the draw loop.
+
+### 2. 12 new creature types (8 → 20 total)
+
+[js/wall.js](js/wall.js) `CREATURE_TYPES` array doubled. The 12 additions:
+
+- **ufo** — saucer body + transparent top dome + cycling magenta/cyan/yellow rim lights + animated lime abduction beam underneath
+- **planet** — back ring → body with surface bands → front ring (so the moon orbits in front) + small white moon orbiting on `wingT * 2`
+- **rocket** — pointed body with quadratic curve nose + cyan window + 2 fin triangles + flickering yellow/orange flame trail
+- **ghost** — pixel ghost: rounded top + 4-bump wavy bottom that wobbles on `sin(wingT * 4)` + 2 tall eyes with glints
+- **bird** — minimalist V wings flapping fast (`sin(wingT * 7)`) + body dot in the middle. The simplest creature.
+- **bee** — translucent wings flapping fast (`sin(wingT * 14)`) + yellow body with two black stripes + stinger triangle
+- **flower** — 5 rotating petals around a yellow center with 4 dark dots
+- **mushroom** — beige stem + colored cap + 4 white spots on the cap
+- **octopus** — head + 8 tentacles drawn as 4-segment polylines wiggling on `sin(wingT * 3 + i + k)`
+- **bat** — 2 angular wings (5-segment polylines) flapping on `sin(wingT * 8)` + black body + ear triangles + magenta eye dots
+- **note** — eighth-note: tilted ellipse head + stem + curved flag
+- **cassette** — body rect + label area with 2 lines + 2 spinning reels (4-spoke rotation on `wingT * 4`)
+
+Each new drawer is ~25–55 lines of canvas paths. Same `(c, light, dark, wingT)` signature as the b055 drawers, so the dispatch in `drawCreature` is just a 12-line addition to the switch.
+
+`drawCreature` also gained a **noRot** list — creatures whose orientation is intentional (butterfly, fish, rocket, note, mushroom, bee) skip the small ambient rotation that the others get from `c.rot * 0.3`.
+
+### 3. Density bump
+
+`MIN_CREATURES = 100`. `buildCreatures` now does `N = Math.max(tracks.length, MIN_CREATURES)` and maps via `i % tracks.length`. With 8 tracks today you get 100 creatures cycling through all 8 (~12 per track). With 200+ tracks you get one per track. The hash seed is per-CREATURE not per-track (`title + '#' + i`), so 12 creatures sharing a track still get different types, positions, and motion.
+
+Cell width dropped 110 → 95 to pack more in. Min cols bumped 4 → 6.
+
+### 4. Bloomy background
+
+Three additive layers added to `drawBackground`:
+
+- **6 drifting nebulas** built once at resize in `buildNebulas()`. Each is a large radial gradient (radius 280–560px) in cyan/lime/purple/yellow/mint/orange, with hash-derived position, drift speed, drift amplitude, and phase. Drawn between the magenta base and the checker with `globalCompositeOperation = 'lighter'` so they additively brighten the magenta where they overlap. Each frame they bob around their anchors via sin/cos.
+- **Per-creature glow halo** in `drawCreature` — one additive radial gradient draw per creature in its accent color, radius `2.0× size` (`2.6×` on hover), peak alpha 0.30 (0.55 on hover). Cheap, sells the bloom.
+- **Soft corner vignette** at the end of `drawBackground` — radial gradient from transparent center to 0.40 black at the corners. Pulls focus toward the middle without darkening the bright bits.
+
+The checker stays on top of the nebulas so the pattern still reads even on the bright spots. Subtle scanlines stay too.
+
+A new `hexToRgba(hex, alpha)` helper converts the palette hex strings to `rgba(...)` for the halo gradient stops.
+
+### Files modified
+- [js/player.js](js/player.js) — added `playQueue` + `queueTrack` + `playOrQueue` + `getQueueLength`. `ended` handler drains queue before falling through.
+- [js/wall.js](js/wall.js) — click handler queue logic + toast state, density bump (`MIN_CREATURES = 100`, per-creature seeding), 12 new creature drawers, dispatch additions, glow halo + nebula bloom layer + vignette in `drawBackground`, `hexToRgba` helper, `nebulas` state + `buildNebulas`. ~1350 lines now (was ~700).
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b055 → b056`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/` → wall view, ~100 creatures drifting
+2. Click a creature with nothing playing → it should start playing immediately, info panel flashes `▶ PLAYING`
+3. Click a different creature while the first is playing → flashes `+ QUEUED`. Wait for the current track to end → the queued one plays next
+4. Click multiple in a row → they queue in order, drain in order
+5. The 8 b055 creatures (butterfly, drone, jelly, fish, comet, beetle, eye, crystal) + 12 new (ufo, planet, rocket, ghost, bird, bee, flower, mushroom, octopus, bat, note, cassette) should all be visible
+6. Background should have soft cyan/lime/purple/yellow nebula glows drifting around — additive, slow
+7. Each creature should have a soft halo behind it in its own color
+8. Corner vignette should pull focus to center
+
+### Knobs
+All in [js/wall.js](js/wall.js):
+- `MIN_CREATURES` (100)
+- `CREATURE_TYPES` array — add/remove/duplicate types to weight the distribution
+- Nebula count (6) + colors + radius range in `buildNebulas`
+- Halo radius multiplier `2.0` / `2.6` and alpha `0.30` / `0.55` in `drawCreature`
+- Corner vignette intensity in `drawBackground` (`rgba(0,0,0,0.40)`)
+- Cell width `95`, margin `60`, creature size `16 + (h % 14)` in `buildCreatures`
+- Toast duration `1400ms` in `onClick`
+
+### Perf
+~100 creatures × 20–60 ops each + 6 nebula gradient draws + 100 halo gradient draws + 75 glyphs + checker. Should still hit 60fps on any laptop. Mobile may struggle with 100 halos — if so, the `drawCreature` halo block is the first thing to put behind a `!isMobile()` check.
+
+### What this is NOT
+- Not draggable creatures
+- Not collision-aware (creatures still bob around anchors and can overlap)
+- Not a "remove from queue" UI — once you queue something it plays. Could add a queue list panel later.
+- Not a real GL bloom — it's 2D additive gradients faking it. Cheaper, no shaders.
+
+### Next
+React to it. Likely tuning rounds: nebula colors/intensity, halo strength, more creature types, fewer creatures if it feels cluttered, queue list UI.
+
 ## b055 — 2026-04-08 — Wall: kill stickers + wordmark, replace with creatures
 
 User on b054: *"i love the moving little things in the center. not a big fan of the wall huge text. the background and moving little things remind me of marathon. can we have small futurey space butterflies flying around and some other cool small animation like things on screen. with them being clickable, and that brings up different music cards"* + follow-up *"one for each track"*.

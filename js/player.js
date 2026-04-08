@@ -114,6 +114,35 @@ function playTrack(index) {
 }
 
 /* =========================================================
+   QUEUE — b056. Click-to-queue from views.
+   - playOrQueue(i): if nothing's playing OR nothing's ever
+     been loaded, play immediately. Otherwise push to the
+     queue and let the 'ended' handler drain it.
+   - queueTrack(i): just push to queue (no immediate play).
+   - The 'ended' event drains playQueue.shift() before
+     falling through to the existing repeat/next logic.
+   ========================================================= */
+const playQueue = [];
+
+function queueTrack(index) {
+  playQueue.push(index);
+}
+
+function playOrQueue(index) {
+  // Nothing playing right now → start it immediately.
+  if (state.currentTrack === -1 || !state.isPlaying) {
+    loadTrack(index);
+    play();
+    return 'playing';
+  }
+  // Otherwise queue it for after the current track ends.
+  playQueue.push(index);
+  return 'queued';
+}
+
+function getQueueLength() { return playQueue.length; }
+
+/* =========================================================
    UI UPDATES
    ========================================================= */
 function updatePlayButton() {
@@ -149,7 +178,16 @@ playerAudio.addEventListener('ended', () => {
   if (state.repeatMode === 'one') {
     playerAudio.currentTime = 0;
     play();
-  } else if (state.repeatMode === 'all' || state.currentTrack < tracks.length - 1 || state.shuffleMode) {
+    return;
+  }
+  // b056 — drain the queue first if anything's been queued from the wall.
+  if (playQueue.length > 0) {
+    const next = playQueue.shift();
+    loadTrack(next);
+    play();
+    return;
+  }
+  if (state.repeatMode === 'all' || state.currentTrack < tracks.length - 1 || state.shuffleMode) {
     playNext();
   } else {
     state.isPlaying = false;

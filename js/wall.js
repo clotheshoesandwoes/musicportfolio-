@@ -25,6 +25,7 @@
   let mx = -9999, my = -9999;
   let creatures = [];
   let glyphs = [];
+  let nebulas = [];
   let hovered = -1;
   let t0 = 0;
   const isMobile = () => window.innerWidth < 768;
@@ -42,9 +43,22 @@
   ];
 
   const CREATURE_TYPES = [
+    // b055 originals
     'butterfly', 'drone', 'jellyfish', 'fish',
     'comet', 'beetle', 'eye', 'crystal',
+    // b056 new
+    'ufo', 'planet', 'rocket', 'ghost',
+    'bird', 'bee', 'flower', 'mushroom',
+    'octopus', 'bat', 'note', 'cassette',
   ];
+
+  // b056 — minimum on-screen creatures even if tracks.length is small.
+  // Each creature still maps to a real track via i % tracks.length.
+  const MIN_CREATURES = 100;
+
+  // b056 — feedback flash state for queued/playing toast in info panel
+  let toastUntil = 0;
+  let toastText = '';
 
   // -------------------------------------------------------
   function init(cont) {
@@ -111,10 +125,15 @@
   function onClick() {
     if (hovered >= 0 && hovered < creatures.length) {
       const c = creatures[hovered];
-      if (typeof window.showTrackDetail === 'function') {
-        window.showTrackDetail(c.trackIndex);
+      // b056 — click queues the song (or plays it if nothing's playing).
+      if (typeof playOrQueue === 'function') {
+        const result = playOrQueue(c.trackIndex);
+        toastText = result === 'playing' ? '▶ PLAYING' : '+ QUEUED';
+        toastUntil = performance.now() + 1400;
       } else if (typeof playTrack === 'function') {
         playTrack(c.trackIndex);
+        toastText = '▶ PLAYING';
+        toastUntil = performance.now() + 1400;
       }
     }
   }
@@ -130,6 +149,39 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     buildCreatures();
     buildGlyphs();
+    buildNebulas();
+  }
+
+  // -------------------------------------------------------
+  // NEBULAS — large soft drifting radial gradients layered
+  // between the base magenta and the checker. Cheap "bloom"
+  // for a 2D canvas — gives the background depth and color
+  // variation without an actual GL bloom pass.
+  // -------------------------------------------------------
+  function buildNebulas() {
+    nebulas = [];
+    const colors = [
+      'rgba(74, 216, 255, 0.55)',   // cyan
+      'rgba(156, 255, 58, 0.45)',   // lime
+      'rgba(168, 85, 247, 0.55)',   // purple
+      'rgba(255, 232, 51, 0.40)',   // yellow
+      'rgba(10, 255, 156, 0.45)',   // mint
+      'rgba(255, 122, 26, 0.40)',   // orange
+    ];
+    for (let i = 0; i < 6; i++) {
+      const h = hash('neb' + i, 33);
+      nebulas.push({
+        baseX: (h % 1000) / 1000 * W,
+        baseY: ((h >> 8) % 1000) / 1000 * H,
+        radius: 280 + (h % 280),
+        color: colors[i % colors.length],
+        speedX: 0.05 + (h % 100) / 1500,
+        speedY: 0.04 + ((h >> 4) % 100) / 1800,
+        ampX: 60 + (h % 80),
+        ampY: 50 + ((h >> 6) % 70),
+        phase: ((h >> 12) % 1000) / 1000 * Math.PI * 2,
+      });
+    }
   }
 
   // Deterministic hash so layout is stable across resize
@@ -140,28 +192,34 @@
   }
 
   // -------------------------------------------------------
-  // CREATURES — exactly one per track. N == tracks.length
-  // (no cap; tested up to 117). Positions anchored — each
-  // creature bobs around its anchor via sin/cos so they
-  // don't drift off-canvas.
+  // CREATURES — at least MIN_CREATURES on screen so the
+  // wall feels populated even when there are only a handful
+  // of tracks. Each creature maps to a real track via
+  // i % tracks.length, so multiple creatures can share a
+  // track. If tracks.length > MIN_CREATURES, we render one
+  // per track. Positions anchored — each creature bobs
+  // around its anchor via sin/cos so they don't drift off.
   // -------------------------------------------------------
   function buildCreatures() {
     creatures = [];
     const tracks = window.tracks || [];
-    const N = tracks.length;
-    if (N === 0) return;
+    if (tracks.length === 0) return;
+    const N = Math.max(tracks.length, MIN_CREATURES);
 
     const margin = 60;
     for (let i = 0; i < N; i++) {
-      const title = tracks[i].title || ('untitled-' + i);
-      const h1 = hash(title, 1 + i);
-      const h2 = hash(title, 7 + i);
-      const h3 = hash(title, 13 + i);
+      const trackIndex = i % tracks.length;
+      const title = tracks[trackIndex].title || ('untitled-' + trackIndex);
+      // Per-CREATURE seed (not per-track) so multiple creatures sharing
+      // a track still get different types, positions, and motion.
+      const h1 = hash(title + '#' + i, 1);
+      const h2 = hash(title + '#' + i, 7);
+      const h3 = hash(title + '#' + i, 13);
       const type = CREATURE_TYPES[h1 % CREATURE_TYPES.length];
 
       // Loose poisson-ish: hash-based grid + jitter. Avoids
-      // perfect grid look but no overlaps for most cases.
-      const cols = Math.max(4, Math.floor((W - margin * 2) / 110));
+      // perfect grid look but mostly no overlaps.
+      const cols = Math.max(6, Math.floor((W - margin * 2) / 95));
       const rows = Math.ceil(N / cols);
       const col = i % cols;
       const row = Math.floor(i / cols);
@@ -174,7 +232,7 @@
         type,
         baseX, baseY,
         x: baseX, y: baseY,
-        size: 18 + (h1 % 14),
+        size: 16 + (h1 % 14),
         colorIdx: h1 % PALETTE.length,
         driftPhase: (h2 % 1000) / 1000 * Math.PI * 2,
         driftSpeedX: 0.3 + (h2 % 100) / 240,
@@ -184,7 +242,7 @@
         rotSpeed: ((h2 % 200) - 100) / 800,
         rot: (h3 % 360) / 360 * Math.PI * 2,
         wingPhase: (h1 % 1000) / 1000 * Math.PI * 2,
-        trackIndex: i,
+        trackIndex,
         title: title,
         scale: 1,
       });
@@ -210,12 +268,33 @@
   }
 
   // -------------------------------------------------------
-  // BACKGROUND — magenta + scrolling diagonal checker
+  // BACKGROUND — magenta base + drifting nebula bloom layer
+  // (additive) + scrolling checker + scanlines.
+  // The nebulas use globalCompositeOperation 'lighter' to
+  // additively brighten the magenta where they overlap, so
+  // the canvas gets a soft uneven bloom without any GL pass.
   // -------------------------------------------------------
   function drawBackground(t) {
+    // Base magenta
     ctx.fillStyle = '#ff2bd6';
     ctx.fillRect(0, 0, W, H);
 
+    // Bloom layer — additive radial gradients drifting around
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const n of nebulas) {
+      const cx = n.baseX + Math.sin(t * n.speedX + n.phase) * n.ampX;
+      const cy = n.baseY + Math.cos(t * n.speedY + n.phase * 0.7) * n.ampY;
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, n.radius);
+      grad.addColorStop(0, n.color);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - n.radius, cy - n.radius, n.radius * 2, n.radius * 2);
+    }
+    ctx.restore();
+
+    // Scrolling checker — drawn over the bloom so the pattern
+    // still reads even on the bright nebula spots
     const size = 36;
     const offX = (t * 18) % size;
     const offY = (t * 18) % size;
@@ -231,6 +310,13 @@
     // Subtle scanlines
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+
+    // Soft corner vignette
+    const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.75);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.40)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
   }
 
   // -------------------------------------------------------
@@ -638,6 +724,439 @@
   }
 
   // -------------------------------------------------------
+  // b056 — 12 NEW CREATURE TYPES
+  // -------------------------------------------------------
+
+  function drawUfo(c, light, dark, wingT) {
+    const s = c.size;
+    // Saucer body
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s, s * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Top dome (transparent-feeling)
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.10, s * 0.45, s * 0.35, 0, Math.PI, 0);
+    ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Bottom abduction beam (cone)
+    const beamA = (Math.sin(wingT * 3) + 1) * 0.5 * 0.35 + 0.10;
+    ctx.fillStyle = `rgba(156,255,58,${beamA})`;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, s * 0.20);
+    ctx.lineTo( s * 0.30, s * 0.20);
+    ctx.lineTo( s * 0.65, s * 1.05);
+    ctx.lineTo(-s * 0.65, s * 1.05);
+    ctx.closePath();
+    ctx.fill();
+    // 3 rotating bottom lights
+    const sp = wingT * 4;
+    for (let i = 0; i < 3; i++) {
+      const a = sp + (i / 3) * Math.PI * 2;
+      ctx.fillStyle = ['#ff5cf2', '#4ad8ff', '#ffe833'][i];
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * s * 0.75, s * 0.18, s * 0.10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawPlanet(c, light, dark, wingT) {
+    const s = c.size;
+    // Ring (back half)
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 1.15, s * 0.30, -0.25, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    // Body
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.70, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Surface bands
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.15, s * 0.65, s * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.20, s * 0.55, s * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Ring (front half)
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 1.15, s * 0.30, -0.25, 0, Math.PI);
+    ctx.stroke();
+    // Orbiting moon
+    const ma = wingT * 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(Math.cos(ma) * s * 1.30, Math.sin(ma) * s * 0.32, s * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.stroke();
+  }
+
+  function drawRocket(c, light, dark, wingT) {
+    const s = c.size;
+    const flame = (Math.sin(wingT * 12) + 1) * 0.5;
+    // Flame
+    ctx.fillStyle = '#ff7a1a';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, s * 0.55);
+    ctx.lineTo( s * 0.30, s * 0.55);
+    ctx.lineTo( 0, s * (1.0 + flame * 0.4));
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.18, s * 0.55);
+    ctx.lineTo( s * 0.18, s * 0.55);
+    ctx.lineTo( 0, s * (0.85 + flame * 0.3));
+    ctx.closePath();
+    ctx.fill();
+    // Body — pointed cylinder
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, s * 0.55);
+    ctx.lineTo(-s * 0.30, -s * 0.30);
+    ctx.quadraticCurveTo(0, -s * 1.05, s * 0.30, -s * 0.30);
+    ctx.lineTo( s * 0.30, s * 0.55);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Window
+    ctx.fillStyle = '#4ad8ff';
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.25, s * 0.18, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Fins
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, s * 0.55);
+    ctx.lineTo(-s * 0.55, s * 0.70);
+    ctx.lineTo(-s * 0.30, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo( s * 0.30, s * 0.55);
+    ctx.lineTo( s * 0.55, s * 0.70);
+    ctx.lineTo( s * 0.30, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  function drawGhost(c, light, dark, wingT) {
+    const s = c.size;
+    const wob = Math.sin(wingT * 4) * s * 0.08;
+    // Body — rounded top + wavy bottom
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.70, Math.PI, 0, false);
+    // Wavy bottom
+    const baseY = s * 0.55;
+    ctx.lineTo( s * 0.70, baseY);
+    for (let i = 0; i < 4; i++) {
+      const x1 = s * 0.70 - (i + 0.5) * (s * 0.35);
+      const x2 = s * 0.70 - (i + 1) * (s * 0.35);
+      const y1 = baseY + (i % 2 === 0 ? wob : -wob) + s * 0.10;
+      ctx.quadraticCurveTo(x1, y1, x2, baseY);
+    }
+    ctx.lineTo(-s * 0.70, baseY);
+    ctx.lineTo(-s * 0.70, 0);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Eyes
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.ellipse(-s * 0.25, -s * 0.15, s * 0.10, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( s * 0.25, -s * 0.15, s * 0.10, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+    // Eye glints
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-s * 0.22, -s * 0.20, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( s * 0.28, -s * 0.20, s * 0.04, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawBird(c, light, dark, wingT) {
+    const s = c.size;
+    const flap = Math.sin(wingT * 7);
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.fillStyle = light;
+    ctx.lineWidth = 2.5;
+    // Two V wings
+    ctx.beginPath();
+    ctx.moveTo(-s, 0 + flap * s * 0.15);
+    ctx.lineTo( 0, -s * 0.20 - flap * s * 0.10);
+    ctx.lineTo( s, 0 + flap * s * 0.15);
+    ctx.stroke();
+    // Body dot in the middle
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.10, s * 0.12, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+  }
+
+  function drawBee(c, light, dark, wingT) {
+    const s = c.size;
+    const flap = Math.sin(wingT * 14) * 0.4 + 0.6;
+    // Wings (drawn behind body)
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.20, -s * 0.40, s * 0.30 * flap, s * 0.18, -0.4, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse( s * 0.20, -s * 0.40, s * 0.30 * flap, s * 0.18, 0.4, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Body — yellow oval
+    ctx.fillStyle = '#ffe833';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.55, s * 0.40, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Stripes
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(-s * 0.30, -s * 0.10, s * 0.60, s * 0.08);
+    ctx.fillRect(-s * 0.20, s * 0.06, s * 0.40, s * 0.08);
+    // Stinger
+    ctx.beginPath();
+    ctx.moveTo(s * 0.55, 0);
+    ctx.lineTo(s * 0.80, -s * 0.05);
+    ctx.lineTo(s * 0.80, s * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    // Eye
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-s * 0.35, -s * 0.10, s * 0.07, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawFlower(c, light, dark, wingT) {
+    const s = c.size;
+    ctx.save();
+    ctx.rotate(wingT * 0.6);
+    // 5 petals
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      ctx.save();
+      ctx.rotate(a);
+      ctx.beginPath();
+      ctx.ellipse(0, -s * 0.55, s * 0.30, s * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    // Center
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.30, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Center dots
+    ctx.fillStyle = '#0e0e0e';
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * s * 0.10, Math.sin(a) * s * 0.10, s * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawMushroom(c, light, dark, wingT) {
+    const s = c.size;
+    // Stem
+    ctx.fillStyle = '#f5ecd8';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.25, s * 0.15);
+    ctx.lineTo(-s * 0.20, s * 0.70);
+    ctx.lineTo( s * 0.20, s * 0.70);
+    ctx.lineTo( s * 0.25, s * 0.15);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Cap
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.85, s * 0.55, 0, Math.PI, 0);
+    ctx.lineTo( s * 0.85, 0);
+    ctx.lineTo(-s * 0.85, 0);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Cap dots
+    ctx.fillStyle = '#ffffff';
+    const dots = [[-0.45, -0.15], [0.05, -0.30], [0.40, -0.10], [-0.20, -0.35]];
+    for (const [dx, dy] of dots) {
+      ctx.beginPath();
+      ctx.arc(s * dx, s * dy, s * 0.10, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+  }
+
+  function drawOctopus(c, light, dark, wingT) {
+    const s = c.size;
+    // 8 wavy tentacles drawn first
+    ctx.strokeStyle = light;
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 8; i++) {
+      const baseA = (i / 8) * Math.PI * 2;
+      const bx = Math.cos(baseA) * s * 0.35;
+      const by = Math.sin(baseA) * s * 0.20 + s * 0.20;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      for (let k = 1; k <= 4; k++) {
+        const r = s * (0.35 + k * 0.18);
+        const wig = Math.sin(wingT * 3 + i + k) * s * 0.10;
+        const px = Math.cos(baseA) * r + wig;
+        const py = Math.sin(baseA) * r + s * 0.20 + k * s * 0.05;
+        ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    // Head
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.10, s * 0.55, s * 0.50, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.15, s * 0.12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc( s * 0.18, -s * 0.15, s * 0.12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.13, s * 0.05, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( s * 0.18, -s * 0.13, s * 0.05, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawBat(c, light, dark, wingT) {
+    const s = c.size;
+    const flap = Math.sin(wingT * 8) * 0.30 + 0.70;
+    ctx.fillStyle = dark;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    // Left wing — angular
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-s * 0.35, -s * 0.30 * flap);
+    ctx.lineTo(-s * 0.85, -s * 0.10 * flap);
+    ctx.lineTo(-s * 0.95, s * 0.20 * flap);
+    ctx.lineTo(-s * 0.55, s * 0.10);
+    ctx.lineTo(-s * 0.30, s * 0.30 * flap);
+    ctx.lineTo(0, s * 0.10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Right wing
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo( s * 0.35, -s * 0.30 * flap);
+    ctx.lineTo( s * 0.85, -s * 0.10 * flap);
+    ctx.lineTo( s * 0.95, s * 0.20 * flap);
+    ctx.lineTo( s * 0.55, s * 0.10);
+    ctx.lineTo( s * 0.30, s * 0.30 * flap);
+    ctx.lineTo(0, s * 0.10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Body
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.18, s * 0.30, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Ears
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.12, -s * 0.30);
+    ctx.lineTo(-s * 0.20, -s * 0.45);
+    ctx.lineTo(-s * 0.05, -s * 0.30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo( s * 0.12, -s * 0.30);
+    ctx.lineTo( s * 0.20, -s * 0.45);
+    ctx.lineTo( s * 0.05, -s * 0.30);
+    ctx.closePath();
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#ff5cf2';
+    ctx.beginPath(); ctx.arc(-s * 0.07, -s * 0.10, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( s * 0.07, -s * 0.10, s * 0.04, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawNote(c, light, dark, wingT) {
+    const s = c.size;
+    // Note head — filled ellipse, slightly tilted
+    ctx.save();
+    ctx.rotate(-0.35);
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.20, s * 0.45, s * 0.35, s * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    // Stem
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(s * 0.05, -s * 0.65, s * 0.10, s * 1.10);
+    // Flag
+    ctx.beginPath();
+    ctx.moveTo(s * 0.15, -s * 0.65);
+    ctx.quadraticCurveTo(s * 0.55, -s * 0.40, s * 0.40, -s * 0.10);
+    ctx.quadraticCurveTo(s * 0.30, -s * 0.30, s * 0.15, -s * 0.30);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawCassette(c, light, dark, wingT) {
+    const s = c.size;
+    // Body
+    ctx.fillStyle = light;
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    const w = s * 1.10, h = s * 0.75;
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.strokeRect(-w / 2, -h / 2, w, h);
+    // Label area
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-w / 2 + 4, -h / 2 + 4, w - 8, h * 0.40);
+    ctx.strokeRect(-w / 2 + 4, -h / 2 + 4, w - 8, h * 0.40);
+    // Label lines
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(-w / 2 + 7, -h / 2 + 8, w * 0.5, 1.5);
+    ctx.fillRect(-w / 2 + 7, -h / 2 + 13, w * 0.4, 1.5);
+    // Two reels — rotating
+    const rA = wingT * 4;
+    for (let side = -1; side <= 1; side += 2) {
+      const cx = side * s * 0.28;
+      const cy = s * 0.15;
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.18, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      // Spokes
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rA * side);
+      ctx.strokeStyle = '#0e0e0e';
+      ctx.lineWidth = 1.5;
+      for (let k = 0; k < 4; k++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos((k / 4) * Math.PI * 2) * s * 0.16, Math.sin((k / 4) * Math.PI * 2) * s * 0.16);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // -------------------------------------------------------
   // CREATURE DRAW — translates/rotates/scales then dispatches
   // to the type-specific routine.
   // -------------------------------------------------------
@@ -654,9 +1173,26 @@
     const [light, dark] = PALETTE[c.colorIdx];
     const wingT = t + c.wingPhase;
 
+    // b056 — soft additive glow halo behind the creature for
+    // a cheap bloom feel. One radial gradient draw per
+    // creature is fine perf-wise. Stronger on hover.
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const haloR = c.size * c.scale * (isHover ? 2.6 : 2.0);
+    const halo = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, haloR);
+    halo.addColorStop(0, hexToRgba(light, isHover ? 0.55 : 0.30));
+    halo.addColorStop(1, hexToRgba(light, 0));
+    ctx.fillStyle = halo;
+    ctx.fillRect(c.x - haloR, c.y - haloR, haloR * 2, haloR * 2);
+    ctx.restore();
+
     ctx.save();
     ctx.translate(c.x, c.y);
-    if (c.type !== 'butterfly' && c.type !== 'fish') {
+    // Some creatures have intentional non-rotating orientation
+    const noRot = c.type === 'butterfly' || c.type === 'fish' ||
+                  c.type === 'rocket' || c.type === 'note' ||
+                  c.type === 'mushroom' || c.type === 'bee';
+    if (!noRot) {
       ctx.rotate(c.rot * 0.3);
     }
     ctx.scale(c.scale, c.scale);
@@ -670,9 +1206,31 @@
       case 'beetle':    drawBeetle(c, light, dark, wingT); break;
       case 'eye':       drawEye(c, light, dark, wingT); break;
       case 'crystal':   drawCrystal(c, light, dark, wingT); break;
+      case 'ufo':       drawUfo(c, light, dark, wingT); break;
+      case 'planet':    drawPlanet(c, light, dark, wingT); break;
+      case 'rocket':    drawRocket(c, light, dark, wingT); break;
+      case 'ghost':     drawGhost(c, light, dark, wingT); break;
+      case 'bird':      drawBird(c, light, dark, wingT); break;
+      case 'bee':       drawBee(c, light, dark, wingT); break;
+      case 'flower':    drawFlower(c, light, dark, wingT); break;
+      case 'mushroom':  drawMushroom(c, light, dark, wingT); break;
+      case 'octopus':   drawOctopus(c, light, dark, wingT); break;
+      case 'bat':       drawBat(c, light, dark, wingT); break;
+      case 'note':      drawNote(c, light, dark, wingT); break;
+      case 'cassette':  drawCassette(c, light, dark, wingT); break;
     }
 
     ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // hexToRgba — turn a #rrggbb string into rgba(...) for
+  // the bloom halo gradient. Cheap, one match per call.
+  // -------------------------------------------------------
+  function hexToRgba(hex, a) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!m) return `rgba(255,255,255,${a})`;
+    return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
   }
 
   // -------------------------------------------------------
@@ -760,18 +1318,19 @@
       if (i === hovered) continue;
       drawCreature(creatures[i], t, false, beat);
     }
+    // b056 — toast (PLAYING / QUEUED) takes priority in the info
+    // panel for ~1.4s after a click, then yields back to hover state.
+    const lab = document.getElementById('wallLabel');
+    const tit = document.getElementById('wallTitle');
+    const showToast = performance.now() < toastUntil;
+
     if (hovered >= 0) {
       drawCreature(creatures[hovered], t, true, beat);
       drawTooltip(creatures[hovered]);
-      // Update info panel
-      const lab = document.getElementById('wallLabel');
-      const tit = document.getElementById('wallTitle');
-      if (lab) lab.textContent = '// ' + creatures[hovered].type;
+      if (lab) lab.textContent = showToast ? toastText : ('// ' + creatures[hovered].type);
       if (tit) tit.textContent = creatures[hovered].title.toUpperCase();
     } else {
-      const lab = document.getElementById('wallLabel');
-      const tit = document.getElementById('wallTitle');
-      if (lab) lab.textContent = '// hover a creature';
+      if (lab) lab.textContent = showToast ? toastText : '// hover a creature';
       if (tit) tit.textContent = 'THE WALL';
     }
 
