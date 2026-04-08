@@ -17,8 +17,8 @@
   // First-person uses fixed position+yaw+pitch+fov, drag rotates lookAt in
   // place, scroll changes FOV instead of distance.
   let camMode = 'orbit';         // 'orbit' | 'firstPerson'
-  let yaw = 0, pitch = 0.30;     // initial slight downward tilt
-  let radius = 26;               // orbit distance (orbit mode only)
+  let yaw = 0.20, pitch = 0.10;  // b036 — lower, slightly off-axis dramatic angle
+  let radius = 22;               // orbit distance (orbit mode only)
   let fov = 70;                  // perspective FOV (first-person zoom target)
   let isDragging = false;
   let lastDragX = 0, lastDragY = 0;
@@ -95,7 +95,10 @@
     // b028 — fog density slashed 0.009 → 0.003 and color shifted from
     // muddy purple 0x40285a to a richer magenta 0x6a1850. The old fog was
     // eating saturation across the whole scene and making it look pastel.
-    scene.fog = new THREE.FogExp2(0x6a1850, 0.003);
+    // b036 — fog density bumped 0.003 → 0.0055 so the distant ground doesn't
+    // read as a flat Roblox slab. Distant trees and ocean fade into the dusk
+    // haze instead of every pixel sitting at full saturation.
+    scene.fog = new THREE.FogExp2(0x6a1850, 0.0055);
 
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 1.5, 320);
     // Initial position will be overwritten by animate() on first frame, but
@@ -242,7 +245,7 @@
           uWindowColor:  { value: windowColor },
           uWindowRange:  { value: windowRange },
           uFogColor:     { value: new THREE.Color(0x6a1850) },
-          uFogDensity:   { value: 0.003 },
+          uFogDensity:{ value: 0.0055 },
           uCycle:        cycleUniform,   // b029 — shared day/night cycle
         },
         vertexShader: `
@@ -339,6 +342,26 @@
             rim = pow(rim, 2.4);
             col += vec3(1.00, 0.30, 0.65) * rim * 0.55;
 
+            // b036 — WORLD-SPACE NOISE HASH. Big flat surfaces (sand, deck,
+            // showroom slab, asphalt) all looked like flat Roblox baseplates
+            // because every fragment of a single mesh got identical color.
+            // Hashing the world position into a small color delta breaks up
+            // the flatness without needing textures. Sampled at multiple
+            // scales for coarse + fine grain. Strength is small (±0.06) so
+            // it reads as material variation, not noise.
+            vec3 hp = floor(vWorldPos * 6.0);
+            float h1 = fract(sin(dot(hp.xz, vec2(12.9898, 78.233))) * 43758.5453);
+            vec3 hp2 = floor(vWorldPos * 1.5);
+            float h2 = fract(sin(dot(hp2.xz + hp2.y, vec2(45.165, 91.371))) * 12345.6789);
+            float grain = (h1 - 0.5) * 0.10 + (h2 - 0.5) * 0.06;
+            // Tint the grain slightly cooler in shadow, warmer in light, so
+            // it reads as material grit instead of color noise
+            col += vec3(grain * 0.9, grain * 0.85, grain * 1.05);
+            // Per-fragment AO-ish darkening on near-horizontal upward faces
+            // sitting near y=0..1 (catches the deck/sand edges)
+            float lowSurface = (1.0 - smoothstep(0.0, 1.5, vWorldPos.y)) * max(vNormal.y, 0.0);
+            col *= mix(1.0, 0.78, lowSurface * 0.55);
+
             float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vFogDepth * vFogDepth);
             col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
             gl_FragColor = vec4(col, 1.0);
@@ -377,7 +400,7 @@
         uBaseColor:   { value: new THREE.Color(0x18d8d0) },
         uBrightColor: { value: new THREE.Color(0xa8fff0) },
         uFogColor:    { value: new THREE.Color(0x6a1850) },
-        uFogDensity:  { value: 0.003 },
+        uFogDensity:{ value: 0.0055 },
       },
       vertexShader: `
         uniform float uTime;
@@ -1776,7 +1799,7 @@
         uColor:      { value: new THREE.Color(0x2a0a55) },
         uHighlight:  { value: new THREE.Color(0xc04098) },
         uFogColor:   { value: new THREE.Color(0x6a1850) },
-        uFogDensity: { value: 0.003 },
+        uFogDensity:{ value: 0.0055 },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -2581,7 +2604,7 @@
         uBase:       { value: new THREE.Color(0x08323c) },
         uHi:         { value: new THREE.Color(0x3a92a8) },
         uFogColor:   { value: new THREE.Color(0x6a1850) },
-        uFogDensity: { value: 0.003 },
+        uFogDensity:{ value: 0.0055 },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -2798,7 +2821,10 @@
     postScene = new THREE.Scene();
     postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     postMaterial = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: lowResTarget.texture } },
+      uniforms: {
+        tDiffuse: { value: lowResTarget.texture },
+        uTexel:   { value: new THREE.Vector2(1 / LOW_W, 1 / LOW_H) },
+      },
       vertexShader: `
         varying vec2 vUv;
         void main() {
@@ -2808,6 +2834,7 @@
       `,
       fragmentShader: `
         uniform sampler2D tDiffuse;
+        uniform vec2 uTexel;
         varying vec2 vUv;
 
         // b028 — 4x4 Bayer matrix dither. Adds the chunky banded gradient
@@ -2837,8 +2864,44 @@
           return v / 16.0 - 0.5;
         }
 
+        // b036 — Cheap single-pass bloom. For each output pixel, sample 13
+        // neighbors in a wide ring, threshold each one to keep only the
+        // bright pixels (lanterns, pool, lambo emissives, fire pit), and
+        // accumulate them as additive glow on top of the base color. Real
+        // bloom would do a separable Gaussian blur chain into a half-res
+        // target — this is the poor man's version that fits in one pass and
+        // looks ~80% as good for our blocky low-res output.
+        vec3 bloomSample(vec2 uv) {
+          vec3 s = texture2D(tDiffuse, uv).rgb;
+          // Threshold: only contribute the part above 0.75 luminance
+          float lum = dot(s, vec3(0.299, 0.587, 0.114));
+          float t = max(0.0, lum - 0.72);
+          return s * t * 1.6;
+        }
+
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
+
+          // b036 — Bloom accumulation. 13 taps in two rings (inner + outer)
+          // gives a soft halo without obvious sample patterns.
+          vec3 bloom = vec3(0.0);
+          float r1 = 2.5, r2 = 5.5;
+          // Inner ring (8 taps, distance r1)
+          bloom += bloomSample(vUv + vec2( r1, 0.0) * uTexel);
+          bloom += bloomSample(vUv + vec2(-r1, 0.0) * uTexel);
+          bloom += bloomSample(vUv + vec2(0.0,  r1) * uTexel);
+          bloom += bloomSample(vUv + vec2(0.0, -r1) * uTexel);
+          bloom += bloomSample(vUv + vec2( r1,  r1) * uTexel * 0.7);
+          bloom += bloomSample(vUv + vec2(-r1,  r1) * uTexel * 0.7);
+          bloom += bloomSample(vUv + vec2( r1, -r1) * uTexel * 0.7);
+          bloom += bloomSample(vUv + vec2(-r1, -r1) * uTexel * 0.7);
+          // Outer ring (4 taps, distance r2)
+          bloom += bloomSample(vUv + vec2( r2, 0.0) * uTexel) * 0.7;
+          bloom += bloomSample(vUv + vec2(-r2, 0.0) * uTexel) * 0.7;
+          bloom += bloomSample(vUv + vec2(0.0,  r2) * uTexel) * 0.7;
+          bloom += bloomSample(vUv + vec2(0.0, -r2) * uTexel) * 0.7;
+          bloom /= 11.6;
+          c.rgb += bloom * 1.4;
 
           // b028 — tone curve: lift midtones, mild contrast, saturation pump
           c.rgb = pow(c.rgb, vec3(0.92));         // gamma lift
@@ -3279,7 +3342,7 @@
     // Interior rooms use first-person so the user can stand in place and
     // pan their view (orbit-around-a-point arcs the camera through walls in
     // tight spaces, plus the radius clamp makes interior orbits unstable).
-    { name: 'pool',     label: 'POOL',     mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -2,    yaw: 0,            pitch: 0.30, radius: 26  },
+    { name: 'pool',     label: 'POOL',     mode: 'orbit',       cx:   0,    cy: 3.0, cz:   2,    yaw: 0.20,         pitch: 0.10, radius: 22  },
     { name: 'beach',    label: 'BEACH',    mode: 'orbit',       cx:   0,    cy: 4.0, cz:  -8,    yaw: 0,            pitch: 0.05, radius: 35  },
     { name: 'aerial',   label: 'AERIAL',   mode: 'orbit',       cx:   0,    cy: 0.0, cz: -10,    yaw: 0,            pitch: 1.25, radius: 42  },
     { name: 'living',   label: 'LIVING',   mode: 'firstPerson', px:   0,    py: 3.5, pz: -15.8,  yaw: Math.PI,      pitch: 0.10, fov: 75 },

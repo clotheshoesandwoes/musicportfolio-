@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## b036 — 2026-04-07 — De-Robloxification: bloom pass + surface noise + heavier fog + lower camera
+
+User: "everything looks super roblox idk how to feel about it all. whaty can we do". Diagnosed root causes as (1) huge unbroken flat-color slabs, (2) emissives without bloom render as flat neon parts, (3) hard contact edges, (4) top-down orbit angle. Three cheap fixes that hit ~80% of the issue without touching geometry:
+
+### A — Cheap single-pass bloom (post shader)
+Inside `postMaterial.fragmentShader`, before the tone curve. For each output pixel, sample 12 neighbors in two rings (8 inner at r=2.5px, 4 outer at r=5.5px), threshold each one to keep only luminance > 0.72, accumulate as additive glow. New `uTexel` uniform = `1/LOW_W, 1/LOW_H` for the offset math. Real bloom would do a separable Gaussian blur chain into a half-res target — this is the single-pass approximation that fits the existing pipeline and looks ~80% as good for blocky low-res output. The pool, lanterns, lambo emissives, fire pit, LED strips, and path lights now actually halo against the dusk sky instead of reading as flat neon parts.
+
+### B — World-space noise hash (PS2 fragment shader)
+Added inside `makePS2Material`'s fragment, between the rim light and the fog. Hashes `floor(vWorldPos * 6.0)` (coarse) and `floor(vWorldPos * 1.5)` (fine) into a small color delta (±0.06 luminance, slightly cooler-tinted). Big flat surfaces (sand, deck, showroom slab, asphalt) all looked like Roblox baseplates because every fragment of one mesh had identical color — the hash breaks that without needing textures. Also added a per-fragment fake-AO term that darkens upward-facing low-y faces by ~22% near contact edges so the deck/sand/villa intersections get a baked shadow crease.
+
+### C — Fog density + camera angle
+- `scene.fog` density `0.003 → 0.0055` (and the four matching `uFogDensity` shader uniforms in PS2 / pool / ocean / lagoon mats). Distant trees and ocean now fade into the dusk haze instead of reading as full-saturation flat color all the way to the horizon.
+- Initial camera + POOL anchor: `cy 4.0 → 3.0`, `cz -2 → 2`, `yaw 0 → 0.20`, `pitch 0.30 → 0.10`, `radius 26 → 22`. Lower, closer, slightly off-axis. Hides more of the flat ground in any single frame and frames the cantilever + pool more dramatically. Initial `let yaw/pitch/radius` defaults updated to match so the very first frame doesn't pop.
+
+### Files modified
+- [js/world.js](js/world.js) — `makePS2Material` frag (noise hash + fake AO), `postMaterial` (bloom pass + uTexel uniform), `scene.fog` density, all 4 `uFogDensity` uniforms, `cameraAnchors[0]` (POOL), initial `let yaw/pitch/radius`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b035e → b036`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b035e — 2026-04-07 — Loop = driveway, single road heading outward only
 
 User: "the loop isnt correct. the driveway should be the loop, and then 1 road leading outward towards the background. currently theres a loop and this tiny little road leading to the front of the house i dont like that".
