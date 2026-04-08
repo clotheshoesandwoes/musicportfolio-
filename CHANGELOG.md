@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## b041 — 2026-04-07 — Mega-mansion Phase 1: tripled footprint, full upper-floor slab, single open volume
+
+User: "i lowkey still hate the new mansion it only has the rooms we mentioned. time to talk new mansion, its gotta be huge to be honest ... no basement cuz itll fuck with the flooring. but we can multi level the open air design but make sure theres floors for second layer ... build it im curious".
+
+4th attempt at the mansion. The previous 3 (b025/b037/b039) all kept the same 32×14 U-footprint and just changed surface details — the wrong move. A huge mansion has to actually BE huge. This is **Phase 1** of the mega rebuild: shell + structure + walkable upper floor. Phase 2 (b042) adds the new room interiors.
+
+### Footprint
+- **56 × 28** (mansionW × mansionD) — ~3× the b025-b040 32×14 U-shape
+- Centered at `mansionCx=0, mansionCz=-17`
+- x range: `-28 to +28` (was -16 to +16)
+- z range: `-31 to -3` (was -17 to -3 — front face stays at -3 so the colonnade + pool deck don't move)
+- Ground floor `mansionH1 = 5.0` (was 4)
+- Upper floor `mansionH2 = 4.5` (was 4)
+- Roof at `mansionRoofY = 10.32` (was 8.82)
+
+### Single open volume — no more 3-block U
+Replaced central + east wing + west wing + east drum + west drum + standalone garage with **one big 56×28 shell**. 3 walls (back + east + west), front fully open, no interior partitions. The whole ground floor is one continuous open space the user can walk through.
+
+### Real walkable upper floor (the user's "second layer floors")
+- **Structural slab box** spanning the entire 56×28 minus wall thickness, centered at `y = podiumTopY + mansionH1 - 0.15` so its top sits at exactly `podiumTopY + mansionH1` (= bedroom Y).
+- **Travertine plane on top** of the slab at `y = podiumTopY + mansionH1 + 0.01`. The actual walkable surface.
+- 11 internal structural columns supporting the slab (6 back row at z=-29, 5 front row at z=-5), positioned to avoid collision with the existing LIVING (x=0±5, z=-14..-4) / BEDROOM (x=-11.5±2, z=-12..-7) / BILLIARD (x=11.5±2.5, z=-13..-5) / INDOOR (x=0±8, z=-17..-29) furniture clusters.
+
+### Backward-compat aliases for the b025-b040 interior rooms
+LIVING/BEDROOM/BILLIARD/INDOOR all reference `villaCx`/`villaCz`/`centralW`/`wingW`/`westWingCx`/`eastWingCx`/`wingH1`/etc. These constants are kept as aliases over the new mansion constants so the rooms still place correctly. Critical change: `wingH1` and `wingH2` bumped from `3` and `3` to `5.0` and `4.5` so the bedroom Y placement (`bdY = podiumTopY + wingH1 = 5.82`) matches the new upper-floor surface exactly.
+
+### Other shell pieces
+- **Front cantilever balcony** — 52 wide × 3 deep slab projecting forward from the upper floor at the roof level, frameless cool-glass rail, marble cap.
+- **Roof slab + parapet + travertine rooftop terrace** spanning the entire 56×28.
+- **2 cylindrical corner drums** (radius 3.0, full mansion height) at the front-left and front-right of the mansion. Cool glass band at the upper floor level. Curved silhouette on both ends.
+- **Rooftop pavilion** (5×5×4 marble plinth + cube + glassMat front + cantilever canopy + 2 columns + 2 sconces) carrying the `bell_tower` click→card target.
+- **Front colonnade**: 9 slim white columns spanning the full 56-wide front, supporting a horizontal cantilever eyebrow slab + warm cove glow strip on the underside.
+- **Back archway** (open marble jamb + lintel + podium-colored void box) at center-back.
+- **Garage zone** integrated into the ground floor at x=-28..-16: marble showcase plinth + LED accent strip on the back wall. The yellow lambo at (-22, -9) lands here.
+- **Wall sconces** along front (5) and back (3) facades.
+- **Grand entrance** wide marble steps (10 wide, was 5) + 2 marble planters with topiary cones.
+
+### Removed
+- All 580 lines of b025-b040 mansion shell cruft (central walls + tvBack strip + cFloorLine + 4 internal columns + cantilever balcony + interior floor/ceiling planes + central rooftop + topiary planters + east wing walls + east wing eyebrow + east wing columns + east wing roof + east wing side door + east wing drum pavilion + west wing walls + west wing eyebrow + west wing columns + west wing roof + west wing drum pavilion + standalone garage block + open colonnade + old rooftop pavilion + 12 wall sconces + back door + grand entrance) consolidated into the new shell.
+- **INDOOR ATRIUM glass walls + roof + atrium back wall** (b029 4 wall meshes + atrium roof slab using `roofMat` + the entire enclosed-room concept). The atrium now lives as a pale-tile floor zone of the new mansion's open ground floor — no walls of its own, the mansion shell IS the walls. The indoor pool, sauna, loungers, potted palm all stay in the same x/z. The `indoor_pool` and `sauna` click→card targets still work.
+
+### Files modified
+- [js/world.js](js/world.js) — mansion shell rewrite (header + constants + body), atrium walls/roof stripped. Net **~570 lines deleted**.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b040 → b041`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Phase 2 (b042 next round)
+Recording studio + DJ booth + aquarium tunnel + atrium with koi pond + waterfall + dining + chef's kitchen + trophy hall + foyer + grand staircase + walk-in closet + master bath + 2 guest bedrooms + piano room + speakeasy + wine tasting + cinema + library + rooftop pool. Plus camera anchors for each + click→card targets. Each lands as a furniture cluster + zone marker; no interior walls (open plan throughout).
+
 ## b040 — 2026-04-07 — Garage wing attached west of mansion + west lot cleared (BBQ, fountain, garden, statues out)
 
 User: "garage attached to mansion ... enough space that i could have a car inside a living room for fun ... the entire mansion bothers me the most right now ... remove bbqbar fountain garden 3 gadren statues ... garage west wing or something sure proceed however u wanna".
