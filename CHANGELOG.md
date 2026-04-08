@@ -1,5 +1,79 @@
 # CHANGELOG
 
+## b058 — 2026-04-08 — Wall: gradient mesh bg, mobile cap, cursor interaction
+
+User on b057: *"what would u do to improve overall experience, also i wanna change background too basic and bland i feel like for all of our icons. would love a dynamic or live background."* I proposed a 7-item plan; user said *"proceed"*. Single commit, all 7 changes.
+
+### 1. Mobile creature cap (30 vs 100)
+
+`MIN_CREATURES_DESKTOP = 100`, `MIN_CREATURES_MOBILE = 30`. b057's 117-on-phone was unreadable. `buildCreatures` now picks the cap based on `isMobile()` and clamps to `min(max(tracks.length, minCount), 32 mobile / 117 desktop)`. Same hash-derived layout, just fewer creatures on small screens.
+
+### 2. Gradient mesh background — checker is GONE
+
+The b056-b057 scrolling diagonal checker was the main thing fighting the creatures for attention. Removed entirely.
+
+Replaced with a **dark plum base** (`#1a0820`) + **7 huge additive color blobs** (cyan / hot pink / lime / purple / mint / orange / second cyan accent) drifting on slow sine paths AND morphing their radii on a separate sine. Each blob is 540–1020px radius, additively layered with `globalCompositeOperation = 'lighter'`. The result reads as "alive color wash" — no edges, no patterns, just slow color shifts. Subtle scanlines stay (alpha 0.03), corner vignette stays (bumped to 0.45 for more contrast against the new dark base).
+
+The b057 nebula draw became the only background draw. The checker draw block was deleted from `drawBackground` entirely. Each nebula now has `radiusPulseSpeed` + `radiusPulseAmp` so the blob sizes morph too.
+
+### 3. Info panel shrunk
+
+The b055 `<div class="info-label">// hover a creature</div><div class="info-title">THE WALL</div><div class="info-meta">N tracks adrift</div>` block was the biggest static thing on screen. Replaced with a single tiny line: `click any creature →` (font-size 11px, opacity 0.7). The title div stays in the DOM but is `display: none` until needed. Hover state replaces the label text with `▸ track title`. Click toast replaces it with `▶ track title` for 1.8s.
+
+### 4. Cursor interaction
+
+Two new behaviors in the draw loop:
+
+- **Gentle attraction**: in `updateCreature`, if the cursor is within 100px of the creature, the creature is pulled up to 22px toward the cursor (linear falloff). Doesn't change the anchor — the drift sine is still computed first, then the attraction nudges the result. Skipped when no cursor (`mx === -9999`).
+- **Connecting threads**: in the main `draw()` loop, after `hitTest()`, walks all creatures and draws a thin lime line (`rgba(156,255,58,0.30)` × distance falloff) from the cursor to any creature within 90px. Skipped on mobile (no hover concept + perf).
+
+### 5. Click burst animation
+
+`bursts` array (top of file). On click, `onClick` pushes `{x, y, birth, color}`. Drawn last in the main draw loop — expanding ring (radius `12 + age * 70`px) + faint inner ring at 60% radius. Both fade over 700ms then auto-removed. Drawn after creatures so they sit above everything. Color comes from the clicked creature's accent palette.
+
+### 6. Currently-playing ring
+
+After `hitTest()`, walks creatures and draws a **slow rotating dashed lime ring** (lineDash `[6, 6]`, rotation `t * 0.6`) around any creature whose `trackIndex === state.currentTrack` (the global player state). Radius is `c.size * c.scale * 1.7` so it sits just outside the creature. Multiple creatures can share a track, so multiple rings can appear simultaneously.
+
+### 7. Poisson-disk placement
+
+Replaced the b057 grid+jitter layout with **dart-throwing poisson placement**. Each creature tries up to 30 hash-derived candidate positions and accepts the first one that's at least `minDist` away from any already-placed creature (`minDist = 72px desktop / 56px mobile`). If all 30 attempts fail, accepts the last candidate as a fallback. The candidates are deterministic (`hash(title + '#' + i + '@' + attempt, 23)`) so the layout is stable across resize.
+
+Result: no more rows, no more grid lattice, no more visible neighbor clustering by type or color.
+
+### Files modified
+- [js/wall.js](js/wall.js) — major rewrite of `buildCreatures` (poisson), `buildNebulas` (gradient mesh), `drawBackground` (checker removed), `updateCreature` (cursor attraction), `draw()` (connecting threads + playing ring + burst rings), `onClick` (push burst), info panel HTML, mobile creature cap. ~80 lines net added.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b057 → b058`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/` → no checker pattern. Background should be dark plum with slow-drifting cyan/pink/lime/purple/mint/orange color washes that visibly morph.
+2. Move mouse around → nearby creatures should subtly drift toward the cursor, and lime threads should appear connecting cursor to nearby creatures (within 90px).
+3. Click any creature → expanding ring burst animation + that song starts immediately. Info panel flashes `▶ track title` for ~1.8s.
+4. While a song is playing → the creature(s) for that track should have a slow rotating dashed lime ring around them.
+5. The 20 creature types should be more evenly spread (no visible grid rows, no neighbor clustering).
+6. **On mobile**: only ~30 creatures (was 117). Tap should still work via b057's inline hit test.
+
+### Knobs (all in [js/wall.js](js/wall.js))
+- `MIN_CREATURES_DESKTOP / MOBILE` — currently 100 / 30
+- Mobile hard cap `32` and desktop hard cap `117` in `buildCreatures` `N` calc
+- Cursor attraction range `100` and pull `22` in `updateCreature`
+- Connecting line range `90` and color `rgba(156,255,58,0.30)` in `draw()`
+- Burst ring lifetime `700ms`, max radius `12 + age * 70` in `draw()`
+- Playing ring `lineDash [6,6]`, color `#9cff3a`, radius mult `1.7`
+- Poisson `minDist` `72 desktop / 56 mobile`
+- Nebula colors + alphas (currently 0.38–0.60) in `buildNebulas`
+- Nebula `radiusPulseAmp` 0.15–0.35
+- Base color `#1a0820` in `drawBackground`
+- Vignette intensity `rgba(0,0,0,0.45)` in `drawBackground`
+
+### What this is NOT
+- Not WebGL — pure 2D canvas, every layer is `globalCompositeOperation` tricks
+- Not asset-based — no images, no sprites, all canvas paths
+- Not search-filtered yet (still shows all)
+- Not type-filtered (no UI to show only butterflies or only jellies)
+
 ## b057 — 2026-04-08 — Wall: tone bloom, fix mobile click, drop queue, more variety
 
 User on b056: *"bloomy too heavy and ugly and concentrated also on mobile still cant click the little things to play a new song and many elements are the same it feels like"* + follow-up *"forget queue just new icon plays new song"*.

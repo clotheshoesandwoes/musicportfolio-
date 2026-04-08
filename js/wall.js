@@ -26,6 +26,7 @@
   let creatures = [];
   let glyphs = [];
   let nebulas = [];
+  let bursts = [];     // b058 — click burst rings, fade and expand
   let hovered = -1;
   let t0 = 0;
   const isMobile = () => window.innerWidth < 768;
@@ -54,7 +55,9 @@
 
   // b056 — minimum on-screen creatures even if tracks.length is small.
   // Each creature still maps to a real track via i % tracks.length.
-  const MIN_CREATURES = 100;
+  // b058 — mobile cap dropped from 100 to 30 (117 was unreadable on phones).
+  const MIN_CREATURES_DESKTOP = 100;
+  const MIN_CREATURES_MOBILE = 30;
 
   // b056 — feedback flash state for queued/playing toast in info panel
   let toastUntil = 0;
@@ -70,13 +73,14 @@
     container.appendChild(canvas);
     ctx = canvas.getContext('2d');
 
-    // Tiny info panel — track count, updates with hover
+    // b058 — minimal info panel: single line "click any creature →"
+    // until something is hovered/playing. No more THE WALL header.
     const info = document.createElement('div');
     info.className = 'info-panel';
+    info.style.cssText = 'pointer-events:none;';
     info.innerHTML = `
-      <div class="info-label" id="wallLabel">// hover a creature</div>
-      <div class="info-title" id="wallTitle">THE WALL</div>
-      <div class="info-meta" id="wallMeta">${(window.tracks || []).length} tracks adrift</div>
+      <div class="info-label" id="wallLabel" style="font-size:11px; letter-spacing:0.16em; opacity:0.7;">click any creature →</div>
+      <div class="info-title" id="wallTitle" style="font-size:14px; margin-top:2px; display:none;"></div>
     `;
     container.appendChild(info);
 
@@ -166,9 +170,15 @@
     const c = creatures[best];
     if (typeof playTrack === 'function') {
       playTrack(c.trackIndex);
-      toastText = '▶ PLAYING';
-      toastUntil = performance.now() + 1400;
+      toastText = '▶ ' + (c.title || '').toLowerCase();
+      toastUntil = performance.now() + 1800;
     }
+    // b058 — click burst: expanding fading ring at the click point
+    bursts.push({
+      x: c.x, y: c.y,
+      birth: performance.now(),
+      color: PALETTE[c.colorIdx][0],
+    });
   }
 
   // -------------------------------------------------------
@@ -186,34 +196,38 @@
   }
 
   // -------------------------------------------------------
-  // NEBULAS — large soft drifting radial gradients layered
-  // between the base magenta and the checker. b057: dialed
-  // way down vs b056 (alpha 0.40-0.55 → 0.14-0.20, radius
-  // 280-560 → 480-880) so the bloom reads as a mood, not as
-  // concentrated hot spots.
+  // NEBULAS — gradient-mesh background. b058: replaces the
+  // checker entirely. 7 huge soft color blobs that drift +
+  // morph their radii on sine, additively layered over a
+  // dark plum base. Reads as "alive color wash" instead of
+  // "static checker pattern".
   // -------------------------------------------------------
   function buildNebulas() {
     nebulas = [];
     const colors = [
-      'rgba(74, 216, 255, 0.18)',   // cyan
-      'rgba(156, 255, 58, 0.14)',   // lime
-      'rgba(168, 85, 247, 0.20)',   // purple
-      'rgba(255, 232, 51, 0.13)',   // yellow
-      'rgba(10, 255, 156, 0.15)',   // mint
-      'rgba(255, 122, 26, 0.14)',   // orange
+      'rgba(74, 216, 255, 0.55)',   // cyan
+      'rgba(255, 92, 242, 0.55)',   // hot pink
+      'rgba(156, 255, 58, 0.42)',   // lime
+      'rgba(168, 85, 247, 0.60)',   // purple
+      'rgba(10, 255, 156, 0.40)',   // mint
+      'rgba(255, 122, 26, 0.38)',   // orange
+      'rgba(74, 216, 255, 0.40)',   // second cyan accent
     ];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < colors.length; i++) {
       const h = hash('neb' + i, 33);
       nebulas.push({
         baseX: (h % 1000) / 1000 * W,
         baseY: ((h >> 8) % 1000) / 1000 * H,
-        radius: 480 + (h % 400),     // bigger + softer
-        color: colors[i % colors.length],
-        speedX: 0.04 + (h % 100) / 1800,
-        speedY: 0.03 + ((h >> 4) % 100) / 2000,
-        ampX: 80 + (h % 100),
-        ampY: 60 + ((h >> 6) % 80),
+        radius: 540 + (h % 480),     // huge soft blobs
+        color: colors[i],
+        speedX: 0.05 + (h % 100) / 1600,
+        speedY: 0.04 + ((h >> 4) % 100) / 1700,
+        ampX: 140 + (h % 160),       // big drift amplitude
+        ampY: 110 + ((h >> 6) % 140),
         phase: ((h >> 12) % 1000) / 1000 * Math.PI * 2,
+        // Pulse the radius too so blobs morph in size
+        radiusPulseSpeed: 0.20 + ((h >> 9) % 100) / 600,
+        radiusPulseAmp: 0.15 + ((h >> 11) % 100) / 500,
       });
     }
   }
@@ -238,9 +252,24 @@
     creatures = [];
     const tracks = window.tracks || [];
     if (tracks.length === 0) return;
-    const N = Math.max(tracks.length, MIN_CREATURES);
+    const minCount = isMobile() ? MIN_CREATURES_MOBILE : MIN_CREATURES_DESKTOP;
+    const N = Math.min(Math.max(tracks.length, minCount), isMobile() ? 32 : 117);
 
     const margin = 60;
+    // b058 — dart-throwing poisson placement: each creature
+    // tries up to 30 hash-derived candidate positions and
+    // accepts the first one that's at least minDist away
+    // from anything already placed. Breaks the grid feel.
+    const minDist = isMobile() ? 56 : 72;
+    const placed = []; // {x,y}
+    function tooClose(x, y) {
+      for (const p of placed) {
+        const dx = p.x - x, dy = p.y - y;
+        if (dx * dx + dy * dy < minDist * minDist) return true;
+      }
+      return false;
+    }
+
     for (let i = 0; i < N; i++) {
       const trackIndex = i % tracks.length;
       const title = tracks[trackIndex].title || ('untitled-' + trackIndex);
@@ -249,29 +278,27 @@
       const h1 = hash(title + '#' + i, 1);
       const h2 = hash(title + '#' + i, 7);
       const h3 = hash(title + '#' + i, 13);
-      // b057 — type distribution: pure h1 % len was clustering. Stride
-      // by i so consecutive creatures land on different types, and mix
-      // in h1 so it doesn't read as a perfect grid pattern.
+      // b057 — type distribution: stride by i (coprime with 20)
       const type = CREATURE_TYPES[(i * 7 + h1) % CREATURE_TYPES.length];
 
-      // Loose poisson-ish: hash-based grid + jitter. Avoids
-      // perfect grid look but mostly no overlaps.
-      const cols = Math.max(6, Math.floor((W - margin * 2) / 95));
-      const rows = Math.ceil(N / cols);
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const cellW = (W - margin * 2) / cols;
-      const cellH = (H - margin * 2) / Math.max(rows, 1);
-      const baseX = margin + cellW * (col + 0.5) + ((h1 % 100) - 50) * 0.4;
-      const baseY = margin + cellH * (row + 0.5) + ((h2 % 100) - 50) * 0.4;
+      // b058 — dart-throw placement.
+      let baseX = margin + (W - margin * 2) * 0.5;
+      let baseY = margin + (H - margin * 2) * 0.5;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const ah = hash(title + '#' + i + '@' + attempt, 23);
+        const cx = margin + ((ah % 10000) / 10000) * (W - margin * 2);
+        const cy = margin + (((ah >> 10) % 10000) / 10000) * (H - margin * 2);
+        if (!tooClose(cx, cy)) { baseX = cx; baseY = cy; break; }
+        if (attempt === 29) { baseX = cx; baseY = cy; } // accept last fallback
+      }
+      placed.push({ x: baseX, y: baseY });
 
       // b057 — wider size range so creatures don't all look "same".
-      // ~70% small (14-26), ~30% larger hero (28-44). Larger ones
-      // anchor the eye and break up the uniform-grid feel.
+      // ~70% small (14-26), ~30% larger hero (28-44).
       const sizeRoll = (h2 % 100);
       const size = sizeRoll < 70
-        ? 14 + (h1 % 13)        // 14-26 small
-        : 28 + (h1 % 17);       // 28-44 larger
+        ? 14 + (h1 % 13)
+        : 28 + (h1 % 17);
 
       creatures.push({
         type,
@@ -313,53 +340,39 @@
   }
 
   // -------------------------------------------------------
-  // BACKGROUND — magenta base + drifting nebula bloom layer
-  // (additive) + scrolling checker + scanlines.
-  // The nebulas use globalCompositeOperation 'lighter' to
-  // additively brighten the magenta where they overlap, so
-  // the canvas gets a soft uneven bloom without any GL pass.
+  // BACKGROUND — b058 gradient mesh. Dark plum base with
+  // 7 huge additive color blobs that drift + morph radius.
+  // No more checker (it was fighting the creatures for
+  // attention). Subtle scanlines + corner vignette stay.
   // -------------------------------------------------------
   function drawBackground(t) {
-    // Base magenta
-    ctx.fillStyle = '#ff2bd6';
+    // Dark plum base (was hot magenta — too dominant)
+    ctx.fillStyle = '#1a0820';
     ctx.fillRect(0, 0, W, H);
 
-    // Bloom layer — additive radial gradients drifting around
+    // Gradient mesh — additive blobs that drift + pulse radius
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const n of nebulas) {
       const cx = n.baseX + Math.sin(t * n.speedX + n.phase) * n.ampX;
       const cy = n.baseY + Math.cos(t * n.speedY + n.phase * 0.7) * n.ampY;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, n.radius);
+      const radius = n.radius * (1 + Math.sin(t * n.radiusPulseSpeed + n.phase) * n.radiusPulseAmp);
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
       grad.addColorStop(0, n.color);
       grad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(cx - n.radius, cy - n.radius, n.radius * 2, n.radius * 2);
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
     }
     ctx.restore();
 
-    // Scrolling checker — drawn over the bloom so the pattern
-    // still reads even on the bright nebula spots
-    const size = 36;
-    const offX = (t * 18) % size;
-    const offY = (t * 18) % size;
-    ctx.fillStyle = 'rgba(0,0,0,0.10)';
-    for (let y = -size + offY; y < H + size; y += size) {
-      for (let x = -size + offX; x < W + size; x += size) {
-        if (((Math.floor((x + offX) / size) + Math.floor((y + offY) / size)) & 1) === 0) {
-          ctx.fillRect(x, y, size, size);
-        }
-      }
-    }
-
     // Subtle scanlines
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
     for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
 
-    // Soft corner vignette — b057 dialed 0.40 → 0.25
+    // Soft corner vignette
     const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.30, W / 2, H / 2, Math.max(W, H) * 0.85);
     vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.25)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
   }
@@ -1206,8 +1219,25 @@
   // to the type-specific routine.
   // -------------------------------------------------------
   function updateCreature(c, t) {
-    c.x = c.baseX + Math.sin(t * c.driftSpeedX + c.driftPhase) * c.driftAmpX;
-    c.y = c.baseY + Math.cos(t * c.driftSpeedY + c.driftPhase * 0.7) * c.driftAmpY;
+    let x = c.baseX + Math.sin(t * c.driftSpeedX + c.driftPhase) * c.driftAmpX;
+    let y = c.baseY + Math.cos(t * c.driftSpeedY + c.driftPhase * 0.7) * c.driftAmpY;
+    // b058 — gentle attraction toward cursor (within 100px). Pulls
+    // creatures up to ~22px toward mx/my so the wall feels alive
+    // when you move the mouse around. Disabled when no cursor
+    // (mx === -9999) and on mobile (no hover concept).
+    if (mx > 0 && my > 0) {
+      const dx = mx - x;
+      const dy = my - y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const range = 100;
+      if (d < range && d > 0.01) {
+        const pull = (1 - d / range) * 22;
+        x += (dx / d) * pull;
+        y += (dy / d) * pull;
+      }
+    }
+    c.x = x;
+    c.y = y;
     c.rot += c.rotSpeed * 0.02;
   }
 
@@ -1361,13 +1391,56 @@
     for (let i = 0; i < creatures.length; i++) updateCreature(creatures[i], t);
     hitTest();
 
+    // b058 — cursor connecting lines: thin lime threads from
+    // the cursor to any creature within 90px. Skipped on mobile.
+    if (mx > 0 && my > 0 && !isMobile()) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(156,255,58,0.30)';
+      ctx.lineWidth = 1;
+      for (const c of creatures) {
+        const dx = c.x - mx;
+        const dy = c.y - my;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 90 && d > 0.01) {
+          ctx.globalAlpha = (1 - d / 90) * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.lineTo(c.x, c.y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // b058 — currently-playing ring: slow rotating dashed lime
+    // circle around any creature whose trackIndex matches the
+    // currently-playing track. state.currentTrack is the global.
+    const playingIdx = (typeof state !== 'undefined' && state) ? state.currentTrack : -1;
+    if (playingIdx >= 0) {
+      for (const c of creatures) {
+        if (c.trackIndex !== playingIdx) continue;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(t * 0.6);
+        ctx.strokeStyle = '#9cff3a';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(0, 0, c.size * c.scale * 1.7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
     // Draw all non-hovered creatures, then hovered on top
     for (let i = 0; i < creatures.length; i++) {
       if (i === hovered) continue;
       drawCreature(creatures[i], t, false, beat);
     }
-    // b056 — toast (PLAYING / QUEUED) takes priority in the info
-    // panel for ~1.4s after a click, then yields back to hover state.
+    // b058 — info panel: collapsed to one line. Toast (PLAYING)
+    // takes priority for ~1.4s after click, otherwise hover label,
+    // otherwise the default "click any creature →".
     const lab = document.getElementById('wallLabel');
     const tit = document.getElementById('wallTitle');
     const showToast = performance.now() < toastUntil;
@@ -1375,11 +1448,34 @@
     if (hovered >= 0) {
       drawCreature(creatures[hovered], t, true, beat);
       drawTooltip(creatures[hovered]);
-      if (lab) lab.textContent = showToast ? toastText : ('// ' + creatures[hovered].type);
-      if (tit) tit.textContent = creatures[hovered].title.toUpperCase();
+      if (lab) lab.textContent = showToast ? toastText : ('▸ ' + creatures[hovered].title.toLowerCase());
+      if (tit) tit.style.display = 'none';
     } else {
-      if (lab) lab.textContent = showToast ? toastText : '// hover a creature';
-      if (tit) tit.textContent = 'THE WALL';
+      if (lab) lab.textContent = showToast ? toastText : 'click any creature →';
+      if (tit) tit.style.display = 'none';
+    }
+
+    // b058 — burst rings: expand + fade over 700ms.
+    // Drawn last so they sit above everything.
+    const now = performance.now();
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const b = bursts[i];
+      const age = (now - b.birth) / 700;
+      if (age >= 1) { bursts.splice(i, 1); continue; }
+      const r = 12 + age * 70;
+      ctx.save();
+      ctx.strokeStyle = b.color;
+      ctx.globalAlpha = (1 - age) * 0.85;
+      ctx.lineWidth = 3 * (1 - age) + 1;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // inner faint ring
+      ctx.globalAlpha = (1 - age) * 0.4;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r * 0.6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     rafId = requestAnimationFrame(draw);
