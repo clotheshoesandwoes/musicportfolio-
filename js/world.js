@@ -103,12 +103,12 @@
 
     scene = new THREE.Scene();
     // b028 — fog density slashed 0.009 → 0.003 and color shifted from
-    // muddy purple 0x40285a to a richer magenta 0x6a1850. The old fog was
+    // muddy purple 0x40285a to a richer magenta 0x382048. The old fog was
     // eating saturation across the whole scene and making it look pastel.
     // b036 — fog density bumped 0.003 → 0.0055 so the distant ground doesn't
     // read as a flat Roblox slab. Distant trees and ocean fade into the dusk
     // haze instead of every pixel sitting at full saturation.
-    scene.fog = new THREE.FogExp2(0x6a1850, 0.0055);
+    scene.fog = new THREE.FogExp2(0x382048, 0.0055);
 
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 1.5, 320);
     // Initial position will be overwritten by animate() on first frame, but
@@ -320,7 +320,7 @@
           uWindowPos:    { value: windowPos },
           uWindowColor:  { value: windowColor },
           uWindowRange:  { value: windowRange },
-          uFogColor:     { value: new THREE.Color(0x6a1850) },
+          uFogColor:     { value: new THREE.Color(0x382048) },
           uFogDensity:{ value: 0.0055 },
           uCycle:        cycleUniform,   // b029 — shared day/night cycle
         },
@@ -491,7 +491,7 @@
         uTime:        { value: 0 },
         uBaseColor:   { value: new THREE.Color(0x18d8d0) },
         uBrightColor: { value: new THREE.Color(0xa8fff0) },
-        uFogColor:    { value: new THREE.Color(0x6a1850) },
+        uFogColor:    { value: new THREE.Color(0x382048) },
         uFogDensity:{ value: 0.0055 },
       },
       vertexShader: `
@@ -2825,7 +2825,7 @@
         uTime:       { value: 0 },
         uColor:      { value: new THREE.Color(0x2a0a55) },
         uHighlight:  { value: new THREE.Color(0xc04098) },
-        uFogColor:   { value: new THREE.Color(0x6a1850) },
+        uFogColor:   { value: new THREE.Color(0x382048) },
         uFogDensity:{ value: 0.0055 },
       },
       vertexShader: `
@@ -3255,7 +3255,7 @@
         uTime:       { value: 0 },
         uBase:       { value: new THREE.Color(0x08323c) },
         uHi:         { value: new THREE.Color(0x3a92a8) },
-        uFogColor:   { value: new THREE.Color(0x6a1850) },
+        uFogColor:   { value: new THREE.Color(0x382048) },
         uFogDensity:{ value: 0.0055 },
       },
       vertexShader: `
@@ -3480,7 +3480,11 @@
     postMaterial = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: lowResTarget.texture },
+        // b045 — depth texture for the Sobel outline pass
+        tDepth:   { value: depthTex },
         uTexel:   { value: new THREE.Vector2(1 / LOW_W, 1 / LOW_H) },
+        // b045 — animated film grain needs uTime
+        uTime:    { value: 0 },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -3491,8 +3495,36 @@
       `,
       fragmentShader: `
         uniform sampler2D tDiffuse;
+        uniform sampler2D tDepth;
         uniform vec2 uTexel;
+        uniform float uTime;
         varying vec2 vUv;
+
+        // b045 — Sobel edge detection over the depth buffer. Picks up
+        // depth discontinuities (silhouettes) and draws a dark line
+        // along them. The single biggest "stylized illustration" effect.
+        float sampleDepth(vec2 uv) {
+          return texture2D(tDepth, uv).r;
+        }
+        float depthSobel(vec2 uv) {
+          vec2 t = uTexel;
+          float tl = sampleDepth(uv + vec2(-t.x, -t.y));
+          float tm = sampleDepth(uv + vec2(0.0, -t.y));
+          float tr = sampleDepth(uv + vec2( t.x, -t.y));
+          float ml = sampleDepth(uv + vec2(-t.x, 0.0));
+          float mr = sampleDepth(uv + vec2( t.x, 0.0));
+          float bl = sampleDepth(uv + vec2(-t.x, t.y));
+          float bm = sampleDepth(uv + vec2(0.0,  t.y));
+          float br = sampleDepth(uv + vec2( t.x, t.y));
+          float gx = -tl - 2.0 * ml - bl + tr + 2.0 * mr + br;
+          float gy = -tl - 2.0 * tm - tr + bl + 2.0 * bm + br;
+          return sqrt(gx * gx + gy * gy);
+        }
+
+        // b045 — film grain hash for animated noise overlay
+        float grainHash(vec2 p) {
+          return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+        }
 
         // b028 — 4x4 Bayer matrix dither. Adds the chunky banded gradient
         // look from PS1/Saturn era and helps the saturated colors hold their
@@ -3537,7 +3569,16 @@
         }
 
         void main() {
-          vec4 c = texture2D(tDiffuse, vUv);
+          // b045 — CHROMATIC ABERRATION at the start. Slight RGB channel
+          // split radial from screen center. R shifts inward, B shifts
+          // outward, G stays. ~2px at the corners. Reads as "shot through
+          // a lens" instead of "engine output".
+          vec2 caDir = (vUv - 0.5);
+          vec2 caOffset = caDir * 0.0040;
+          float chR = texture2D(tDiffuse, vUv - caOffset).r;
+          float chG = texture2D(tDiffuse, vUv).g;
+          float chB = texture2D(tDiffuse, vUv + caOffset).b;
+          vec4 c = vec4(chR, chG, chB, 1.0);
 
           // b036 — Bloom accumulation. 13 taps in two rings (inner + outer)
           // gives a soft halo without obvious sample patterns.
@@ -3560,15 +3601,37 @@
           bloom /= 11.6;
           c.rgb += bloom * 1.4;
 
-          // b028 — tone curve: lift midtones, mild contrast, saturation pump
-          c.rgb = pow(c.rgb, vec3(0.92));         // gamma lift
+          // b045 — SOBEL OUTLINE from depth buffer. Detects silhouette
+          // edges (large depth discontinuities between adjacent pixels)
+          // and darkens them into a 1-2px contour line. The single
+          // biggest "stylized illustration" effect — the difference
+          // between Borderlands and a generic 3D engine.
+          float edge = depthSobel(vUv);
+          float outline = smoothstep(0.0008, 0.0030, edge);
+          c.rgb *= 1.0 - outline * 0.78;
+
+          // b045 — STRONGER COLOR GRADE: deeper midtones, big saturation
+          // pump, harder contrast. Tints shadows toward cool blue and
+          // highlights toward warm orange (sunset graded look).
+          c.rgb = pow(c.rgb, vec3(0.85));         // deeper gamma lift
           float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-          c.rgb = mix(vec3(lum), c.rgb, 1.32);    // saturation +32%
-          c.rgb = (c.rgb - 0.5) * 1.08 + 0.5;     // contrast +8%
+          c.rgb = mix(vec3(lum), c.rgb, 1.45);    // saturation +45%
+          c.rgb = (c.rgb - 0.5) * 1.18 + 0.5;     // contrast +18%
+          // Cool shadows / warm highlights split-tone
+          vec3 coolShadow = vec3(0.45, 0.55, 0.85);
+          vec3 warmHigh   = vec3(1.20, 0.95, 0.70);
+          float lumWeight = smoothstep(0.0, 1.0, lum);
+          c.rgb *= mix(coolShadow, warmHigh, lumWeight);
 
           // Faint scanlines (lighter for PS2+)
           float line = sin(vUv.y * 960.0) * 0.020;
           c.rgb -= line;
+
+          // b045 — ANIMATED FILM GRAIN. Hashes (vUv * pixel + uTime) per
+          // frame so the grain pattern moves with time, breaking up the
+          // static-ness of the rendered output. ±0.05 amplitude.
+          float grain = grainHash(vUv * 1024.0 + uTime * 60.0);
+          c.rgb += (grain - 0.5) * 0.10;
 
           // b028 — Bayer dither into ~5 bits per channel. Pixel-perfect
           // bands; adds nostalgia without crushing saturation.
@@ -3577,38 +3640,30 @@
           c.rgb += d;
           c.rgb = floor(c.rgb * 32.0 + 0.5) / 32.0;
 
-          // Subtle vignette
-          float v = smoothstep(1.1, 0.4, length(vUv - 0.5));
-          c.rgb *= v;
+          // b045 — STRONGER VIGNETTE. Wider falloff, deeper corners,
+          // slightly cool tint to push the focus inward and feel more
+          // "composed shot" instead of "raw render".
+          float vd = length(vUv - 0.5);
+          float v = smoothstep(0.95, 0.30, vd);
+          c.rgb *= mix(vec3(0.82, 0.78, 0.92), vec3(1.0), v);
+
           gl_FragColor = c;
         }
       `,
     });
     postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
+    // b045 — register the post pass uTime so animate() drives the animated
+    // film grain (the timeUniforms[] array is read every rAF tick)
+    timeUniforms.push(postMaterial.uniforms.uTime);
 
-    // -----------------------------------------------------
-    // b026b — DEBUG OUTLINES: yellow wireframe boxes around every
-    // clickable prop, so the user can see at a glance which objects
-    // are wired up to a song card. Walk the whole scene, find every
-    // Object3D whose `.name` is in propTracks, and add a BoxHelper.
-    // depthTest off + high renderOrder so the outline always pops.
-    // -----------------------------------------------------
-    {
-      const wanted = new Set(Object.keys(propTracks));
-      const found = [];
-      scene.traverse(obj => {
-        if (obj.name && wanted.has(obj.name)) found.push(obj);
-      });
-      for (const obj of found) {
-        const helper = new THREE.BoxHelper(obj, 0xffee00);
-        helper.material.depthTest = false;
-        helper.material.transparent = true;
-        helper.material.opacity = 0.9;
-        helper.renderOrder = 999;
-        scene.add(helper);
-      }
-      console.log('[villa b026b] clickable props found:', found.map(o => o.name));
-    }
+    // b045 — b026b debug yellow BoxHelper outlines REMOVED. They were
+    // added as a temporary dev aid to visualize which props were wired
+    // to song cards, then never cleaned up. With Phase 2 + 3 adding 15
+    // new clickable props on top of the original 20, every car / lambo
+    // / TV / pool table / aquarium / piano / guest bed / etc. was
+    // getting a depth-test-off bright-yellow wireframe outline. That
+    // was the single biggest contributor to the "still looks Roblox"
+    // feeling — debug wireframes layered over actual geometry.
 
     // -----------------------------------------------------
     // b029 — Camera anchor strip (DOM overlay). Small horizontal bar at

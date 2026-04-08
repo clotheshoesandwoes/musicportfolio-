@@ -1,5 +1,54 @@
 # CHANGELOG
 
+## b045 — 2026-04-07 — Kill debug outlines + Tier 1 post-process overhaul (Sobel outlines, film grain, CA, stronger grading, cooler fog)
+
+User: "still too blandy blocky and roblox like i think we gotta improve and upgrade overall artstyle honestly".
+
+Diagnosed: 2 root causes layered on top of each other.
+
+### Root cause #1 — debug yellow wireframe outlines on EVERY clickable prop
+The b026b dev block (`scene.traverse + new THREE.BoxHelper(obj, 0xffee00)` with `depthTest: false, opacity: 0.9, renderOrder: 999`) was added as a "show me which props are wired up to song cards" dev aid and never cleaned up. With Phase 2 + 3 adding 15 new clickable props on top of the original 20, **every car / lambo / TV / pool table / aquarium / piano / guest bed / pier / yacht / fountain etc. was getting a depth-test-off bright-yellow wireframe drawn on top of it**. That single block was probably the biggest contributor to the persistent "looks like Roblox" feeling — debug wireframes on top of every prop. Block deleted.
+
+### Root cause #2 — post-pass was too gentle to actually transform the look
+The b036/b028 post pass had bloom + tone curve + faint scanlines + Bayer dither + subtle vignette but no edge work, no animated grain, no chromatic aberration, no real color grade. Net effect: looked like the raw renderer with a slight curve. Tier 1 overhaul:
+
+### New post-process effects
+
+- **🖍️ Sobel outline shader from the depth buffer** — new `tDepth` uniform sampling the existing `depthTex` (already attached to `lowResTarget`). Sobel kernel runs across 8 neighbors of each pixel, computes the gradient magnitude, and `smoothstep(0.0008, 0.0030, edge)` produces a soft 1-2px contour line that darkens by 78% wherever there's a depth discontinuity. Instantly stylizes silhouettes — the difference between Borderlands and a generic engine.
+- **🌈 Chromatic aberration at the start of main()** — `vec2 caOffset = (vUv - 0.5) * 0.0040`, sample R at `vUv - caOffset`, G at `vUv`, B at `vUv + caOffset`. ~2px split at the corners. Reads as "shot through a lens" not "raw render".
+- **🎞️ Animated film grain** — new `uTime` uniform pushed into `timeUniforms[]` so animate() drives it every rAF tick. Hash `grainHash(vUv * 1024 + uTime * 60)` shifts the noise pattern per frame, ±0.05 amplitude. Hides the staticness of the rendered output.
+- **🎨 Stronger color grade** — gamma `0.92 → 0.85` (deeper midtones), saturation `+32% → +45%`, contrast `+8% → +18%`. Plus a **split-tone**: shadows tinted toward cool blue `vec3(0.45, 0.55, 0.85)`, highlights toward warm orange `vec3(1.20, 0.95, 0.70)`, mixed by luminance. The whole frame now reads as a graded sunset image.
+- **🌑 Stronger vignette** — falloff range `1.1..0.4 → 0.95..0.30`, slight cool tint `vec3(0.82, 0.78, 0.92)` at the edges. Pulls focus inward.
+
+### Cooler fog color
+The b028/b036 fog was `0x6a1850` (rich hot magenta) at density `0.0055`. Hot magenta + the toon shading + bloom was producing the persistent pink wash drowning every distant surface. Shifted to `0x382048` (deeper purple-blue, less hot) across all 5 declarations:
+- `scene.fog`
+- `makePS2Material` `uFogColor`
+- pool shader `uFogColor`
+- ocean shader `uFogColor`
+- lagoon shader `uFogColor`
+
+Density unchanged (0.0055 still). The scene is still dusky/atmospheric but the magenta no longer eats everything.
+
+### What this should change visually
+- **Yellow wireframes on every prop GONE** — the screen is no longer covered in 35 yellow boxes
+- **Dark contour outlines** on every silhouette edge (mansion, columns, cars, palms, koi pond, aquarium, etc.) — instant illustration look
+- **Less pink/magenta wash** in the distance, atmosphere reads as cooler dusk
+- **Deeper colors + stronger contrast + split-tone** = shadows feel cool, highlights feel warm orange — proper sunset grade
+- **Animated film grain** moving across the frame at 60fps so the image doesn't read as static
+- **Lens chromatic aberration** at the corners — slight RGB split
+- **Stronger vignette** drawing the eye to the center of the frame
+
+### What's NOT in this commit
+- Tier 2 (rounded box geometry) — saved for b046 if Tier 1 alone isn't enough
+- Cast shadow maps — still risky in one commit, deferred
+
+### Files modified
+- [js/world.js](js/world.js) — b026b debug outline block deleted (~22 lines), post pass shader rewritten (CA + Sobel outline + grain + stronger grade + stronger vignette + new tDepth/uTime uniforms), 5 fog color references shifted via `replace_all`, postMaterial uTime registered in timeUniforms[]
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b044 → b045`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b044 — 2026-04-07 — Tier 3 art-style upgrade: toon-stepped lighting + sun disc + cloud bands
 
 User: "everything still looks so friggin robloxly and blocky, what can we do to change the art style? ... id love to see tier 3 in action first honestly".
