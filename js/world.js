@@ -2617,14 +2617,17 @@
     materials.push(lagoonMat);
     timeUniforms.push(lagoonMat.uniforms.uTime);
 
-    // b035 — lagoon is a thick BoxGeometry, top y=0.05, well above the
-    // beach top (0.00) but well below the deck top (0.20). Doesn't overlap
-    // the deck footprint (deck z range [-36, 16]; lagoon centered at z=62).
+    // b035b — Lagoon is now an actual ocean: 260×170, pushed forward to
+    // start past the beach chair zone (z=32..40). Top y=0.30 — a full 0.30
+    // above the beach top (0.00), so the lagoon ALWAYS wins the depth test
+    // wherever it overlaps the sand. No more flickering. Doesn't touch the
+    // pool deck (deck z range [-36, 16]; lagoon spans z=60..230). Pier
+    // (deck y=0.65) and yachts (hull y=0.5) still float over it correctly.
     const lagoon = new THREE.Mesh(
-      new THREE.BoxGeometry(82, 0.40, 68),
+      new THREE.BoxGeometry(260, 0.40, 170),
       lagoonMat
     );
-    lagoon.position.set(0, -0.15, 62);  // top y = 0.05
+    lagoon.position.set(0, 0.10, 145);  // top y = 0.30
     scene.add(lagoon);
 
     // ----- Loop driveway road (east, threaded through the forest) -----

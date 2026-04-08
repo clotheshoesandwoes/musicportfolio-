@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## b035b — 2026-04-07 — Lagoon = actual ocean (much bigger + dominant y)
+
+User: "its still happening with the lagoon. also the lagoon needs to be much bigger cuz its supposed to be an ocean".
+
+The b035 lagoon was 82×68 with top y=0.05 — only 0.05 above the beach top at 0.00, so it still landed in the depth-buffer noise zone where it overlapped the sand and flickered. Two issues, one combined fix:
+
+- **Size**: 82×68 → 260×170. Reads as a horizon-spanning ocean instead of a pool.
+- **Y separation**: top y 0.05 → 0.30. Now a full 0.30 above the beach top, so the lagoon ALWAYS wins the depth test wherever they overlap. No more fight.
+- **Position**: center z 62 → 145. Pushed forward to start at z=60, past the beach chair zone (z=32..40), so beach chairs stay on visible sand instead of being submerged. Pool deck untouched (deck z range -36..16). Pier (deck y=0.65) and yachts (hull y=0.5) still float over the new water surface correctly.
+
+### Files modified
+- [js/world.js](js/world.js) — lagoon size + position + y bump
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b035 → b035b`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b035 — 2026-04-07 — Kill the ground-stack z-fighting (real y separation, thick boxes)
 
 User: "look at how much things glitch on the floor. sand blends with water with pool with floor of pool. can we give these different y axis heights and if needed make it rectangular instead of 2d flat planes to address any gaps in height."
