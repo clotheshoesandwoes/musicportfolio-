@@ -1,5 +1,74 @@
 # CHANGELOG
 
+## b050 — 2026-04-08 — Interior zoning: half-walls + floor tints + column rework
+
+User on b049: "you seem to have struggled with every room. no idea why. everything is super open... uh i have no idea if youll do better with placement this time around." Six screenshots showed 4-6 rooms visible in every shot with zero separation between them. Diagnosis: the b041 mega-mansion was deliberately designed with "no interior partitions" — single 56×28 open volume per floor. Worked at 4 rooms, fails at 22.
+
+User answered the four pre-code questions:
+- Q1 (major views): "idk i just want to be able to float through and say this makes sense" → goal is layout coherence, not specific view protection
+- Q2 (wall style): "half walls but i want more open feel rooms" → half-walls everywhere, lean open
+- Q3 (which rooms walled off): "stay open" → no fully enclosed rooms
+- Q4 (columns): "they're empty and kind of ugly" → rework or delete
+
+### New helpers ([js/world.js:933](js/world.js#L933))
+- **`addHalfWall(x1, z1, x2, z2, yBase)`** — 1.4m tall waist-height marble divider with a slim warm-wood top cap. Endpoints in any direction. Built from `roundedBoxGeometry` so it carries the b049 chamfered treatment. Sightlines flow over the top → zoning without view blocking.
+- **`addDressedColumn(cx, cz, h, yBase)`** — 0.32-radius marble shaft with a 0.9×0.9 chamfered marble base + capital. Modernist take on classical orders. Replaces the b041 plain slim columns with something architectural.
+
+### Column rework ([js/world.js:1003](js/world.js#L1003))
+The b041 11-column 2-row grid (5 front + 6 back) was deleted. The slab is a render, not real physics — it doesn't need 11 supports. Replaced with **4 dressed hero columns** at architectural anchor points:
+- 2 flanking the foyer entrance: `(-8, -5)` and `(8, -5)`
+- 2 flanking the back archway: `(-5, -29)` and `(5, -29)`
+
+7 columns deleted total. The remaining 4 read as deliberate architecture instead of structural stubs cluttering the open volume.
+
+### Interior zoning block ([js/world.js:1881](js/world.js#L1881))
+A new block runs just before the b042 phase 2 rooms section (so it lands before furniture is placed). Contents:
+
+**9 ground-floor half-walls** zoning the rooms:
+- West vertical (`x=-16`) splitting kitchen+garage from living, in two segments with a gap at the kitchen-to-garage transition
+- East vertical front (`x=7`) splitting living from foyer/billiard
+- East vertical back (`x=13`) splitting atrium/koi from trophy/aquarium
+- Center horizontal (`z=-17`) splitting living from atrium with a 4-wide walkthrough gap
+- East horizontal back splitting billiard/speakeasy from trophy/aquarium
+- Speakeasy vs billiard divider at `x=14`
+- Plus 2 west horizontals separating kitchen/garage/wine
+
+**8 upper-floor half-walls** zoning the upstairs rooms:
+- West vertical splitting studio from bedroom
+- Bedroom vs closet vertical at `x=-7`
+- Closet horizontal splitting closet from cinema
+- Cinema vs guest vertical
+- Library/DJ vs cinema vertical
+- East horizontal splitting DJ/library from guest
+- Plus studio horizontal splitting studio from piano
+
+**17 floor tint planes** — one per room — at `+0.011` above the existing floor. Each tint is a `PlaneGeometry` with a per-room color drawn from a small palette table:
+- Ground: garage (gray-brown), kitchen (warm cream), wine (deep wood), living (neutral travertine), atrium (cool stone), foyer (light marble), billiard (green-tinted), speakeasy (dark warm), trophy (gold-tinted)
+- Upper: studio (cool dark), piano (warm wood), bedroom (warm cream), closet (bright marble), cinema (very dark), DJ (dark cool), library (warm wood), guest (warm cream)
+
+All tints stay close to the base travertine — subtle "this room is slightly different" cue that combines with the half-walls to make rooms feel like rooms.
+
+### What this should change visually
+- Walking around the ground floor: as you cross from living into the foyer, a half-wall passes your hip and the floor tint shifts from neutral to warm cream → "I am now in the foyer"
+- Aerial / orbit camera: instead of a furniture warehouse, you see distinct color-zoned cells with marble dividers between them
+- Front view through the colonnade: your sightline still reaches the back archway, but the foreground reads as foyer / dressed columns / archway instead of "13 random rooms in one frame"
+- The 4 dressed columns at the foyer + archway flanks frame those transitions instead of cluttering them
+
+### Risk
+- Half-walls run along straight lines without doors — entering a zoned room means walking around a wall end. With first-person camera dolly that's fine; with orbit it's invisible since you're 50m up.
+- Floor tints might z-fight with the existing `groundFloorTop` / `upperFloorTop` planes if the +0.011 offset is too small. Watch for shimmer.
+- Some half-wall positions might intersect existing furniture (wine racks at the back wall, kitchen island, billiard pool table). If anything pokes through, the wall coordinates can be tweaked individually.
+- Library + DJ booth are at almost the same coordinates `(19, -9)` and `(20, -10)` — they overlap in the existing scene. b050 doesn't fix that; the half-wall between them is at `x=13` which separates them from cinema, not from each other. Out of scope.
+
+### Files modified
+- [js/world.js](js/world.js) — `addHalfWall` + `addDressedColumn` helpers added, 11-column block replaced with 4-column block, new INTERIOR ZONING block (~100 lines) added before phase 2 rooms
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b049 → b050`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Next
+Wait for the user's reaction to the zoning. If it works → next obvious moves are surface textures (L3) or detailed cars (L4) from the b049 lever menu. If specific walls or tints are wrong → tweak individual coordinates without rebuilding the whole zoning system. If the whole approach is wrong → revert b050 cleanly (single commit, all the new code is in two clearly-marked b050 blocks).
+
 ## b049 — 2026-04-07 — Rounded box geometry pass on the mansion shell
 
 Second half of the b047 screenshot diagnosis. Where b048 fixed the cardboard palms, b049 fixes the **hard 90° corners** that were the other loud "Roblox" tell. The mansion shell is now built from a chamfered box helper instead of raw `BoxGeometry`.

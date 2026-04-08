@@ -931,6 +931,68 @@
     }
 
     // -------------------------------------------------------------------
+    // b050 — half-wall room divider. ~1.4m tall waist-height marble
+    // partition with a slim wood top cap. Used to zone the open mansion
+    // volume into readable rooms without blocking sightlines. Endpoints
+    // (x1,z1)→(x2,z2) so walls can run in any direction. Chamfered same
+    // as b049 mansion shell.
+    // -------------------------------------------------------------------
+    function addHalfWall(x1, z1, x2, z2, yBase) {
+      const dx = x2 - x1;
+      const dz = z2 - z1;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.1) return;
+      const cx = (x1 + x2) / 2;
+      const cz = (z1 + z2) / 2;
+      const angle = Math.atan2(dz, dx);
+      const h = 1.4;
+      const t = 0.16;
+      const wall = new THREE.Mesh(
+        roundedBoxGeometry(len, h, t, 0.06),
+        marbleMat
+      );
+      wall.position.set(cx, yBase + h / 2, cz);
+      wall.rotation.y = -angle;
+      scene.add(wall);
+      // Slim warm-wood cap on top for a richer architectural read
+      const cap = new THREE.Mesh(
+        roundedBoxGeometry(len + 0.04, 0.06, t + 0.04, 0.02),
+        woodSlatMat
+      );
+      cap.position.set(cx, yBase + h + 0.03, cz);
+      cap.rotation.y = -angle;
+      scene.add(cap);
+    }
+
+    // -------------------------------------------------------------------
+    // b050 — dressed hero column. Slim marble shaft with a wider square
+    // base + capital (modernist take on classical orders). Replaces the
+    // 11 plain b041 structural columns — 8 of them are deleted and the
+    // remaining hero positions get this dressed treatment.
+    // -------------------------------------------------------------------
+    function addDressedColumn(cx, cz, h, yBase) {
+      const shaftR = 0.32;
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(shaftR, shaftR, h - 0.4, 16),
+        villaMat
+      );
+      shaft.position.set(cx, yBase + 0.2 + (h - 0.4) / 2, cz);
+      scene.add(shaft);
+      const base = new THREE.Mesh(
+        roundedBoxGeometry(0.9, 0.20, 0.9, 0.06),
+        marbleMat
+      );
+      base.position.set(cx, yBase + 0.10, cz);
+      scene.add(base);
+      const capital = new THREE.Mesh(
+        roundedBoxGeometry(0.9, 0.20, 0.9, 0.06),
+        marbleMat
+      );
+      capital.position.set(cx, yBase + h - 0.10, cz);
+      scene.add(capital);
+    }
+
+    // -------------------------------------------------------------------
     // Helper: slim round white column (the colonnade column language)
     // -------------------------------------------------------------------
     function addColumn(cx, cz, h, yBase) {
@@ -993,21 +1055,23 @@
     upperFloorTop.position.set(mansionCx, podiumTopY + mansionH1 + 0.01, mansionCz);
     scene.add(upperFloorTop);
 
-    // ===== INTERNAL STRUCTURAL COLUMNS supporting the upper floor slab =====
-    // 2 rows × 5 columns = 10 columns. Positions chosen to avoid the
-    // existing LIVING (x=0±5, z=-14..-4), BEDROOM (x=-11.5±2, z=-12..-7),
-    // BILLIARD (x=11.5±2.5, z=-13..-5), INDOOR ATRIUM (x=0±8, z=-17..-29).
+    // ===== INTERNAL STRUCTURAL COLUMNS — b050 rework =====
+    // The b041 version was 11 plain slim columns in a 2-row grid. The b049
+    // screenshot showed they read as "empty + ugly stubs cluttering the
+    // open volume" — and the upper-floor slab is a render, not real
+    // physics, so it doesn't actually need 11 supports. Deleted 7 of them.
+    // The remaining 4 are dressed hero columns (marble base + capital +
+    // thicker shaft) at architectural anchor points: flanking the foyer
+    // entrance on the front + flanking the back archway on the back.
     {
       const colY = podiumTopY;
       const colH = mansionH1 - 0.15;
-      // Front row at z=-5 (just inside the front face)
-      for (const x of [-25, -19, 0, 19, 25]) {
-        addColumn(x, -5, colH, colY);
-      }
-      // Back row at z=-29 (just inside the back wall)
-      for (const x of [-25, -19, -13, 13, 19, 25]) {
-        addColumn(x, -29, colH, colY);
-      }
+      // Front: 2 hero columns flanking the foyer entry transition
+      addDressedColumn(-8, -5, colH, colY);
+      addDressedColumn( 8, -5, colH, colY);
+      // Back: 2 hero columns flanking the back archway
+      addDressedColumn(-5, -29, colH, colY);
+      addDressedColumn( 5, -29, colH, colY);
     }
 
     // Marble floor-line eyebrow on the front (slim band reading as the
@@ -1812,6 +1876,107 @@
       const neon = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.4, 0.08), neonMat);
       neon.position.set(brCx, brY + 2.4, brCz + 5.5);
       scene.add(neon);
+    }
+
+    // =====================================================
+    // b050 — INTERIOR ZONING (half-walls + floor tint zones)
+    //
+    // Per b049 user feedback ("everything is super open... no idea what
+    // room I'm in"), the b041 mega-mansion's "no interior partitions"
+    // design was producing 4-6 visible rooms in every screenshot with
+    // zero separation. Fix: zone the open volume with 1.4m half-walls
+    // (waist-height marble + wood cap, sightlines flow over the top)
+    // and per-room floor tint planes (subtle color shifts at the borders).
+    // No fully enclosed rooms — the user explicitly said "stay open".
+    // =====================================================
+    {
+      const gY = podiumTopY + 0.005;  // ground floor wall + tint base
+      const uY = podiumTopY + mansionH1 + 0.005;  // upper floor
+
+      // ----- Ground floor half-walls -----
+      // West vertical: separates kitchen+garage zone from living room
+      addHalfWall(-16, -3,  -16, -16, gY);
+      // West-back vertical: separates wine cellar from atrium/koi pond
+      addHalfWall(-16, -19, -16, -31, gY);
+      // West horizontal: separates kitchen from garage (short stub)
+      addHalfWall(-28, -11, -16, -11, gY);
+      // West horizontal back: separates kitchen+garage from wine
+      addHalfWall(-28, -19, -16, -19, gY);
+      // East vertical front: separates living from foyer/billiard
+      addHalfWall(  7, -3,    7, -15, gY);
+      // East vertical back: separates atrium/koi from trophy/aquarium
+      addHalfWall( 13, -19,  13, -31, gY);
+      // Center horizontal: separates living from atrium/koi (with gap 0..3)
+      addHalfWall( -7, -17,  -1, -17, gY);
+      addHalfWall(  3, -17,   7, -17, gY);
+      // East horizontal: separates billiard/speakeasy from trophy/aquarium
+      addHalfWall(  7, -17,  28, -17, gY);
+      // Speakeasy vs billiard divider
+      addHalfWall( 14,  -3,  14, -15, gY);
+
+      // ----- Upper floor half-walls -----
+      // West vertical: separates studio from bedroom
+      addHalfWall(-16, -3,  -16, -16, uY);
+      // West-back vertical: separates piano from atrium void
+      addHalfWall(-16, -19, -16, -31, uY);
+      // Studio horizontal: separates studio from piano
+      addHalfWall(-28, -17, -16, -17, uY);
+      // Bedroom vs closet vertical
+      addHalfWall( -7, -3,   -7, -15, uY);
+      // Closet horizontal: separates closet from cinema
+      addHalfWall( -7, -17,  10, -17, uY);
+      // Cinema vs guest vertical
+      addHalfWall( 11, -19,  11, -31, uY);
+      // Library/DJ vs cinema vertical
+      addHalfWall( 13,  -3,  13, -17, uY);
+      // East horizontal: separates DJ/library from guest
+      addHalfWall( 13, -17,  28, -17, uY);
+
+      // ----- Floor zone tints -----
+      // Each zone gets a subtle color plane just above the main floor
+      // (+0.005) so the existing furniture sits on top. Tints are kept
+      // close to the base travertine so they read as "this room is
+      // slightly different" not "WHOA new color".
+      const floorTints = {
+        kitchenG: 0xd4cab2, wineG:    0xa88468, livingG:  0xc9c2b2,
+        atriumG:  0xb8c0c8, foyerG:   0xe6dec8, billiardG:0x9eaa9e,
+        speakG:   0x8a6a58, trophyG:  0xd2c098, garageG:  0x807a72,
+        studioU:  0x686a78, pianoU:   0x9a7858, bedroomU: 0xd8c8b0,
+        closetU:  0xeae2d0, cinemaU:  0x4a4658, djU:      0x584058,
+        libraryU: 0xa07458, guestU:   0xd0bca0,
+      };
+      const tintMats = {};
+      for (const [k, hex] of Object.entries(floorTints)) {
+        tintMats[k] = makePS2Material({ color: hex, roughness: 0.85 });
+      }
+      function addFloorTint(matKey, cx, cz, w, d, y) {
+        const tint = new THREE.Mesh(new THREE.PlaneGeometry(w, d), tintMats[matKey]);
+        tint.rotation.x = -Math.PI / 2;
+        tint.position.set(cx, y + 0.001, cz);
+        tint.receiveShadow = true;
+        scene.add(tint);
+      }
+      const fG = podiumTopY + 0.011;
+      const fU = podiumTopY + mansionH1 + 0.011;
+      // Ground floor tints
+      addFloorTint('garageG',   -22, -7,  11, 7,  fG);
+      addFloorTint('kitchenG',  -11, -14, 9,  10, fG);
+      addFloorTint('wineG',     -22, -25, 11, 11, fG);
+      addFloorTint('livingG',    -4, -10, 21, 13, fG);
+      addFloorTint('atriumG',     0, -24, 12, 13, fG);
+      addFloorTint('foyerG',     10, -7,  6,  7,  fG);
+      addFloorTint('billiardG',  10, -12, 6,  9,  fG);
+      addFloorTint('speakG',     21, -10, 13, 13, fG);
+      addFloorTint('trophyG',    20, -25, 15, 11, fG);
+      // Upper floor tints
+      addFloorTint('studioU',   -22, -10, 11, 13, fU);
+      addFloorTint('pianoU',    -22, -24, 11, 13, fU);
+      addFloorTint('bedroomU',  -11, -10, 8,  13, fU);
+      addFloorTint('closetU',    -3, -10, 7,  13, fU);
+      addFloorTint('cinemaU',     3, -25, 14, 11, fU);
+      addFloorTint('djU',        20, -10, 13, 13, fU);
+      addFloorTint('libraryU',   17, -10, 6,  13, fU);
+      addFloorTint('guestU',     20, -25, 13, 11, fU);
     }
 
     // =====================================================
