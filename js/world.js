@@ -1039,14 +1039,95 @@
       scene.add(drumRing);
     }
 
+    // b040 — west wing side door REMOVED. The door was between the outside
+    // and the bedroom interior; the new garage now sits in that exact spot,
+    // making the door a (forbidden) interior door. The garage <-> bedroom
+    // boundary is just an open archway through the shared wall.
+
+    // =====================================================================
+    // GARAGE WING (b040 — attached west of the west wing)
+    //
+    // Single tall open volume: the user wanted "enough space that a car
+    // could live in the living room for fun". This is the answer — a 12×14
+    // open garage with the yellow lambo parked inside on a marble showcase
+    // plinth, lit by an LED accent strip. Same modern Miami language as
+    // the wings: white plaster, 3 walls (front open), marble underside
+    // band, flat roof + parapet, slim round columns supporting the front
+    // edge. Shares its east wall with the west wing's west wall (x=-16).
+    // =====================================================================
+    const garageW = 12;
+    const garageD = 14;
+    const garageH = 6.5;
+    const garageCx = westWingLeftX - garageW / 2;   // -22
+    const garageCz = villaCz;                        // -10
+    const garageLeftX = garageCx - garageW / 2;      // -28
+
+    // 3 walls (back + left + right) — front is open
+    addWallBoxOpenFront(garageCx, garageCz, garageW, garageD, garageH, podiumTopY, villaMat);
+
+    // Marble underside band on the front (matches the wing eyebrows)
     {
-      const sideDoor = new THREE.Mesh(new THREE.BoxGeometry(0.10, 2.6, 1.4), windowMat);
-      sideDoor.position.set(westWingLeftX - 0.05, podiumTopY + 1.3, villaCz);
-      scene.add(sideDoor);
-      const sFrame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.20, 1.7), marbleMat);
-      sFrame.position.set(westWingLeftX - 0.06, podiumTopY + 2.7, villaCz);
-      scene.add(sFrame);
+      const eb = new THREE.Mesh(
+        new THREE.BoxGeometry(garageW + 0.6, 0.30, 0.6),
+        marbleMat
+      );
+      eb.position.set(garageCx, podiumTopY + garageH - 0.15, centralFrontZ + 0.30);
+      scene.add(eb);
     }
+
+    // Travertine interior floor (matches central + wing interiors)
+    const garageFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(garageW - wallT * 2, garageD - wallT * 2),
+      floorInteriorMat
+    );
+    garageFloor.rotation.x = -Math.PI / 2;
+    garageFloor.position.set(garageCx, podiumTopY + 0.01, garageCz);
+    scene.add(garageFloor);
+
+    // Flat roof + parapet (matches wings) at the same height as the
+    // central rooftop terrace? No — this volume is shorter than central
+    // (6.5 vs 8.82) so its roof is its own level.
+    addFlatRoofWithParapet(garageCx, garageCz, garageW, garageD, podiumTopY + garageH);
+
+    // 3 slim front columns supporting the marble eyebrow band
+    {
+      const colY = podiumTopY;
+      const colH = garageH - 0.20;
+      for (let i = 0; i < 3; i++) {
+        const t = i / 2;
+        const x = garageLeftX + 0.8 + t * (garageW - 1.6);
+        addColumn(x, centralFrontZ - 0.6, colH, colY);
+      }
+    }
+
+    // Marble showcase plinth on the garage floor where the lambo sits
+    {
+      const plinth = new THREE.Mesh(
+        new THREE.BoxGeometry(6.0, 0.18, 3.4),
+        marbleMat
+      );
+      plinth.position.set(garageCx, podiumTopY + 0.10, garageCz + 1.0);
+      scene.add(plinth);
+    }
+
+    // LED accent strip running along the back wall interior at car-roof
+    // height — cool ledMat (cyan), modern garage lighting
+    {
+      const ledStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(garageW - 1.6, 0.10, 0.10),
+        ledMat
+      );
+      ledStrip.position.set(
+        garageCx,
+        podiumTopY + 2.6,
+        garageCz - garageD / 2 + 0.5
+      );
+      scene.add(ledStrip);
+    }
+
+    // Sconce on each side of the front opening
+    addSconce(garageLeftX + 0.3, podiumTopY + 2.6, centralFrontZ + 0.20);
+    addSconce(garageLeftX + garageW - 0.3, podiumTopY + 2.6, centralFrontZ + 0.20);
 
     // =====================================================================
     // OPEN COLONNADE — slim white round columns spanning the full front,
@@ -1407,10 +1488,11 @@
       return g;
     }
 
-    // b029 — Yellow Lambo relocated from the (deleted) driveway to the
-    // east side of the deck, mirroring the pink Lambo on the west side.
-    // Both supercars now on display flanking the pool.
-    addCar(14.0, 5.0, 0xf5d518, Math.PI / 4, 'lambo_yellow');
+    // b040 — Yellow Lambo moved INTO the new garage wing, parked on the
+    // marble showcase plinth. Faces front (rotY=0 → headlights toward +z).
+    // baseY=0.92 = podium top (0.82) + plinth height (0.10) so wheels rest
+    // on the plinth surface.
+    addCar(-22.0, -9.0, 0xf5d518, 0, 'lambo_yellow', 0.92);
     // b016 — Pink Lambo rotation flipped (-PI/4 not +PI/4) so hood points
     // toward (-x, +z) — diagonally toward the front-left of the property
     addCar(-14.0, 5.0, 0xff2d95, -Math.PI / 4, 'lambo_pink');
@@ -2289,396 +2371,21 @@
     }
     addFirePit(-22, 18);
 
-    // ----- Outdoor BBQ / bar near the pool (east of jacuzzi) -----
-    function addBBQBar(cx, cz) {
-      const g = new THREE.Group();
-      // L-shaped counter
-      const c1 = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.0, 0.8), stoneMat);
-      c1.position.set(0, 0.5, 0);
-      g.add(c1);
-      const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 2.0), stoneMat);
-      c2.position.set(1.1, 0.5, 1.0);
-      g.add(c2);
-      // Lighter counter tops
-      const top1 = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.08, 0.85), rimMat);
-      top1.position.set(0, 1.04, 0);
-      g.add(top1);
-      const top2 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 2.05), rimMat);
-      top2.position.set(1.1, 1.04, 1.0);
-      g.add(top2);
-      // Grill body + heat strip
-      const grill = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.3, 0.6), railMat);
-      grill.position.set(-0.5, 1.25, 0);
-      g.add(grill);
-      const heat = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.06, 0.5), lanternGlowMat);
-      heat.position.set(-0.5, 1.43, 0);
-      g.add(heat);
-      // Bottles on the counter (warm-glow stand-ins)
-      for (let i = 0; i < 3; i++) {
-        const b = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.5, 0.18), windowMat);
-        b.position.set(0.8 + i * 0.3, 1.34, -0.2);
-        g.add(b);
-      }
-      g.position.set(cx, 0, cz);
-      g.name = 'bbqbar';
-      scene.add(g);
-    }
-    addBBQBar(17, 9);
-
-    // ----- Garden statues (3 — front lawn between deck and beach) -----
-    function addStatue(cx, cz, type) {
-      const g = new THREE.Group();
-      if (type === 'obelisk') {
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 1.2), stoneMat);
-        base.position.y = 0.2;
-        g.add(base);
-        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.7, 4.0, 0.7), stoneMat);
-        shaft.position.y = 2.4;
-        g.add(shaft);
-        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.5, 0.8, 4), stoneMat);
-        cap.position.y = 4.8;
-        cap.rotation.y = Math.PI / 4;
-        g.add(cap);
-      } else if (type === 'sphere') {
-        const ped = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 1.0), stoneMat);
-        ped.position.y = 0.8;
-        g.add(ped);
-        const sph = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0), rimMat);
-        sph.position.y = 2.3;
-        g.add(sph);
-      } else if (type === 'abstract') {
-        for (let i = 0; i < 4; i++) {
-          const sz = 0.95 - i * 0.13;
-          const b = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, sz), stoneMat);
-          b.position.y = 0.5 + i * 0.85;
-          b.rotation.y = i * 0.7;
-          g.add(b);
-        }
-      }
-      g.position.set(cx, 0, cz);
-      g.name = 'statue_' + type;
-      scene.add(g);
-    }
-    addStatue( 26, 22, 'obelisk');
-    addStatue(-28, 24, 'sphere');
-    addStatue(  0, 26, 'abstract');
+    // b040 — Outdoor BBQ bar REMOVED (user request).
+    // b040 — Garden statues (obelisk/sphere/abstract) REMOVED (user request).
+    // The corresponding bbqbar/statue_* entries in propTracks are now
+    // orphaned references (harmless — they just no longer match anything).
 
     // -----------------------------------------------------
-    // b023 — Two flanking lots either side of the villa
-    // West: formal garden (hedges + fountain + topiary + paths)
-    // East: glass-walled supercar showroom with 3 cars on display
+    // b040 — Flanking lots: ONLY the east supercar showroom remains.
+    // The b024 luxury garden (lawn + hedge perimeter + 3-tier marble
+    // fountain + 30+ topiary/bougainvillea/roses/lavender + 2 marble
+    // statues + 2 benches + 2 pergolas + 6 lanterns + 8 urn planters,
+    // ~85 meshes) is REMOVED at user request. The west lot is now empty
+    // ground ready for whatever lands there next round (topiary garden /
+    // koi pond / waterfall — TBD). The fountain click→card target
+    // ('fountain' in propTracks) is now an orphan reference (harmless).
     // -----------------------------------------------------
-
-    // ----- West lot: LUXURY GARDEN (b024 rewrite) -----
-    // b023's garden was a tiny checkered terrace with floating cubes. v2 is
-    // a proper exorbitant-wealth Miami villa garden: bright lawn plane,
-    // marble cross paths, 3-tier marble fountain, taller manicured hedge
-    // perimeter, 30+ varied plants (topiary cones/spheres/spirals,
-    // bougainvillea, rose bushes, lavender), 2 marble corner statues, 2
-    // benches, 2 pergola archways with bougainvillea drape, 6 pathway
-    // lanterns, 8 marble urn planters. Density > size. ~85 meshes.
-    function addGarden(cx, cz) {
-      // b034 — gw 22→30, gd 18→24 (footprint expansion)
-      const gw = 30, gd = 24;
-      const halfW = gw / 2, halfD = gd / 2;
-
-      // ----- 1. Bright lawn plane (the actual grass, finally) -----
-      // b035 — lawn raised to y=0.10 (above the new beach top at 0.00,
-      // but below the deck top at 0.20). Path thickness (0.08) sits above.
-      const lawn = new THREE.Mesh(new THREE.BoxGeometry(gw, 0.08, gd), lawnMat);
-      lawn.position.set(cx, 0.06, cz);
-      scene.add(lawn);
-
-      // ----- 2. Manicured hedge perimeter (taller + brighter) -----
-      const hedgeH = 1.4, hedgeT = 0.6;
-      const hF = new THREE.Mesh(new THREE.BoxGeometry(gw, hedgeH, hedgeT), shrubMat);
-      hF.position.set(cx, hedgeH / 2, cz + halfD);
-      scene.add(hF);
-      const hB = new THREE.Mesh(new THREE.BoxGeometry(gw, hedgeH, hedgeT), shrubMat);
-      hB.position.set(cx, hedgeH / 2, cz - halfD);
-      scene.add(hB);
-      const hL = new THREE.Mesh(new THREE.BoxGeometry(hedgeT, hedgeH, gd), shrubMat);
-      hL.position.set(cx - halfW, hedgeH / 2, cz);
-      scene.add(hL);
-      const hR = new THREE.Mesh(new THREE.BoxGeometry(hedgeT, hedgeH, gd), shrubMat);
-      hR.position.set(cx + halfW, hedgeH / 2, cz);
-      scene.add(hR);
-
-      // ----- 3. Marble cross paths -----
-      const pathW = 2.6;
-      const pathLong = new THREE.Mesh(new THREE.BoxGeometry(pathW, 0.08, gd - 0.6), marbleMat);
-      pathLong.position.set(cx, 0.18, cz);  // b035 — above lawn top (0.10)
-      scene.add(pathLong);
-      const pathCross = new THREE.Mesh(new THREE.BoxGeometry(gw - 0.6, 0.08, pathW), marbleMat);
-      pathCross.position.set(cx, 0.18, cz);
-      scene.add(pathCross);
-
-      // ----- 4. 3-tier ornate marble fountain (the centerpiece) -----
-      // Lower basin (b026 — named as the click→card target for the fountain)
-      const basin1 = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.5, 0.55, 20), marbleMat);
-      basin1.position.set(cx, 0.275, cz);
-      basin1.name = 'fountain';
-      scene.add(basin1);
-      const water1 = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.05, 0.10, 20), poolMat);
-      water1.position.set(cx, 0.56, cz);
-      scene.add(water1);
-      // Middle column
-      const col1 = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.9, 12), marbleMat);
-      col1.position.set(cx, 1.05, cz);
-      scene.add(col1);
-      // Middle basin
-      const basin2 = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.5, 0.4, 16), marbleMat);
-      basin2.position.set(cx, 1.65, cz);
-      scene.add(basin2);
-      const water2 = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.08, 16), poolMat);
-      water2.position.set(cx, 1.88, cz);
-      scene.add(water2);
-      // Upper column
-      const col2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.7, 10), marbleMat);
-      col2.position.set(cx, 2.20, cz);
-      scene.add(col2);
-      // Top tier (small)
-      const basin3 = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 0.3, 12), marbleMat);
-      basin3.position.set(cx, 2.70, cz);
-      scene.add(basin3);
-      // Crowning sphere
-      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), marbleMat);
-      crown.position.set(cx, 3.15, cz);
-      scene.add(crown);
-
-      // ----- 5. Plant helpers (used inside this garden + future scenery) -----
-      function addTopiaryCone(px, pz, h) {
-        const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.7, h, 8), topiaryMat);
-        cone.position.set(px, h / 2, pz);
-        scene.add(cone);
-      }
-      function addTopiarySphere(px, pz, r) {
-        const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), topiaryMat);
-        ball.position.set(px, r + 0.2, pz);
-        scene.add(ball);
-        // Tiny stone base
-        const base = new THREE.Mesh(new THREE.BoxGeometry(r * 1.4, 0.2, r * 1.4), marbleMat);
-        base.position.set(px, 0.1, pz);
-        scene.add(base);
-      }
-      function addTopiarySpiral(px, pz) {
-        // 3 stacked spheres tapering up
-        const sizes = [0.55, 0.42, 0.30];
-        let y = 0.4;
-        for (const s of sizes) {
-          const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), topiaryMat);
-          ball.position.set(px, y + s, pz);
-          scene.add(ball);
-          y += s * 1.7;
-        }
-        const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.25, 0.9), marbleMat);
-        base.position.set(px, 0.125, pz);
-        scene.add(base);
-      }
-      function addBougainvillea(px, pz, scale) {
-        // Green base + magenta bloom cluster on top (icosahedron)
-        const greenBase = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 * scale, 1), shrubMat);
-        greenBase.position.set(px, 0.55 * scale, pz);
-        scene.add(greenBase);
-        // Bloom cluster — 3 magenta spheres of varied size
-        const blooms = [
-          { dx: 0,    dy: 0.8 * scale, dz: 0,    r: 0.55 * scale },
-          { dx: 0.4 * scale,  dy: 0.6 * scale, dz: 0.2 * scale,  r: 0.40 * scale },
-          { dx: -0.3 * scale, dy: 0.7 * scale, dz: -0.3 * scale, r: 0.42 * scale },
-        ];
-        for (const b of blooms) {
-          const bloom = new THREE.Mesh(new THREE.IcosahedronGeometry(b.r, 1), bougainvilleaMat);
-          bloom.position.set(px + b.dx, 0.55 * scale + b.dy, pz + b.dz);
-          scene.add(bloom);
-        }
-      }
-      function addRoseBush(px, pz) {
-        // Small green base + 5 tiny red bloom boxes
-        const base = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), shrubMat);
-        base.position.set(px, 0.45, pz);
-        scene.add(base);
-        for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2;
-          const r = 0.35;
-          const bloom = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), roseMat);
-          bloom.position.set(px + Math.cos(a) * r, 0.7, pz + Math.sin(a) * r);
-          scene.add(bloom);
-        }
-      }
-      function addLavenderClump(px, pz) {
-        // 5 tall thin purple stalks clustered
-        for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2;
-          const r = 0.22;
-          const stalk = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7, 0.12), lavenderMat);
-          stalk.position.set(px + Math.cos(a) * r, 0.35, pz + Math.sin(a) * r);
-          scene.add(stalk);
-        }
-        // Flower top blob
-        const top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 1), lavenderMat);
-        top.position.set(px, 0.85, pz);
-        scene.add(top);
-      }
-      function addUrnPlanter(px, pz) {
-        // Marble urn (tapered cylinder) + small topiary on top
-        const urn = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.30, 0.7, 10), marbleMat);
-        urn.position.set(px, 0.35, pz);
-        scene.add(urn);
-        const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.50, 0.50, 0.10, 10), marbleMat);
-        lip.position.set(px, 0.75, pz);
-        scene.add(lip);
-        const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.40, 1), topiaryMat);
-        ball.position.set(px, 1.10, pz);
-        scene.add(ball);
-      }
-
-      // ----- 6. Topiary at the 4 corners (cones, taller) -----
-      addTopiaryCone(cx - halfW + 1.8, cz - halfD + 1.8, 2.4);
-      addTopiaryCone(cx + halfW - 1.8, cz - halfD + 1.8, 2.4);
-      addTopiaryCone(cx - halfW + 1.8, cz + halfD - 1.8, 2.4);
-      addTopiaryCone(cx + halfW - 1.8, cz + halfD - 1.8, 2.4);
-
-      // ----- 7. More topiary cones lining the inner hedge edges -----
-      addTopiaryCone(cx - halfW + 1.8, cz, 1.9);
-      addTopiaryCone(cx + halfW - 1.8, cz, 1.9);
-      addTopiaryCone(cx, cz - halfD + 1.8, 1.9);
-      addTopiaryCone(cx, cz + halfD - 1.8, 1.9);
-
-      // ----- 8. Topiary spheres flanking the fountain (4) -----
-      addTopiarySphere(cx - 4.5, cz - 4.5, 0.6);
-      addTopiarySphere(cx + 4.5, cz - 4.5, 0.6);
-      addTopiarySphere(cx - 4.5, cz + 4.5, 0.6);
-      addTopiarySphere(cx + 4.5, cz + 4.5, 0.6);
-
-      // ----- 9. Topiary spirals at the path corners -----
-      addTopiarySpiral(cx - 2.0, cz - 2.0);
-      addTopiarySpiral(cx + 2.0, cz - 2.0);
-      addTopiarySpiral(cx - 2.0, cz + 2.0);
-      addTopiarySpiral(cx + 2.0, cz + 2.0);
-
-      // ----- 10. Bougainvillea bushes spilling over the hedges -----
-      addBougainvillea(cx - halfW + 0.8, cz - halfD + 5.5, 1.1);
-      addBougainvillea(cx - halfW + 0.8, cz + halfD - 5.5, 1.1);
-      addBougainvillea(cx + halfW - 0.8, cz - halfD + 5.5, 1.1);
-      addBougainvillea(cx + halfW - 0.8, cz + halfD - 5.5, 1.1);
-      addBougainvillea(cx - 6.0, cz - halfD + 0.8, 0.9);
-      addBougainvillea(cx + 6.0, cz - halfD + 0.8, 0.9);
-
-      // ----- 11. Rose bushes scattered in the quadrants -----
-      addRoseBush(cx - 6.5, cz - 2.5);
-      addRoseBush(cx + 6.5, cz - 2.5);
-      addRoseBush(cx - 6.5, cz + 2.5);
-      addRoseBush(cx + 6.5, cz + 2.5);
-      addRoseBush(cx - 3.2, cz - 6.8);
-      addRoseBush(cx + 3.2, cz - 6.8);
-
-      // ----- 12. Lavender clumps -----
-      addLavenderClump(cx - 7.5, cz - 6.5);
-      addLavenderClump(cx + 7.5, cz - 6.5);
-      addLavenderClump(cx - 7.5, cz + 6.5);
-      addLavenderClump(cx + 7.5, cz + 6.5);
-
-      // ----- 13. Urn planters at hedge corners + path intersections -----
-      addUrnPlanter(cx - halfW + 1.0, cz - halfD + 0.8);
-      addUrnPlanter(cx + halfW - 1.0, cz - halfD + 0.8);
-      addUrnPlanter(cx - halfW + 1.0, cz + halfD - 0.8);
-      addUrnPlanter(cx + halfW - 1.0, cz + halfD - 0.8);
-      addUrnPlanter(cx - 1.6, cz - halfD + 0.8);
-      addUrnPlanter(cx + 1.6, cz - halfD + 0.8);
-      addUrnPlanter(cx - 1.6, cz + halfD - 0.8);
-      addUrnPlanter(cx + 1.6, cz + halfD - 0.8);
-
-      // ----- 14. 2 marble corner statues -----
-      // (small obelisk + sphere-on-pedestal flanking the fountain on the long axis)
-      // Obelisk
-      const oBase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 1.0), marbleMat);
-      oBase.position.set(cx - 7.5, 0.15, cz);
-      scene.add(oBase);
-      const oShaft = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), marbleMat);
-      oShaft.position.set(cx - 7.5, 1.6, cz);
-      scene.add(oShaft);
-      const oCap = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.4, 0.6, 4), marbleMat);
-      oCap.position.set(cx - 7.5, 3.20, cz);
-      oCap.rotation.y = Math.PI / 4;
-      scene.add(oCap);
-      // Sphere on pedestal
-      const sPed = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.4, 0.85), marbleMat);
-      sPed.position.set(cx + 7.5, 0.7, cz);
-      scene.add(sPed);
-      const sphere = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 1), marbleMat);
-      sphere.position.set(cx + 7.5, 2.0, cz);
-      scene.add(sphere);
-
-      // ----- 15. 2 marble benches flanking the fountain -----
-      function addBench(px, pz, rotY) {
-        const seat = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 0.7), marbleMat);
-        seat.position.set(px, 0.55, pz);
-        seat.rotation.y = rotY;
-        scene.add(seat);
-        for (const dx of [-0.95, 0.95]) {
-          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.7), marbleMat);
-          const lx = px + dx * Math.cos(rotY);
-          const lz = pz + dx * Math.sin(rotY);
-          leg.position.set(lx, 0.25, lz);
-          leg.rotation.y = rotY;
-          scene.add(leg);
-        }
-        const back = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 0.12), marbleMat);
-        const backOffsetX = -Math.sin(rotY) * 0.32;
-        const backOffsetZ =  Math.cos(rotY) * 0.32;
-        back.position.set(px + backOffsetX, 1.0, pz + backOffsetZ);
-        back.rotation.y = rotY;
-        scene.add(back);
-      }
-      addBench(cx, cz - 5.5, 0);
-      addBench(cx, cz + 5.5, Math.PI);
-
-      // ----- 16. 2 pergola archways at north + south path entrances -----
-      function addPergola(px, pz) {
-        // 4 marble posts forming a square
-        for (const dx of [-1.4, 1.4]) {
-          for (const dz of [-0.6, 0.6]) {
-            const post = new THREE.Mesh(new THREE.BoxGeometry(0.32, 3.0, 0.32), marbleMat);
-            post.position.set(px + dx, 1.5, pz + dz);
-            scene.add(post);
-          }
-        }
-        // Top beams (long axis)
-        for (const dz of [-0.6, 0.6]) {
-          const beam = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 0.18), marbleMat);
-          beam.position.set(px, 3.0, pz + dz);
-          scene.add(beam);
-        }
-        // Cross slats (5 across)
-        for (let i = 0; i < 5; i++) {
-          const lx = px - 1.2 + i * 0.6;
-          const slat = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.12, 1.5), marbleMat);
-          slat.position.set(lx, 3.10, pz);
-          scene.add(slat);
-        }
-        // Bougainvillea draping over the top
-        addBougainvillea(px - 1.0, pz, 0.85);
-        addBougainvillea(px + 1.0, pz, 0.85);
-        // Lift the bloom cluster onto the pergola top by drawing extra blooms
-        for (const dx of [-1.0, 0.0, 1.0]) {
-          const drape = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), bougainvilleaMat);
-          drape.position.set(px + dx, 3.45, pz);
-          scene.add(drape);
-        }
-      }
-      addPergola(cx, cz - halfD);
-      addPergola(cx, cz + halfD);
-
-      // ----- 17. 6 pathway lanterns lining the marble paths -----
-      // b035 — garden lawn top is ~0.10, pass that as baseY
-      addDeckLantern(cx - 5.5, cz - 1.6, 0.10);
-      addDeckLantern(cx - 5.5, cz + 1.6, 0.10);
-      addDeckLantern(cx + 5.5, cz - 1.6, 0.10);
-      addDeckLantern(cx + 5.5, cz + 1.6, 0.10);
-      addDeckLantern(cx - 1.6, cz - 5.5, 0.10);
-      addDeckLantern(cx + 1.6, cz - 5.5, 0.10);
-    }
-    addGarden(-32, 13);
 
     // ----- East lot: supercar showroom (b034 — enlarged + relocated NE) -----
     function addCarShowroom(cx, cz) {

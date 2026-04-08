@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## b040 — 2026-04-07 — Garage wing attached west of mansion + west lot cleared (BBQ, fountain, garden, statues out)
+
+User: "garage attached to mansion ... enough space that i could have a car inside a living room for fun ... the entire mansion bothers me the most right now ... remove bbqbar fountain garden 3 gadren statues ... garage west wing or something sure proceed however u wanna".
+
+This is **Phase 1** of the multi-round mansion/scenery revamp. Phase 2 (pool / topiary garden / koi pond / waterfall / extra palms / sky bridge / road / showroom) lands in subsequent rounds.
+
+### Added — garage wing attached west of the west wing
+- New 12×14 single-volume open-air garage at `cx=-22, cz=-10`. Shares its east wall (x=-16) with the west wing's west wall — they read as one continuous mansion silhouette.
+- Same modern Miami language as the wings: white plaster, 3 walls (front open via `addWallBoxOpenFront`), marble underside band, flat roof + parapet via `addFlatRoofWithParapet`, 3 slim round front columns.
+- Single tall volume (height 6.5, between wing 6.0 and central 8.82) so it reads as a clearly distinct mass without competing with the central block.
+- **Travertine showcase floor** + **marble showcase plinth** (6.0×0.18×3.4) inside the garage where the lambo sits.
+- **LED accent strip** along the back interior wall at car-roof height — cool ledMat (cyan), the modern Miami garage lighting cliché.
+- 2 sconces flanking the front opening.
+- The user wanted "enough space that a car could live in the living room for fun" — this is the answer: a giant open volume with the car fully visible from the colonnade view.
+
+### Moved
+- **Yellow Lambo** relocated from the deck (`addCar(14, 5, ..., 'lambo_yellow')`) to inside the new garage on the showcase plinth (`addCar(-22, -9, ..., 0, 'lambo_yellow', 0.92)`). Faces front (rotY=0). baseY=0.92 = podium top + plinth height so the wheels rest on the plinth surface. Pink Lambo stays on the deck unchanged.
+
+### Removed (user request)
+- **Outdoor BBQ bar** (`addBBQBar` function + call at `(17, 9)`) — east of pool. The L-shaped stone counter, grill, heat strip, 3 warm-glow bottles, all gone.
+- **3 garden statues** (`addStatue` function + 3 calls — obelisk at (26,22), sphere at (-28,24), abstract at (0,26)).
+- **Entire luxury garden lot** (`addGarden` ~300-line function + call at `(-32, 13)`) — lawn plane, hedge perimeter, marble cross paths, **3-tier marble fountain** (the `fountain` click target lives here), 8 topiary cones, 4 topiary spheres, 4 topiary spirals, 6 bougainvillea bushes, 6 rose bushes, 4 lavender clumps, 8 marble urn planters, 2 corner marble statues, 2 marble benches, 2 pergolas, 6 pathway lanterns, all the nested helper functions (`addTopiaryCone`/`addTopiarySphere`/`addTopiarySpiral`/`addBougainvillea`/`addRoseBush`/`addLavenderClump`/`addUrnPlanter`/`addBench`/`addPergola`). ~85 meshes deleted.
+- **West wing side door** — was an exterior door between the (now-deleted) garden lot and the bedroom interior. The new garage now occupies that exact spot, so the door would become an interior door (forbidden by user wish) — removed.
+
+### Orphaned click→card targets (intentional)
+- `'bbqbar'` (track 6), `'fountain'` (track 7), `'statue_obelisk'` (track 9), `'statue_sphere'` (track 10), `'statue_abstract'` (track 11) entries in `propTracks` are now orphan references — they no longer match any mesh. They're harmless (no error, just unclickable). Will be reassigned when the topiary garden / koi pond / waterfall replace them in Phase 2.
+
+### What was NOT touched (kept for Phase 2)
+- Entire b039 mansion shell (central + east + west wings, drums, cantilever balcony, rooftop pavilion, colonnade, interior rooms)
+- Pool, pool deck, deck lanterns, pink Lambo, boulders
+- Beach, ocean, pier, yachts, jet skis, surfboards, lagoon
+- Tiki bar, fire pit + outdoor seating circle
+- Forest (pines + palms), neighbor villas, skyline
+- Loop driveway road
+- Supercar showroom (east lot)
+
+### Files modified
+- [js/world.js](js/world.js) — garage block added (~85 lines), yellow lambo position changed (1 line), BBQ bar function + call deleted (~35 lines), 3 statues function + 3 calls deleted (~37 lines), luxury garden function + call deleted (~301 lines), 4 stub comment blocks added. Net **~270 lines deleted**.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b039 → b040`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump + scene contents refresh
+
 ## b039 — 2026-04-07 — WASD fix + open-air mansion retry (no yellow windows, west drum, taller pavilion, open back archway)
 
 User: "wasd does nothing like keystrokes arent registered whatsoever ... mansion still looks the same as it did before. its not the OPEN AIR modern miami build i thought itd be can we retry ... no doors in the inside. maybe open doors for front and back doors. very cool open air mansion (no yellow windows. not too flat or blocky."
