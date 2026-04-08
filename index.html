@@ -20,6 +20,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
+
+  <!-- b052 — importmap so three.js examples/jsm modules (postprocessing/*)
+       can resolve their bare 'three' imports against the same unpkg CDN.
+       Only used by ?style=v2 stylization pipeline; the default villa view
+       (which uses absolute import URLs) is unaffected. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <!-- Top bar -->

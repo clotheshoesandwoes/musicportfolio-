@@ -1,5 +1,64 @@
 # CHANGELOG
 
+## b052 — 2026-04-08 — Stylization pipeline (?style=v2): ACES + bloom + grade
+
+User after b051: villa "looks like ugly runescape," wants a Destiny-grade visual upgrade. Honest read: Destiny is unreachable in-browser, but the *mood* (atmospheric haze, rim light, bloom-soaked horizon, color grading) is 100% reachable via post-processing. The current scene has zero tone mapping and zero post — that's most of why it reads as flat. Recommended path was post-processing first because it's the highest visible jump per hour and doesn't touch geometry.
+
+### Activation
+Behind a `?style=v2` URL query flag, mirroring the `?paint=1` pattern from b051:
+- `cantmute.me/` → existing villa, byte-identical to b051
+- `cantmute.me/?style=v2` → same villa rendered through the post-processing pipeline
+- `cantmute.me/?paint=1` → painterly POC, untouched
+
+When the flag is absent, every code path in `world.js` is unchanged. Every new line is inside an `if (stylized)` branch or guarded by `if (composer)`.
+
+### Pipeline
+1. **`renderer.toneMapping = ACESFilmicToneMapping`** + exposure 1.15 + sRGB output color space (only when stylized; default villa stays NoToneMapping)
+2. **`RenderPass`** — renders the existing scene+camera into a linear HDR target. No scene changes.
+3. **`UnrealBloomPass`** — strength 0.85, radius 0.55, threshold 0.85. Threshold is high so only the brightest emissives bloom (pool, neon signs, lambo emissives, lamps) — plaster walls stay clean.
+4. **Custom `ShaderPass` — finishing pass:**
+   - ASC CDL lift / gamma / gain color grade (slight cool shadows, warmer highlights, magenta lift)
+   - Radial vignette (uVignette = 1.05)
+   - Animated film grain (uGrain = 0.045, hashed against `uTime`)
+5. **`OutputPass`** — applies ACES tone mapping + sRGB conversion at the very end (must be last). Reads `renderer.toneMapping` / `renderer.outputColorSpace`.
+
+### Module loading
+The five postprocessing modules (`EffectComposer`, `RenderPass`, `UnrealBloomPass`, `ShaderPass`, `OutputPass`) are lazy-imported in parallel via `Promise.all()`, only when `?style=v2` is present. They live in `three/examples/jsm/postprocessing/` and use bare `import 'three'` specifiers, which previously couldn't resolve from unpkg.
+
+To make them resolve, [index.html](index.html) gained a `<script type="importmap">` block mapping `three` → `https://unpkg.com/three@0.160.0/build/three.module.js` and `three/addons/` → `https://unpkg.com/three@0.160.0/examples/jsm/`. The existing absolute-URL imports in `world.js` and `world-paint.js` are unaffected by the importmap (importmaps only resolve bare specifiers).
+
+### Failure mode
+If any of the five dynamic imports fail, the catch block logs a warning and leaves `composer = null`. `animate()` then takes the legacy `renderer.render(scene, camera)` branch — the user sees the unstyled villa instead of a black screen or crash.
+
+### Files modified
+- [js/world.js](js/world.js) — `composer` / `stylized` declarations near the top, URL flag check + tone-mapping setup after renderer creation, ~115-line composer build block after camera setup, render-path branch in `animate()`, composer resize in `onResize`, composer dispose in `destroy()`. All additive — no existing lines removed.
+- [index.html](index.html) — `<script type="importmap">` block in `<head>` so `three/addons/postprocessing/*` can resolve their bare `'three'` imports
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b051 → b052`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/` → identical to b051. Compare against:
+2. Hard refresh `cantmute.me/?style=v2` → ACES + bloom + grade + vignette + grain.
+3. Hard refresh `cantmute.me/?paint=1` → painterly POC, untouched.
+4. Resize the window in `?style=v2` → composer should track the renderer.
+5. Switch tabs and come back → composer should clean up via `destroy()` and rebuild on next mount.
+
+### Knobs
+All tunable in [js/world.js](js/world.js) inside the `if (stylized)` block:
+- Bloom: `strength=0.85`, `radius=0.55`, `threshold=0.85`
+- Vignette: `uVignette=1.05`
+- Grain: `uGrain=0.045`
+- Color grade: `uLift / uGamma / uGain` vec3s
+- Exposure: `renderer.toneMappingExposure = 1.15`
+
+### What this is NOT
+- Not a geometry change. Not a material change. Not a lighting change. Just a finishing layer on top of the existing PBR + shadow map pipeline from b047.
+- Not toon/cel shading. The original recommendation was post-processing **first**, then optionally a stylized shader pass on top. Toon would require rewriting hero materials and is left for a follow-up if `?style=v2` lands well.
+
+### Next
+Wait for the user's reaction at `?style=v2`. If the direction is right → tune the knobs (bloom strength, grade), then either ship as the default (delete the flag, make it always-on) or layer on a toon/outline pass for the next jump. If wrong → revert is one delete pass on the `if (stylized)` blocks plus the importmap.
+
 ## b051 — 2026-04-08 — Painterly / watercolor POC (?paint=1 URL flag, fully isolated)
 
 User after b050: "how can we drastically change so that the artstyle is actually different not small effects" → picked option 4 from the radical-options menu (painterly / watercolor with the Miami villa concept) → "poc pls idk just miami super rich vibes with stuff weve already talked about". This commit lands a fully isolated proof-of-concept the user can compare against the current b050 villa view without disturbing it.
