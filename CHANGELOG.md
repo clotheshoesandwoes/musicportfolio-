@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## b035c — 2026-04-07 — Pull lagoon front edge in so the pier extends over water
+
+User: "we need to move the lagoon in closer because the bridge is too much on the sand". The pier runs z=30..66 but the b035b lagoon front edge was at z=60, so basically the entire pier was on sand with only the very tip over water.
+
+Moved lagoon center z 145 → 117. New z range 32..202. Pier base now lands right at the shoreline so the pier extends over the water for nearly its entire length. Still clear of the pool deck (deck z range -36..16). Beach chairs at z=32..40 are now near the waterline (intended — they sit at the edge of the surf).
+
+### Files modified
+- [js/world.js](js/world.js) — lagoon center z 145 → 117
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b035b → b035c`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b035b — 2026-04-07 — Lagoon = actual ocean (much bigger + dominant y)
 
 User: "its still happening with the lagoon. also the lagoon needs to be much bigger cuz its supposed to be an ocean".
