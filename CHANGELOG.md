@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## b043 — 2026-04-07 — Mega-mansion Phase 3: foyer + staircase + speakeasy + wine cellar + library + piano + guest bedroom + rooftop pool + 12 more palms
+
+User: "proceed".
+
+Phase 3 of the mega-mansion. 7 more interior zones + the rooftop pool feature, plus 12 extra scattered palms (user wishlist). Pure open-plan, non-grid layouts.
+
+### 7 new rooms
+
+**Ground floor (3):**
+1. **🏛️ Foyer + grand staircase** (`grand_stair`) — front-east transition zone, x=11 z=-7. **14-step curved sweeping marble staircase** ascending from ground to upper floor in a quarter-circle arc (radius 6.0, sweep -30° to +60°). Each step rotated to follow the curve. 2 tall marble newel posts with sphere caps at the bottom + entry rug. Truly non-grid.
+2. **🍸 Speakeasy bar** (`speakeasy_bar`) — front-east, x=17 z=-9. **3-segment curving bar counter** (left + right segments angled ±10°), continuous wood top spans all 3, 5 tall stools facing south. 6 emissive bottles in alternating colors (warm + cyan + magenta + cool yellow) on a back shelf. Magenta neon "BAR" sign above.
+3. **🍷 Wine cellar / tasting** (`wine_rack`) — back-west ground, x=-21 z=-24. 3 tall dark wood wine racks against the back wall, each with an 8×6 grid of dark red emissive bottle dots (144 bottles total). **Round marble tasting table** in front with 3 chairs around it + 3 wine bottles on the table.
+
+**Upper floor (3):**
+4. **📚 Library** (`library_books`) — front-east upper, x=19 z=-9. 3 tall dark wood bookshelves against the back, each with 5 horizontal dividers and **60 colored book boxes per shelf** (180 books total in 6 alternating spine colors). Reading chair + side table with warm-glow lamp.
+5. **🎹 Piano / songwriting room** (`piano`) — back-west upper, x=-19 z=-23. **Grand piano with curved tail** built as a main rectangular body + 4 tapering box segments at angles to suggest the wing. Pale keyboard slab + black key strip overlay + 3 cylindrical legs + bench + angled music stand with sheet music.
+6. **🛏️ Guest bedroom** (`guest_bed`) — back-east upper, x=18 z=-23. Bed frame + mattress + 2 pillows + headboard + nightstand + warm lamp + 3 abstract artwork squares above the bed (red, green, gold).
+
+**Rooftop (1 zone, multiple features):**
+7. **🏊 Rooftop pool + hot tub + open-air DJ deck** (`rooftop_pool`) — Long 12×4 cyan emissive infinity pool centered on the roof. Round hot tub off to the east. 4 sleek chaise loungers around the pool with magenta cushions. Open-air DJ table on the west end with 2 cyan jog wheels + 2 magenta LED bar uplights. Tall marble planter with topiary on the east end.
+
+### 12 more scattered palms (user wishlist: "palm trees yess")
+Added across the front lawn area at varied positions (x = ±18, ±22, ±30, ±36 / z = 4 to 38), heights 5.6-7.0. Frames the mansion better and adds depth from any angle.
+
+### 7 new propTracks entries (track indices 28-34)
+`grand_stair`, `speakeasy_bar`, `wine_rack`, `library_books`, `piano`, `guest_bed`, `rooftop_pool`.
+
+### 7 new camera anchors
+`FOYER`, `SPEAKEASY`, `WINE`, `LIBRARY`, `PIANO`, `GUEST`, `ROOFTOP` — first-person except ROOFTOP which uses orbit mode (cy=11, radius=28) for the wide rooftop overview. Total anchors now: **22**.
+
+### Files modified
+- [js/world.js](js/world.js) — propTracks (+7 entries), 7 room interior blocks (~390 lines), camera anchors (+7 entries), 12 more `addPalm` calls
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b042 → b043`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### Phase 3 status
+**Mansion is now ~22 rooms across 2 floors + rooftop**. Still room for more — possible Phase 4 additions: 2nd guest bedroom, formal dining (separate from kitchen), butler's pantry, gym/yoga room, observatory dome, helipad on rooftop, sky bridge, breakfast nook, art gallery hall. Plus the user's wishlist sky bridge (TBD design).
+
 ## b042 — 2026-04-07 — Mega-mansion Phase 2: 8 new room interiors + camera anchors
 
 User: "a 8 proceed but i want room for more just incase more rooms yknow ... u can do interesting layouts too doesnt have to be super grid based".

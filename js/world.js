@@ -159,6 +159,14 @@
       'recording_console': 25,
       'dj_booth':        26,
       'walk_in_closet': 27,
+      // b043 — Phase 3 mega-mansion room props
+      'grand_stair':     28,
+      'speakeasy_bar':   29,
+      'wine_rack':       30,
+      'library_books':   31,
+      'piano':           32,
+      'guest_bed':       33,
+      'rooftop_pool':    34,
     };
 
     // -----------------------------------------------------
@@ -1122,6 +1130,19 @@
     addPalm(-12.0, 24.0, 6.0);
     addPalm( 14.0, 16.0, 5.4);
     addPalm( 12.0, 24.0, 6.2);
+    // b043 — extra scattered palms (user wishlist: more palm trees)
+    addPalm(-22.0, 12.0, 6.6);
+    addPalm( 22.0, 12.0, 6.4);
+    addPalm(-30.0, 18.0, 7.0);
+    addPalm( 30.0, 18.0, 6.8);
+    addPalm(-18.0,  4.0, 5.8);
+    addPalm( 18.0,  4.0, 5.6);
+    addPalm(-36.0, 28.0, 6.4);
+    addPalm( 36.0, 28.0, 6.6);
+    addPalm( -6.0, 28.0, 6.0);
+    addPalm(  6.0, 32.0, 6.2);
+    addPalm(-26.0, 38.0, 5.8);
+    addPalm( 26.0, 36.0, 6.0);
 
     // -----------------------------------------------------
     // Deck lanterns — small warm-glow lanterns on the pool deck
@@ -2076,6 +2097,478 @@
         faucet.position.set(tubCx + 0.6 + dx, suiteY + 1.13, tubCz + 2.4);
         scene.add(faucet);
       }
+    }
+
+    // =====================================================
+    // b043 — Phase 3 mega-mansion rooms
+    //
+    // 7 more zones inside the b041 56×28 mansion + rooftop pool feature.
+    // Same open-plan rules: no walls, furniture clusters, click→card
+    // targets, non-grid layouts where it makes sense.
+    // =====================================================
+
+    // ----- FOYER + GRAND STAIRCASE (front-east transition, ground floor) -----
+    {
+      const fCx = 11;
+      const fCz = -7;
+      const fY  = podiumTopY;
+
+      // Curved sweeping marble staircase from ground (y=0.83) up to upper
+      // floor (y=5.83). 12 steps, each step rotated slightly so the whole
+      // run sweeps in a quarter-circle curve from (x=14, z=-3) toward
+      // (x=8, z=-11).
+      const stepCount = 14;
+      const totalRise = mansionH1;  // 5.0
+      const stepRise = totalRise / stepCount;
+      const arcR = 6.0;  // radius of the curve
+      const arcCx = 8;   // center the curve sweeps around
+      const arcCz = -7;
+      const arcStartAng = -Math.PI / 6;   // -30°
+      const arcEndAng   =  Math.PI / 3;   //  60°
+      const arcSweep = arcEndAng - arcStartAng;
+      const stairTreadMat = makePS2Material({ color: 0xefe6d2 });
+      for (let i = 0; i < stepCount; i++) {
+        const t = i / (stepCount - 1);
+        const ang = arcStartAng + arcSweep * t;
+        const sx = arcCx + Math.cos(ang) * arcR;
+        const sz = arcCz + Math.sin(ang) * arcR;
+        const sy = fY + (i + 0.5) * stepRise;
+        const step = new THREE.Mesh(
+          new THREE.BoxGeometry(2.4, stepRise + 0.02, 1.2),
+          stairTreadMat
+        );
+        step.position.set(sx, sy, sz);
+        step.rotation.y = -ang + Math.PI / 2;
+        if (i === 6) step.name = 'grand_stair';
+        scene.add(step);
+      }
+      // 2 tall round marble newel posts at the bottom of the stair
+      const newel1 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.40, 2.4, 12),
+        marbleMat
+      );
+      newel1.position.set(arcCx + Math.cos(arcStartAng) * arcR + 0.6, fY + 1.2, arcCz + Math.sin(arcStartAng) * arcR);
+      scene.add(newel1);
+      const newel2 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.40, 2.4, 12),
+        marbleMat
+      );
+      newel2.position.set(arcCx + Math.cos(arcStartAng) * arcR - 0.6, fY + 1.2, arcCz + Math.sin(arcStartAng) * arcR);
+      scene.add(newel2);
+      // Decorative cap spheres on top of each newel
+      for (const newelX of [
+        arcCx + Math.cos(arcStartAng) * arcR + 0.6,
+        arcCx + Math.cos(arcStartAng) * arcR - 0.6,
+      ]) {
+        const cap = new THREE.Mesh(new THREE.IcosahedronGeometry(0.40, 1), marbleMat);
+        cap.position.set(newelX, fY + 2.55, arcCz + Math.sin(arcStartAng) * arcR);
+        scene.add(cap);
+      }
+      // Marble entry rug at the bottom of the stair
+      const entryRug = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.10, 2.4), marbleMat);
+      entryRug.position.set(fCx + 1.5, fY + 0.05, fCz + 2.0);
+      scene.add(entryRug);
+    }
+
+    // ----- SPEAKEASY BAR (front-east, dim/moody, between billiard + aquarium) -----
+    {
+      const spCx = 17;
+      const spCz = -9;
+      const spY  = podiumTopY;
+
+      // Long curving bar counter — 3 box segments at slight angles
+      const counterMat = makePS2Material({ color: 0x2a1010 });
+      const counterTopMat = makePS2Material({ color: 0x4a2818 });
+      const seg1 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.0, 0.7), counterMat);
+      seg1.position.set(spCx - 1.6, spY + 0.5, spCz);
+      seg1.rotation.y = 0.18;
+      scene.add(seg1);
+      const seg2 = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.0, 0.7), counterMat);
+      seg2.position.set(spCx, spY + 0.5, spCz - 0.4);
+      scene.add(seg2);
+      const seg3 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.0, 0.7), counterMat);
+      seg3.position.set(spCx + 1.6, spY + 0.5, spCz);
+      seg3.rotation.y = -0.18;
+      scene.add(seg3);
+      // Continuous wood top across all 3 segments
+      const barTop = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.10, 0.8), counterTopMat);
+      barTop.position.set(spCx, spY + 1.05, spCz - 0.18);
+      barTop.name = 'speakeasy_bar';
+      scene.add(barTop);
+      // 5 tall bar stools facing the counter
+      const stoolMat = makePS2Material({ color: 0x141014 });
+      for (let i = 0; i < 5; i++) {
+        const sx = spCx - 2.4 + i * 1.2;
+        const stoolSeat = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.10, 8), stoolMat);
+        stoolSeat.position.set(sx, spY + 0.92, spCz + 0.9);
+        scene.add(stoolSeat);
+        const stoolPole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.92, 5), stoolMat);
+        stoolPole.position.set(sx, spY + 0.46, spCz + 0.9);
+        scene.add(stoolPole);
+      }
+      // Back bar shelves with 6 emissive bottles (warm + cyan + magenta mix)
+      const bottleColors = [0xffaa30, 0xc04060, 0x40d0a0, 0xff80c0, 0x80a0ff, 0xffe080];
+      for (let i = 0; i < 6; i++) {
+        const m = makePS2Material({
+          color:       bottleColors[i],
+          emissive:    bottleColors[i],
+          emissiveAmt: 1.2,
+        });
+        const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 0.65, 6), m);
+        bottle.position.set(spCx - 2.5 + i * 1.0, spY + 1.55, spCz - 1.4);
+        scene.add(bottle);
+      }
+      // Dark wood back shelf the bottles sit on
+      const backShelf = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.16, 0.5), counterTopMat);
+      backShelf.position.set(spCx, spY + 1.20, spCz - 1.4);
+      scene.add(backShelf);
+      // Magenta neon "BAR" sign above the back shelf
+      const neonMat = makePS2Material({
+        color:       0xff40a0,
+        emissive:    0xff40a0,
+        emissiveAmt: 2.4,
+      });
+      const neon = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 0.08), neonMat);
+      neon.position.set(spCx, spY + 2.6, spCz - 1.55);
+      scene.add(neon);
+    }
+
+    // ----- WINE CELLAR / TASTING (back-west ground floor, behind garage) -----
+    {
+      const wCx = -21;
+      const wCz = -24;
+      const wY  = podiumTopY;
+
+      // 3 tall wine racks against the back wall — dark wood with bottle dots
+      const rackMat = makePS2Material({ color: 0x2a1808 });
+      const wineRedMat = makePS2Material({
+        color:       0x600010,
+        emissive:    0x800020,
+        emissiveAmt: 0.6,
+      });
+      for (let r = 0; r < 3; r++) {
+        const rx = wCx - 4 + r * 4;
+        const rack = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.4, 0.6), rackMat);
+        rack.position.set(rx, wY + 1.7, wCz - 2.6);
+        scene.add(rack);
+        if (r === 1) rack.name = 'wine_rack';
+        // Grid of bottle dots on the rack face (8 wide × 6 tall)
+        for (let bi = 0; bi < 8; bi++) {
+          for (let bj = 0; bj < 6; bj++) {
+            const bx = rx - 1.5 + bi * 0.42;
+            const by = wY + 0.4 + bj * 0.5;
+            const dot = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.06, 6), wineRedMat);
+            dot.position.set(bx, by, wCz - 2.3);
+            dot.rotation.x = Math.PI / 2;
+            scene.add(dot);
+          }
+        }
+      }
+      // Round marble tasting table in front of the racks
+      const tastingTable = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.4, 1.4, 0.18, 16),
+        marbleMat
+      );
+      tastingTable.position.set(wCx, wY + 0.95, wCz);
+      scene.add(tastingTable);
+      // Marble pedestal under the table
+      const pedTable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.30, 0.50, 0.86, 12),
+        marbleMat
+      );
+      pedTable.position.set(wCx, wY + 0.43, wCz);
+      scene.add(pedTable);
+      // 3 tasting chairs around the table
+      const chairMatW = makePS2Material({ color: 0x401818 });
+      for (let i = 0; i < 3; i++) {
+        const ang = (i / 3) * Math.PI * 2 + 0.4;
+        const cx = wCx + Math.cos(ang) * 2.3;
+        const cz = wCz + Math.sin(ang) * 2.3;
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.7), chairMatW);
+        seat.position.set(cx, wY + 0.40, cz);
+        seat.rotation.y = -ang + Math.PI / 2;
+        scene.add(seat);
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.85, 0.10), chairMatW);
+        back.position.set(cx + Math.cos(ang) * 0.30, wY + 0.85, cz + Math.sin(ang) * 0.30);
+        back.rotation.y = -ang + Math.PI / 2;
+        scene.add(back);
+      }
+      // 3 wine bottles + 3 stemmed glasses on the table
+      for (let i = 0; i < 3; i++) {
+        const ang = (i / 3) * Math.PI * 2;
+        const bx = wCx + Math.cos(ang) * 0.6;
+        const bz = wCz + Math.sin(ang) * 0.6;
+        const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 0.5, 6), wineRedMat);
+        bottle.position.set(bx, wY + 1.30, bz);
+        scene.add(bottle);
+      }
+    }
+
+    // ----- LIBRARY (front-east upper floor, tall bookshelves) -----
+    {
+      const lCx = 19;
+      const lCz = -9;
+      const lY  = podiumTopY + mansionH1;
+
+      // 3 tall bookshelves running along the back wall
+      const shelfMat = makePS2Material({ color: 0x3a1f0e });
+      const bookColors = [0x4a1010, 0x10302a, 0x2a1a4a, 0x4a3a10, 0x103040, 0x401a2a];
+      for (let s = 0; s < 3; s++) {
+        const sx = lCx + (s - 1) * 2.6;
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(2.4, 4.0, 0.6), shelfMat);
+        shelf.position.set(sx, lY + 2.0, lCz - 1.8);
+        scene.add(shelf);
+        if (s === 1) shelf.name = 'library_books';
+        // 5 horizontal shelf dividers
+        for (let i = 0; i < 5; i++) {
+          const divY = lY + 0.4 + i * 0.75;
+          const div = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.55), shelfMat);
+          div.position.set(sx, divY, lCz - 1.78);
+          scene.add(div);
+        }
+        // Books — vertical thin colored boxes filling each shelf
+        for (let row = 0; row < 5; row++) {
+          for (let bk = 0; bk < 12; bk++) {
+            const bMat = makePS2Material({ color: bookColors[(row + bk) % bookColors.length] });
+            const bx = sx - 1.0 + bk * 0.18;
+            const by = lY + 0.7 + row * 0.75;
+            const book = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.55, 0.30), bMat);
+            book.position.set(bx, by, lCz - 1.78);
+            scene.add(book);
+          }
+        }
+      }
+      // Reading chair facing south (toward the colonnade view)
+      const readChairMat = makePS2Material({ color: 0x2a3548 });
+      const readChair = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 1.6), readChairMat);
+      readChair.position.set(lCx, lY + 0.45, lCz + 1.6);
+      scene.add(readChair);
+      const readBack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.4, 0.3), readChairMat);
+      readBack.position.set(lCx, lY + 1.0, lCz + 2.4);
+      scene.add(readBack);
+      // Round side table next to the chair with a warm glow lamp
+      const sideTable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.40, 0.40, 0.6, 12),
+        shelfMat
+      );
+      sideTable.position.set(lCx + 1.4, lY + 0.30, lCz + 1.8);
+      scene.add(sideTable);
+      const lampShade = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.30, 0.45, 8),
+        lanternGlowMat
+      );
+      lampShade.position.set(lCx + 1.4, lY + 0.85, lCz + 1.8);
+      scene.add(lampShade);
+    }
+
+    // ----- PIANO / SONGWRITING ROOM (back-west upper, behind studio) -----
+    {
+      const pCx = -19;
+      const pCz = -23;
+      const pY  = podiumTopY + mansionH1;
+
+      // Grand piano — black lacquer body with curved tail. Built as a
+      // main rectangular box + a quarter-circle "wing" approximated by
+      // 5 trapezoid segments at angles.
+      const pianoBlackMat = makePS2Material({ color: 0x05050a });
+      const pianoBody = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.40, 1.2), pianoBlackMat);
+      pianoBody.position.set(pCx, pY + 0.65, pCz);
+      pianoBody.name = 'piano';
+      scene.add(pianoBody);
+      // Curved tail — 4 tapering boxes at angles
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 3) * 0.5;
+        const tx = pCx + 1.1 + Math.cos(ang) * (0.4 + i * 0.15);
+        const tz = pCz + Math.sin(ang) * (0.5 + i * 0.18);
+        const tail = new THREE.Mesh(
+          new THREE.BoxGeometry(0.5 - i * 0.05, 0.40, 0.9 - i * 0.10),
+          pianoBlackMat
+        );
+        tail.position.set(tx, pY + 0.65, tz);
+        tail.rotation.y = -ang;
+        scene.add(tail);
+      }
+      // Keyboard — long pale slab at the front
+      const keyMat = makePS2Material({ color: 0xefe8d8 });
+      const keys = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.3), keyMat);
+      keys.position.set(pCx, pY + 0.86, pCz - 0.6);
+      scene.add(keys);
+      // Black key strip overlay
+      const blackKeys = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.18), pianoBlackMat);
+      blackKeys.position.set(pCx, pY + 0.90, pCz - 0.66);
+      scene.add(blackKeys);
+      // 3 piano legs (cylindrical)
+      for (const [lx, lz] of [[-0.85, -0.5], [0.85, -0.5], [0.6, 0.5]]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.65, 6), pianoBlackMat);
+        leg.position.set(pCx + lx, pY + 0.325, pCz + lz);
+        scene.add(leg);
+      }
+      // Piano bench in front
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.16, 0.4), pianoBlackMat);
+      bench.position.set(pCx, pY + 0.50, pCz - 1.4);
+      scene.add(bench);
+      // Music stand — angled box rising from the keyboard area
+      const stand = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.6, 0.06), pianoBlackMat);
+      stand.position.set(pCx, pY + 1.20, pCz - 0.30);
+      stand.rotation.x = -0.4;
+      scene.add(stand);
+      // Sheet music (white slab on the stand)
+      const sheet = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.50, 0.04), keyMat);
+      sheet.position.set(pCx, pY + 1.18, pCz - 0.18);
+      sheet.rotation.x = -0.4;
+      scene.add(sheet);
+    }
+
+    // ----- GUEST BEDROOM (back-east upper floor, behind cinema area) -----
+    {
+      const gCx = 18;
+      const gCz = -23;
+      const gY  = podiumTopY + mansionH1;
+
+      // Bed frame
+      const bedMat = makePS2Material({ color: 0xa08868 });
+      const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.45, 4.0), bedMat);
+      bedFrame.position.set(gCx, gY + 0.45, gCz);
+      scene.add(bedFrame);
+      // Mattress + sheets
+      const sheetMat = makePS2Material({ color: 0xf2eadc });
+      const mattress = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.25, 3.8), sheetMat);
+      mattress.position.set(gCx, gY + 0.78, gCz);
+      mattress.name = 'guest_bed';
+      scene.add(mattress);
+      // Pillows
+      for (const dx of [-0.6, 0.6]) {
+        const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.15, 0.6), sheetMat);
+        pillow.position.set(gCx + dx, gY + 0.96, gCz - 1.4);
+        scene.add(pillow);
+      }
+      // Headboard
+      const headboard = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.2, 0.16), bedMat);
+      headboard.position.set(gCx, gY + 1.05, gCz - 2.0);
+      scene.add(headboard);
+      // 1 nightstand
+      const ns = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.6), bedMat);
+      ns.position.set(gCx + 1.9, gY + 0.30, gCz - 1.6);
+      scene.add(ns);
+      // Lamp on the nightstand
+      const lampShade = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), lanternGlowMat);
+      lampShade.position.set(gCx + 1.9, gY + 0.85, gCz - 1.6);
+      scene.add(lampShade);
+      // Small abstract artwork on the wall above the bed (3 colored squares)
+      const art1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.06), makePS2Material({ color: 0xc04060 }));
+      art1.position.set(gCx - 0.85, gY + 2.1, gCz - 2.0);
+      scene.add(art1);
+      const art2 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.06), makePS2Material({ color: 0x40c0a0 }));
+      art2.position.set(gCx, gY + 2.1, gCz - 2.0);
+      scene.add(art2);
+      const art3 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.06), makePS2Material({ color: 0xc0a040 }));
+      art3.position.set(gCx + 0.85, gY + 2.1, gCz - 2.0);
+      scene.add(art3);
+    }
+
+    // ----- ROOFTOP POOL + HOT TUB + DJ DECK (rooftop terrace) -----
+    {
+      const rpY = mansionRoofY + 0.21;  // travertine deck top
+      // Long rectangular infinity pool centered on the rooftop, front edge
+      // overhanging the cantilever balcony for the "infinity" look
+      const rPoolW = 12.0;
+      const rPoolD = 4.0;
+      const rPoolCx = 0;
+      const rPoolCz = 0;  // toward the front of the rooftop
+      const rPoolMat = makePS2Material({
+        color:       0x40c8ff,
+        emissive:    0x40b8ff,
+        emissiveAmt: 0.8,
+      });
+      const rPool = new THREE.Mesh(
+        new THREE.BoxGeometry(rPoolW, 0.30, rPoolD),
+        rPoolMat
+      );
+      rPool.position.set(rPoolCx, rpY + 0.15, rPoolCz);
+      rPool.name = 'rooftop_pool';
+      scene.add(rPool);
+      // Marble pool rim
+      const rPoolRim = new THREE.Mesh(
+        new THREE.BoxGeometry(rPoolW + 0.6, 0.18, rPoolD + 0.6),
+        marbleMat
+      );
+      rPoolRim.position.set(rPoolCx, rpY + 0.09, rPoolCz);
+      scene.add(rPoolRim);
+
+      // Round hot tub off to the east of the pool
+      const hotTubMat = makePS2Material({
+        color:       0x80b0d0,
+        emissive:    0xa0c0e0,
+        emissiveAmt: 0.7,
+      });
+      const hotTub = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 1.6, 0.50, 16),
+        hotTubMat
+      );
+      hotTub.position.set(8, rpY + 0.25, -8);
+      scene.add(hotTub);
+      const hotTubRim = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.85, 1.85, 0.20, 16),
+        marbleMat
+      );
+      hotTubRim.position.set(8, rpY + 0.10, -8);
+      scene.add(hotTubRim);
+
+      // 4 sleek chaise loungers around the pool (on the long sides)
+      const loungerMat = makePS2Material({ color: 0xefe6d2 });
+      function addRooftopLounger(lx, lz, rotY) {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.20, 0.8), loungerMat);
+        base.position.set(lx, rpY + 0.10, lz);
+        base.rotation.y = rotY;
+        scene.add(base);
+        const cushion = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 0.7), makePS2Material({ color: 0xc04060 }));
+        cushion.position.set(lx, rpY + 0.26, lz);
+        cushion.rotation.y = rotY;
+        scene.add(cushion);
+      }
+      addRooftopLounger(-4, 3.5, 0);
+      addRooftopLounger( 4, 3.5, 0);
+      addRooftopLounger(-4, -3.5, Math.PI);
+      addRooftopLounger( 4, -3.5, Math.PI);
+
+      // Open-air DJ deck on the west side of the rooftop — long table with
+      // 2 cyan emissive jog wheels + 2 magenta LED bar uplights
+      const djTable = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 0.30, 0.9),
+        makePS2Material({ color: 0x141820 })
+      );
+      djTable.position.set(-10, rpY + 0.30, -2);
+      scene.add(djTable);
+      const djCyanMat = makePS2Material({
+        color:       0x40c0ff,
+        emissive:    0x40c0ff,
+        emissiveAmt: 1.5,
+      });
+      for (const dx of [-0.7, 0.7]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 16), djCyanMat);
+        wheel.position.set(-10 + dx, rpY + 0.49, -1.85);
+        scene.add(wheel);
+      }
+      const djLedMat = makePS2Material({
+        color:       0xff40a0,
+        emissive:    0xff40a0,
+        emissiveAmt: 1.8,
+      });
+      for (const lx of [-12, -8]) {
+        const ledBar = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.18), djLedMat);
+        ledBar.position.set(lx, rpY + 0.95, -2);
+        scene.add(ledBar);
+      }
+      // Tall planter with palm-style topiary at the east end of the rooftop
+      const rPlanter = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 1.4), marbleMat);
+      rPlanter.position.set(13, rpY + 0.30, 4);
+      scene.add(rPlanter);
+      const rTopiary = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.65, 1.6, 8),
+        topiaryMat
+      );
+      rTopiary.position.set(13, rpY + 1.4, 4);
+      scene.add(rTopiary);
     }
 
     // -----------------------------------------------------
@@ -3609,6 +4102,14 @@
     { name: 'cinema',    label: 'CINEMA',    mode: 'firstPerson', px:   4,   py: 8.5, pz: -19.0,  yaw: 0,            pitch: 0.05, fov: 80 },
     { name: 'dj',        label: 'DJ BOOTH',  mode: 'firstPerson', px:  20,   py: 8.5, pz:  -6.0,  yaw: 0,            pitch: 0.10, fov: 75 },
     { name: 'closet',    label: 'CLOSET',    mode: 'firstPerson', px:  -4,   py: 8.0, pz:  -6.0,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
+    // b043 — Phase 3 mega-mansion room anchors
+    { name: 'foyer',     label: 'FOYER',     mode: 'firstPerson', px:  11,   py: 3.0, pz:  -2.0,  yaw: Math.PI,      pitch: 0.05, fov: 78 },
+    { name: 'speakeasy', label: 'SPEAKEASY', mode: 'firstPerson', px:  17,   py: 3.0, pz:  -6.0,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
+    { name: 'wine',      label: 'WINE',      mode: 'firstPerson', px: -21,   py: 3.0, pz: -21.0,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
+    { name: 'library',   label: 'LIBRARY',   mode: 'firstPerson', px:  19,   py: 8.0, pz:  -6.0,  yaw: Math.PI,      pitch: 0.10, fov: 75 },
+    { name: 'piano',     label: 'PIANO',     mode: 'firstPerson', px: -19,   py: 8.0, pz: -20.0,  yaw: 0,            pitch: 0.10, fov: 75 },
+    { name: 'guest',     label: 'GUEST',     mode: 'firstPerson', px:  18,   py: 8.0, pz: -20.0,  yaw: 0,            pitch: 0.10, fov: 75 },
+    { name: 'rooftop',   label: 'ROOFTOP',   mode: 'orbit',       cx:   0,   cy: 11.0, cz:  -8,    yaw: 0.10,         pitch: 0.20, radius: 28 },
   ];
   let currentAnchorIdx = 0;
   let flyState = null;  // b032: { startTime, fromPos, fromLook, fromFov, toPos, toLook, toFov, target }
