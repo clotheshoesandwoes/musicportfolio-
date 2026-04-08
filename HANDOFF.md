@@ -238,9 +238,13 @@ For full context read [CHANGELOG.md](CHANGELOG.md). Quick summary by epoch:
 
 ---
 
-## 8. CURRENT OPEN PROBLEM — art style
+## 8. CURRENT OPEN PROBLEM — art style (Path A executed in b047)
 
-**As of b046 the user is still unhappy with the look.** Specifically: "still too blandy blocky and roblox like i think we gotta improve and upgrade overall artstyle honestly"
+**Status: Path A from the rebuild menu has been executed in b047.** The user picked Path A ("clean modern low-poly + real lighting") with "some geometry changes" and asked for it to be built + committed before they came back from a 10-min shower. The pipeline swap is now live; we don't yet know if it actually fixed the look. Read the b047 CHANGELOG entry for the full details.
+
+### What was up to b046
+
+"still too blandy blocky and roblox like i think we gotta improve and upgrade overall artstyle honestly"
 
 ### What has been tried (and didn't fully work)
 

@@ -1,5 +1,63 @@
 # CHANGELOG
 
+## b047 — 2026-04-07 — Path A art-style rebuild: real PBR + cast shadows + full resolution + conifer trees
+
+User: "path a but with some geometry changes yknow can u build it out and git commit so when i come back from showr 10 mins i can see something we can do in new chat give me the prompt tho".
+
+**The big swap.** Replaces the entire b010-b046 PS2+ pipeline (custom 3-light fragment shader + 854×480 low-res render target + bloom + Sobel + film grain + CA + grade + dither + scanlines + vignette) with **real Three.js PBR + actual cast shadows** at full canvas resolution. Plus a quick conifer geometry fix as the requested geometry change.
+
+This is the "Path A" recommendation from b046's section 8 of HANDOFF.md. Three failed mansion rebuilds + one failed cel shading + the b026b debug outline discovery convinced both of us the PS2 aesthetic was the wrong target. Time to embrace clean modern instead of fighting Roblox.
+
+### Material factory swap
+- `makePS2Material(opts)` now returns a `THREE.MeshStandardMaterial` instead of the custom ShaderMaterial. Same signature so all ~80 callsites still work. opts.color → color, opts.emissive → emissive, opts.emissiveAmt → emissiveIntensity, plus optional opts.roughness/opts.metalness with sane defaults (0.65 / 0.05).
+- Old custom shader factory renamed to `_DEAD_makePS2Material` and left in place temporarily so its closure references to lampPos/poolPos/windowPos/cycleUniform don't TDZ. Will delete in a follow-up cleanup commit once the new pipeline is verified.
+
+### Renderer changes
+- `antialias: true` (was false)
+- `setPixelRatio(min(devicePixelRatio, 2))` (was 1) — full resolution, capped at 2 so retina laptops don't melt
+- `shadowMap.enabled = true`, `shadowMap.type = PCFSoftShadowMap`
+- Render directly to canvas (was render-to-target → upscale-quad)
+
+### Real lights added (after camera creation)
+- **DirectionalLight** as the sun: warm `0xffd9a8`, intensity 1.4, position (40, 50, 25), target (0, 0, -10), `castShadow=true`, 2048×2048 shadow map, ortho frustum -55..+55 covering the mansion footprint, `bias=-0.0002`, `normalBias=0.05`
+- **AmbientLight**: cool dusk `0x6a4a78`, intensity 0.45 — keeps the dark side from going pitch black
+- **HemisphereLight**: warm sky `0xff9070` / cool ground `0x402060`, intensity 0.55
+- **3 PointLights** at the existing lamp / pool / window positions: warm `0xffaa50` deck lantern, cyan `0x40e8e8` pool, warm `0xffc070` window. Decay 1.6, distance 18-24. (No shadows on the points to save GPU.)
+
+### Shadow flags
+After the entire scene is built, one `scene.traverse()` call sets `castShadow = true` and `receiveShadow = true` on every Mesh that uses a non-shader material. Water shaders (pool/ocean/lagoon) and the sky dome are skipped because they're custom ShaderMaterial.
+
+### Render loop
+The `animate()` 2-pass render (low-res target → upscale post quad) is replaced with a single direct `renderer.render(scene, camera)`. The low-res render target + post pipeline (bloom, Sobel, film grain, CA, grade, dither, scanlines, vignette) is no longer in use — the post setup code still runs in init for now (creates the dead target + post quad) but doesn't get rendered. Cleanup commit will delete it.
+
+### Geometry: conifer trees rebuilt
+The b034b `addPineTree` was 4 stacked tapering cones — every layer's edge silhouetted into chunky steps that read as Minecraft pine. Replaced with a **single tall 16-sided cone** (full taper from radius 2.2 base to 0 top) + a small lower skirt for organic fullness. Trunk slightly thicker + taller (8-side cylinder, radius 0.34). The whole forest (~50 trees in the loop driveway rings + back jungle wall) reads as smooth conifer silhouettes now.
+
+### What this should change visually
+- **Real cast shadows** from the directional sun across the mansion deck, pool, garage, colonnade, cars, palm trees, etc.
+- **Full canvas resolution** instead of 854×480 — sharp text, sharp edges, no upscaled pixel chunks
+- **Antialiased edges** instead of nearest-neighbor staircase
+- **PBR lighting** on plaster + marble + travertine + chrome (with the default roughness 0.65 / metalness 0.05)
+- **Smoother conifer trees** in the forest
+- **Three real point lights** at the lamp/pool/window positions instead of the fake shader uniform versions
+- **No more bloom / Sobel / film grain / CA / dither / scanlines / vignette** — clean modern look
+
+### Risk
+- Performance: cast shadows on every mesh + full resolution might be slower than the 854×480. Set shadow map to 2048 (moderate). Mobile users get a smaller window so it should be OK. If perf is bad, drop shadow map size to 1024 or disable cast shadows on background props.
+- The 3 water shaders (pool/ocean/lagoon) still use the old custom ShaderMaterial pipeline. They have their own fog uniforms + lighting math. They might look slightly out of place against the new PBR-lit mansion. Verify visually.
+- The sky shader is still the b044 procedural gradient + sun disc + clouds. Should look fine with the new pipeline since it's a separate dome.
+- The day/night `cycleUniform` no longer drives anything in `makePS2Material` (the new MeshStandardMaterial doesn't read it). Sky still uses it. Could rotate the directional sun light by uCycle for a real day/night cycle in a follow-up.
+
+### Files modified
+- [js/world.js](js/world.js) — `makePS2Material` swap, renderer config, real lights block, animate render swap, scene traverse for shadow flags, `addPineTree` rewrite. ~120 lines added, ~10 lines deleted (most of the b010-b046 PS2+ shader plumbing is just unreachable now, will clean up in a follow-up)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b046 → b047`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+- [HANDOFF.md](HANDOFF.md) — needs another update next round once we see how this looks; section 8's "Path A" decision is now executed
+
+### Next chat
+The user is going to start a new conversation. Read [HANDOFF.md](HANDOFF.md) first, then this entry. The big open question for the new chat is "did Path A actually fix the look?" If yes → continue cleaning up (delete dead post pipeline, delete `_DEAD_makePS2Material`, hook the directional sun rotation to the day/night cycle, maybe add subtle textures). If no → re-read this entry, look at the screenshot, decide whether to tune the lighting or pick a different path.
+
 ## b046 — 2026-04-07 — Revert b044 toon shading + massive HANDOFF.md rewrite (b017 → b046)
 
 User: "cel shading looks terrible. and the art style graphics themselves look blocky and awful. is there anything we can do to rebuild or change? update files to u have better memory like a working final md or something this chats context getting heavy".

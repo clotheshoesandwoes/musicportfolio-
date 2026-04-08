@@ -1,6 +1,6 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b046
+**Build:** b047
 **Updated:** 2026-04-07
 
 ## Design references

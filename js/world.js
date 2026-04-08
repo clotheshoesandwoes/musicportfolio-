@@ -95,9 +95,16 @@
     canvas.className = 'world-canvas';
     container.appendChild(canvas);
 
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(1);
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    // b047 — Path A: render at full device resolution (was setPixelRatio(1)
+    // for the 854×480 PS2+ low-res target). Cap at 2 so retina laptops
+    // don't melt their GPU on the larger window sizes.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(container.clientWidth, container.clientHeight, false);
+    // b047 — shadow maps enabled for the new directional sun. PCF soft
+    // shadows give the cleanest result for the modern minimalist look.
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // b028 — richer pink-magenta clear color, was muddy indigo 0x1a1238
     renderer.setClearColor(0x2a0a35, 1);
 
@@ -116,6 +123,57 @@
     // skips animate.
     camera.position.set(0, 12, 26);
     camera.lookAt(0, 4, -2);
+
+    // ===================================================================
+    // b047 — REAL LIGHTING (Path A pipeline swap)
+    // Replaces the b010-b046 custom 3-point-light shader with actual
+    // Three.js lights. The directional sun casts real shadows; ambient
+    // + hemisphere fill the dark side. Three small point lights at the
+    // existing lamp / pool / window positions keep the warm interior
+    // accent (no shadows on the points to save GPU).
+    // ===================================================================
+
+    // Directional sun — warm sunset, casts shadows over the mansion area
+    const sunLight = new THREE.DirectionalLight(0xffd9a8, 1.4);
+    sunLight.position.set(40, 50, 25);
+    sunLight.target.position.set(0, 0, -10);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.camera.left   = -55;
+    sunLight.shadow.camera.right  =  55;
+    sunLight.shadow.camera.top    =  55;
+    sunLight.shadow.camera.bottom = -55;
+    sunLight.shadow.camera.near   = 1;
+    sunLight.shadow.camera.far    = 200;
+    sunLight.shadow.bias = -0.0002;
+    sunLight.shadow.normalBias = 0.05;
+    scene.add(sunLight);
+    scene.add(sunLight.target);
+
+    // Cool dusk ambient — keeps the dark side from going pitch black
+    const ambientLight = new THREE.AmbientLight(0x6a4a78, 0.45);
+    scene.add(ambientLight);
+
+    // Hemisphere fill — warm sky bounce on tops, cooler ground bounce
+    // on undersides. Cheap atmospheric look without needing GI.
+    const hemiLight = new THREE.HemisphereLight(0xff9070, 0x402060, 0.55);
+    hemiLight.position.set(0, 50, 0);
+    scene.add(hemiLight);
+
+    // Warm interior window glow point light
+    const windowPointLight = new THREE.PointLight(0xffc070, 1.6, 24, 1.6);
+    windowPointLight.position.set(0, 4.5, -10);
+    scene.add(windowPointLight);
+
+    // Cyan pool glow point light
+    const poolPointLight = new THREE.PointLight(0x40e8e8, 1.8, 22, 1.6);
+    poolPointLight.position.set(0, 0.6, 5);
+    scene.add(poolPointLight);
+
+    // Warm deck lantern point light
+    const deckPointLight = new THREE.PointLight(0xffaa50, 1.4, 18, 1.6);
+    deckPointLight.position.set(0, 1.0, 9.5);
+    scene.add(deckPointLight);
 
     // b029 — cycleUniform lives at IIFE level (see top of file). It must be
     // outside init() so animate() can write to it from the rAF loop.
@@ -303,9 +361,33 @@
     const windowRange = 12;                          // was 18
 
     // -----------------------------------------------------
-    // PS2 material factory — vertex jitter + 3-light shader
+    // b047 — Path A material factory: real PBR via MeshStandardMaterial.
+    // Replaces the b010-b046 custom PS2+ ShaderMaterial pipeline (vertex
+    // jitter + custom 3-light fragment + manual fog + noise hash + AO).
+    // The new pipeline uses Three.js's built-in lighting + shadow maps
+    // for actual cast shadows, and renders at full canvas resolution
+    // instead of the 854×480 low-res target.
+    //
+    // Same makePS2Material(opts) signature so all ~80 callsites still
+    // work. The opts.emissive + opts.emissiveAmt fields map cleanly onto
+    // MeshStandardMaterial.emissive + emissiveIntensity.
     // -----------------------------------------------------
     function makePS2Material(opts) {
+      const mat = new THREE.MeshStandardMaterial({
+        color:             opts.color,
+        emissive:          opts.emissive || 0x000000,
+        emissiveIntensity: opts.emissiveAmt || 0,
+        roughness:         opts.roughness != null ? opts.roughness : 0.65,
+        metalness:         opts.metalness != null ? opts.metalness : 0.05,
+      });
+      materials.push(mat);
+      return mat;
+    }
+    // b047 — DEAD: the b010-b046 custom shader factory is below this stub
+    // but unreachable. Kept temporarily so the if(false) block doesn't
+    // cause TDZ on materials referenced inside its closure. Will delete
+    // in a follow-up cleanup commit once the new pipeline is verified.
+    function _DEAD_makePS2Material(opts) {
       const mat = new THREE.ShaderMaterial({
         uniforms: {
           uColor:        { value: new THREE.Color(opts.color) },
@@ -3357,28 +3439,40 @@
       emissive:    0x4a8030,
       emissiveAmt: 0.30,
     });
+    // b047 — single-cone conifer instead of the b034b 4-stacked-pyramid
+    // version. The stacked-cone approach was reading as Minecraft pine
+    // — every layer's edge silhouetted into chunky steps. A single
+    // tall taper with more polygons (16-side cylinder, 0 top radius)
+    // reads as an actual fir tree. Trunk slightly thicker + taller.
     function addPineTree(x, z, h) {
-      h *= 1.7;
-      const trunkH = h * 0.30;
+      h *= 1.9;
+      const trunkH = h * 0.22;
+      const trunkR = 0.34;
       const t = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.30, 0.45, trunkH, 5),
+        new THREE.CylinderGeometry(trunkR * 0.7, trunkR, trunkH, 8),
         trunkMat
       );
       t.position.set(x, trunkH / 2, z);
       scene.add(t);
-      // 4 stacked tapering cones for fuller silhouette
-      const cones = 4;
-      for (let i = 0; i < cones; i++) {
-        const baseR = 2.4 - i * 0.45;
-        const ch    = h * 0.32;
-        const cy    = trunkH + i * (h * 0.20) + ch / 2;
-        const cone = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.0, baseR, ch, 7),
-          forestMat
-        );
-        cone.position.set(x, cy, z);
-        scene.add(cone);
-      }
+      // Single tall taper for the foliage — 16-sided cone, full taper
+      // from a 2.4-radius base to 0 at the top. Reads as a smooth
+      // conifer silhouette instead of stacked pyramid steps.
+      const foliageH = h * 0.95;
+      const foliageBase = 2.2;
+      const foliage = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.0, foliageBase, foliageH, 16),
+        forestMat
+      );
+      foliage.position.set(x, trunkH + foliageH / 2 - 0.15, z);
+      scene.add(foliage);
+      // Small secondary lower skirt of foliage for organic fullness
+      const skirtH = h * 0.30;
+      const skirt = new THREE.Mesh(
+        new THREE.CylinderGeometry(foliageBase * 0.35, foliageBase * 1.10, skirtH, 16),
+        forestMat
+      );
+      skirt.position.set(x, trunkH + skirtH / 2 + 0.05, z);
+      scene.add(skirt);
     }
 
     // b034c — Far Cry 3 jungle: pack pines TIGHT around the loop + road,
@@ -3703,6 +3797,18 @@
       camera.updateProjectionMatrix();
     };
     window.addEventListener('resize', onResize);
+
+    // b047 — Path A: enable shadow casting + receiving on every mesh in
+    // the scene. Done in one pass at the end of init() so I don't have
+    // to retrofit every addCar/addPalm/addRoom block. Skylights, sun,
+    // sky dome, and water shaders are skipped (water uses custom
+    // ShaderMaterial which doesn't support standard shadows).
+    scene.traverse(obj => {
+      if (obj.isMesh && obj.material && !obj.material.isShaderMaterial) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
 
     loader.remove();
     animate();
@@ -4378,14 +4484,14 @@
       }
     }
 
-    // Pass 1 — render scene to low-res target
-    renderer.setRenderTarget(lowResTarget);
-    renderer.clear();
-    renderer.render(scene, camera);
-
-    // Pass 2 — upscale to canvas
+    // b047 — Path A: render the scene directly to the canvas at full
+    // resolution. The b010-b046 low-res render target + post-pass
+    // upscale pipeline (854×480 → bloom + Sobel + grain + grade +
+    // dither + scanlines + CA + vignette) is gone. PBR + shadow maps
+    // do the heavy lifting now; the post pipeline was layering
+    // effects on top of an already-stylized base and wasn't working.
     renderer.setRenderTarget(null);
-    renderer.render(postScene, postCamera);
+    renderer.render(scene, camera);
   }
 
   function destroy() {
