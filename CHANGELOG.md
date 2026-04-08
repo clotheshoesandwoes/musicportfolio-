@@ -1,5 +1,75 @@
 # CHANGELOG
 
+## b051 — 2026-04-08 — Painterly / watercolor POC (?paint=1 URL flag, fully isolated)
+
+User after b050: "how can we drastically change so that the artstyle is actually different not small effects" → picked option 4 from the radical-options menu (painterly / watercolor with the Miami villa concept) → "poc pls idk just miami super rich vibes with stuff weve already talked about". This commit lands a fully isolated proof-of-concept the user can compare against the current b050 villa view without disturbing it.
+
+### Activation
+The POC is parallel, not a replacement. It lives behind a `?paint=1` URL query flag:
+- `cantmute.me/` → boots into the existing b050 villa view (unchanged)
+- `cantmute.me/?paint=1` → boots into the new painterly POC
+
+The flag check is 3 lines in [js/app.js](js/app.js) at the bottom of the boot handler. If the POC is killed, those 3 lines + the new file + the index.html script tag are the only deletions needed.
+
+### New file: [js/world-paint.js](js/world-paint.js) (~580 lines)
+Self-contained painterly POC. Does not import, modify, or share state with [js/world.js](js/world.js). Registers as a 5th view named `'paint'`. Loads its own copy of three.js from the same CDN URL.
+
+### What it builds
+Intentionally minimal scope so the user can react to the *direction*, not the *completeness*:
+- Procedural canvas paper texture (512×512, 9000 dab particles + 80 fiber lines + 14 wash blotches, drawn in JS at boot — no external assets)
+- Brush-wash sky dome: warm coral horizon → deep magenta mid → indigo top, with sun disc + halo + cloud band noise + paper grain overlay
+- Sand ground: warm beige with darker dab noise + color bleed
+- Ocean: flat cyan-teal wash with painted-on horizontal brush strokes via noise
+- Pool: small flat cyan with painted caustic strokes + slim cream marble rim
+- Mansion shell: 3 walls + floor podium + upper floor slab + flat roof + 9-column colonnade + eyebrow cantilever + 4 entry steps. **NO interior rooms** — POC just shows the volume.
+- 6 flat-card palms (deliberately back to b023 silhouette style — painterly works with flat shapes, not the b048 detailed 3D drooping fronds)
+- 1 yellow lambo (3 boxes + 4 wheels) — click target
+- 1 working click→card hookup: click the lambo → DOM popover appears with track 0 from `window.tracks`. Closes on button click. Same shape as the existing b026 system, just standalone in the POC file so it can be killed cleanly.
+
+### The painterly material
+`makePainterlyMaterial(opts)` is a custom ShaderMaterial — no PBR, no real lighting, no shadows:
+- Flat base color
+- + low-frequency world-pos noise color bleed (organic variation across flat surfaces)
+- + soft top-down tint from `vNormal.y` (directional cue without real lights)
+- × paper texture sampled from world XZ (tiles continuously regardless of mesh UVs)
+- × faint warm wash overlay (pulls everything toward sunset palette)
+
+The custom sky shader does horizon→mid→top gradient + sun disc + cloud band noise + paper overlay all in fragment.
+
+### Camera + interaction
+Simple orbit only. LMB drag rotates yaw/pitch. Wheel zooms radius. Click-on-prop opens the card. No first-person mode, no WASD, no anchor system, no R reset. The POC is "look at the look", not "explore the property."
+
+### What's deliberately NOT in the POC
+- Interior rooms (no zoning, no half-walls, no furniture)
+- Multiple click targets (just the lambo)
+- Camera anchors (no top-bar buttons in this view)
+- Outline shader (Studio Ghibli backgrounds use no outlines on most things — flatter, more wash-like read)
+- Cast shadows (the painterly aesthetic uses hand-painted shadow patches via vertex tweaks if at all, not real shadows)
+- The full 22-room interior layout
+- The 50+ forest pines, neighbor villas, lagoon, jet skis, yachts, etc.
+- The post-process pass (no Sobel/CA/grain/dither — the painterly material handles the look at the surface level)
+
+### Files modified
+- [js/world-paint.js](js/world-paint.js) — NEW, ~580 lines
+- [js/app.js](js/app.js) — 3-line `?paint=1` URL flag check at boot, plus `window.tracks = tracks` global so the POC card can read track titles
+- [index.html](index.html) — `<script src="js/world-paint.js"></script>` after `world.js`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b050 → b051`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/?paint=1` → loads the painterly POC
+2. Hard refresh `cantmute.me/` → loads the existing b050 villa unchanged
+3. Click the yellow lambo in the POC → song card appears
+
+### Risks
+- Painterly shaders are notoriously fiddly. If it looks wrong it usually means the paper is too strong, the bleed is too strong, or the top-tint is too contrasty — all 4 are uniforms in `makePainterlyMaterial` and tunable per-call.
+- Mobile perf should be fine (single-pass render, no shadows, no PBR, ~50 meshes)
+- This is the **5th** art-style attempt. If the painterly direction is also wrong, the next conversation needs to seriously consider option 1 (synthwave) or option 6 (drop 3D entirely) from the menu — not another fragment-shader retune.
+
+### Next
+Wait for the user's reaction at `?paint=1`. If the direction is right → promote to full villa view in b052 (port the painterly material + sky to world.js, replace `makePS2Material`/`makePainterlyMaterial`-of-b047, keep the b050 zoning + half-walls). If the direction is wrong → kill `world-paint.js` + the URL flag + revisit the radical-options menu.
+
 ## b050 — 2026-04-08 — Interior zoning: half-walls + floor tints + column rework
 
 User on b049: "you seem to have struggled with every room. no idea why. everything is super open... uh i have no idea if youll do better with placement this time around." Six screenshots showed 4-6 rooms visible in every shot with zero separation between them. Diagnosis: the b041 mega-mansion was deliberately designed with "no interior partitions" — single 56×28 open volume per floor. Worked at 4 rooms, fails at 22.

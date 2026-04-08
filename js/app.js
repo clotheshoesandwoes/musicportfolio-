@@ -303,5 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('load', async () => {
   await loadConfig();
   document.getElementById('trackCount').textContent = tracks.length;
-  switchView('villa');
+  // b051 — ?paint=1 URL flag boots into the painterly POC instead of villa
+  window.tracks = tracks;
+  const params = new URLSearchParams(window.location.search);
+  const bootView = params.get('paint') === '1' ? 'paint' : 'villa';
+  switchView(bootView);
 });
