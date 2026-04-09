@@ -1,5 +1,64 @@
 # CHANGELOG
 
+## b063 — 2026-04-08 — 12 more hero icons (resumes the b061 batch)
+
+User on b062: *"yes"* to resuming the 12-icon batch I'd paused to ship the pagination fix. Picking it back up.
+
+### New icon overrides
+
+| Title match | Type | What it draws |
+|---|---|---|
+| `thunderbird` | `thunderbird` | Indigo bird w/ angular flapping wings + yellow beak + yellow lightning bolts trailing both wings |
+| `best day ever` | `sun` | Yellow sun w/ 12 rotating triangle rays + cream inner glow + cartoon eyes + smile + magenta dab tongue |
+| `warzone` | `grenade` | Pineapple-style green grenade w/ ridged grid + steel neck + curved safety lever + pulsing red pin ring |
+| `streets` | `boombox` | Retro 80s boombox — handle, two big pulsing speakers, antenna, center tape deck w/ reels, 4-color button row |
+| `lemonade` | `lemon` | Bright yellow lemon w/ pointy ends + skin texture dots + white sheen highlight + green leaf w/ vein |
+| `beachouse` | `beachhut` | Wood plank hut w/ thatched triangle roof + cyan window + pink sand mound + leaning palm w/ swaying fronds |
+| `sickboi` | `skull` | Cute pixel skull w/ glowing magenta eye sockets that pulse + nose triangle + 5-tooth grid mouth |
+| `10 miles` | `roadsign` | Yellow diamond highway sign on a post w/ "10 MILES" text + arrow underneath |
+| `money ain` | `cashstack` | Stack of 5 layered green dollar bills w/ wobble + top bill detail w/ $ sign + portrait oval + corner numbers |
+| `birthday` | `cake` | 3-layer cake (pink/cream/cyan) w/ frosting drips + sprinkles + 3 red candles w/ flickering yellow flames + plate |
+| `wallet` | `wallet` | Brown leather bifold w/ stitching + center fold + green cash sticking out top w/ $ sign + cyan card peeking + "K" embossed circle |
+| `lotus` | `lotusflower` | 3-layer pink lotus — 5 outer petals + 5 mid petals + 3 inner white petals + yellow stamen w/ rotating dot ring |
+
+### How it landed
+Same recipe as b060/b061: 12 entries appended to `ICON_OVERRIDES`, 12 new drawer functions inserted after `drawVillainmask`, 12 dispatch cases added to the `drawCreature` switch, 12 entries added to the `noRot` list (all stay upright).
+
+Each drawer is ~50–95 lines of canvas paths with character-appropriate animation: thunderbird wings flap, sun rays rotate, grenade pin pulses red, boombox cones pump, lemon stays static, palm fronds sway on the beach hut, skull eye sockets glow, candle flames flicker, wallet wobbles, lotus stamen dots rotate.
+
+### Total override count is now 24 hero icons
+b060: 3 (ODST, Rolla, Pillowcase)
+b061: 9 (Spaceship, Hotelsign, Coffeecup, Robot, Discoball, Mariostar, Chainlink, Wonkysmile, Villainmask)
+b063: 12 (Thunderbird, Sun, Grenade, Boombox, Lemon, Beachhut, Skull, Roadsign, Cashstack, Cake, Wallet, Lotus)
+
+That covers about **14% of the 177-track catalog** with custom hero art. Combined with b062 pagination, every special icon is reachable by cycling pages with the ↻ button.
+
+### Files modified
+- [js/wall.js](js/wall.js) — 12 ICON_OVERRIDES entries, 12 new drawer functions, 12 dispatch cases, 12 noRot entries. ~900 lines net added. File is now ~3,530 lines.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b062 → b063`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/`
+2. Tap the ↻ button to cycle pages and find each new icon:
+   - `Thunderbird` → indigo bird w/ lightning trailing
+   - `Best Day Ever (Clarity)` → smiley sun
+   - `Warzone` → pineapple grenade
+   - `Streets` → 80s boombox
+   - `Lemonade` → yellow lemon
+   - `Beachouse` → beach hut w/ palm
+   - `Sickboi` → glowing skull
+   - `10 Miles` → diamond road sign
+   - `Money Ain't a Thing` → cash stack
+   - `Birthday Freestyle` → birthday cake
+   - `Wallet` → bifold wallet
+   - `Lotus (Try to Breathe)` → pink lotus
+3. Click any of them → that song plays.
+
+### Potential next round
+If you want even more, candidates: "Take Me Home" (house), "Real Love" (heart), "Spotlight" (spotlight cone), "Indie Time" (clock), "Final Chapter" (book), "Two of Us" (paired silhouettes), "I Will Survive" (raised fist), "Wired" (lightning bolt), "Greatest Consequences" (gavel), "Stop Light" (traffic light), "Wind Blows" (windmill / leaf), "Convinced" (raised hand). Tell me which.
+
 ## b062 — 2026-04-08 — Wall pagination so all 177 tracks are reachable on mobile
 
 User on b061: *"on mobile, ill only ever seen like 15 songs. i dont wanna see all 177 or do i? idk. but i wanna see more or be able to cycle more than just the 15 i see yknow"*
