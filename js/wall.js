@@ -54,6 +54,28 @@
     'octopus', 'bat', 'note', 'cassette',
   ];
 
+  // b060 — per-track icon overrides. Special creature drawers
+  // for specific song titles. Match is case-insensitive substring
+  // against track.title. The first creature placed for each
+  // matching track gets the override (depth 2 + bumped size);
+  // any additional creatures sharing that track stay random.
+  // Add more entries here to give more songs custom art — each
+  // override type needs a draw* function and a dispatch case.
+  const ICON_OVERRIDES = [
+    { match: 'odst',            type: 'helmet'     },  // ODST → ODST helmet
+    { match: 'rolla',           type: 'supercar'   },  // Rolla → Lambo
+    { match: 'silk pillowcase', type: 'pillowcase' },  // Silk Pillowcase → pillow
+  ];
+
+  function getOverrideType(title) {
+    if (!title) return null;
+    const lower = title.toLowerCase();
+    for (const o of ICON_OVERRIDES) {
+      if (lower.includes(o.match)) return o.type;
+    }
+    return null;
+  }
+
   // b056 — minimum on-screen creatures even if tracks.length is small.
   // Each creature still maps to a real track via i % tracks.length.
   // b058 — mobile cap dropped from 100 to 30 (117 was unreadable on phones).
@@ -277,6 +299,11 @@
     // from anything already placed. Breaks the grid feel.
     const minDist = isMobile() ? 56 : 72;
     const placed = []; // {x,y}
+    // b060 — track which trackIndices have already received
+    // their override "hero" creature. Only the FIRST creature
+    // for each matched track gets the override + front depth +
+    // bumped size, so the special icons appear exactly once.
+    const overrideUsed = new Set();
     function tooClose(x, y) {
       for (const p of placed) {
         const dx = p.x - x, dy = p.y - y;
@@ -294,7 +321,16 @@
       const h2 = hash(title + '#' + i, 7);
       const h3 = hash(title + '#' + i, 13);
       // b057 — type distribution: stride by i (coprime with 20)
-      const type = CREATURE_TYPES[(i * 7 + h1) % CREATURE_TYPES.length];
+      let type = CREATURE_TYPES[(i * 7 + h1) % CREATURE_TYPES.length];
+      // b060 — icon override: if this track has a custom icon
+      // and we haven't placed it yet, use the override.
+      const overrideType = getOverrideType(title);
+      let isOverride = false;
+      if (overrideType && !overrideUsed.has(trackIndex)) {
+        type = overrideType;
+        overrideUsed.add(trackIndex);
+        isOverride = true;
+      }
 
       // b058 — dart-throw placement.
       let baseX = margin + (W - margin * 2) * 0.5;
@@ -318,14 +354,17 @@
       // b059 — parallax depth: 25% back, 60% mid, 15% front.
       // Back is smaller + dimmer + slower; front is larger +
       // brighter + faster. Real visual hierarchy.
+      // b060 — override icons forced to depth 2 (front) and
+      // bumped size so the special art reads as a hero element.
       const depthRoll = (h3 % 100);
-      const depth = depthRoll < 25 ? 0 : depthRoll < 85 ? 1 : 2;
+      const depth = isOverride ? 2 : (depthRoll < 25 ? 0 : depthRoll < 85 ? 1 : 2);
       const depthScale     = depth === 0 ? 0.55 : depth === 1 ? 1.00 : 1.30;
       const depthAlpha     = depth === 0 ? 0.55 : depth === 1 ? 1.00 : 1.00;
       const depthDriftMult = depth === 0 ? 0.55 : depth === 1 ? 1.00 : 1.40;
       const depthSpeedMult = depth === 0 ? 0.60 : depth === 1 ? 1.00 : 1.30;
 
       size = size * depthScale;
+      if (isOverride) size = Math.max(size * 1.4, 40);
 
       creatures.push({
         type,
@@ -1270,6 +1309,332 @@
   }
 
   // -------------------------------------------------------
+  // b060 — OVERRIDE CREATURE DRAWERS
+  // Custom art for specific song titles. Each one's an
+  // intentional hero icon — front layer, bumped size, more
+  // detail than the random creature types.
+  // -------------------------------------------------------
+
+  function drawHelmet(c, light, dark, wingT) {
+    // ODST helmet — angular sci-fi shape, dark visor, side
+    // armor block, front antenna node. Nods to Halo ODST
+    // without copying the exact silhouette.
+    const s = c.size;
+
+    // Outer helmet body — slightly tapered hex shape
+    ctx.fillStyle = '#3a4555';   // gunmetal
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.10);
+    ctx.lineTo(-s * 0.75, -s * 0.65);
+    ctx.lineTo(-s * 0.30, -s * 0.92);
+    ctx.lineTo( s * 0.30, -s * 0.92);
+    ctx.lineTo( s * 0.75, -s * 0.65);
+    ctx.lineTo( s * 0.85, -s * 0.10);
+    ctx.lineTo( s * 0.78,  s * 0.55);
+    ctx.lineTo( s * 0.50,  s * 0.85);
+    ctx.lineTo(-s * 0.50,  s * 0.85);
+    ctx.lineTo(-s * 0.78,  s * 0.55);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Top crown plate — slightly lighter
+    ctx.fillStyle = '#4a5565';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.65);
+    ctx.lineTo(-s * 0.30, -s * 0.85);
+    ctx.lineTo( s * 0.30, -s * 0.85);
+    ctx.lineTo( s * 0.55, -s * 0.65);
+    ctx.lineTo( s * 0.40, -s * 0.45);
+    ctx.lineTo(-s * 0.40, -s * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Visor — wide dark band with cyan glow
+    ctx.fillStyle = '#0a0e16';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.78, -s * 0.10);
+    ctx.lineTo(-s * 0.65, -s * 0.40);
+    ctx.lineTo( s * 0.65, -s * 0.40);
+    ctx.lineTo( s * 0.78, -s * 0.10);
+    ctx.lineTo( s * 0.65,  s * 0.05);
+    ctx.lineTo(-s * 0.65,  s * 0.05);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Visor cyan inner glow
+    ctx.fillStyle = '#4ad8ff';
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.30);
+    ctx.lineTo( s * 0.55, -s * 0.30);
+    ctx.lineTo( s * 0.50, -s * 0.05);
+    ctx.lineTo(-s * 0.50, -s * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Visor highlight
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-s * 0.45, -s * 0.25, s * 0.20, s * 0.04);
+
+    // Side armor blocks (cheek guards)
+    ctx.fillStyle = '#2a3340';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.05);
+    ctx.lineTo(-s * 0.55,  s * 0.10);
+    ctx.lineTo(-s * 0.55,  s * 0.50);
+    ctx.lineTo(-s * 0.78,  s * 0.55);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo( s * 0.85, -s * 0.05);
+    ctx.lineTo( s * 0.55,  s * 0.10);
+    ctx.lineTo( s * 0.55,  s * 0.50);
+    ctx.lineTo( s * 0.78,  s * 0.55);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Bottom mouth guard
+    ctx.fillStyle = '#1a2230';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.50, s * 0.20);
+    ctx.lineTo( s * 0.50, s * 0.20);
+    ctx.lineTo( s * 0.40, s * 0.65);
+    ctx.lineTo(-s * 0.40, s * 0.65);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Mouth grille lines
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1.5;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * s * 0.18, s * 0.25);
+      ctx.lineTo(i * s * 0.18, s * 0.60);
+      ctx.stroke();
+    }
+
+    // Front antenna nub (animated blink)
+    const blink = Math.sin(wingT * 4) > 0;
+    ctx.fillStyle = blink ? '#9cff3a' : '#3a4555';
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.78, s * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.stroke();
+
+    // ODST stencil (subtle lime text behind visor area)
+    ctx.fillStyle = 'rgba(156,255,58,0.6)';
+    ctx.font = `bold ${Math.max(6, s * 0.18)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ODST', 0, s * 0.42);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawSupercar(c, light, dark, wingT) {
+    // Lambo-style wedge supercar — low body, raked
+    // windshield, two big wheels, glowing headlight.
+    const s = c.size;
+    const wheelSpin = wingT * 6;
+
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.40)';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.55, s * 1.15, s * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body wedge — sharp angular front, low slung
+    ctx.fillStyle = '#ffe833';   // hot yellow lambo
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-s * 1.05,  s * 0.30);   // rear bottom
+    ctx.lineTo(-s * 1.10,  s * 0.05);   // rear top
+    ctx.lineTo(-s * 0.70, -s * 0.05);   // rear shoulder
+    ctx.lineTo(-s * 0.30, -s * 0.30);   // roof rear
+    ctx.lineTo( s * 0.20, -s * 0.30);   // roof front
+    ctx.lineTo( s * 0.55, -s * 0.05);   // hood top
+    ctx.lineTo( s * 1.10,  s * 0.10);   // nose tip
+    ctx.lineTo( s * 1.10,  s * 0.30);   // front bottom
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Windshield + side window
+    ctx.fillStyle = '#1a2230';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.35, -s * 0.05);
+    ctx.lineTo(-s * 0.20, -s * 0.27);
+    ctx.lineTo( s * 0.18, -s * 0.27);
+    ctx.lineTo( s * 0.40, -s * 0.05);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Cyan windshield reflection
+    ctx.fillStyle = '#4ad8ff';
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.25, -s * 0.10);
+    ctx.lineTo(-s * 0.15, -s * 0.22);
+    ctx.lineTo( s * 0.05, -s * 0.22);
+    ctx.lineTo( s * 0.10, -s * 0.10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Side intake / vent
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, s * 0.05);
+    ctx.lineTo(-s * 0.20, s * 0.05);
+    ctx.lineTo(-s * 0.30, s * 0.20);
+    ctx.lineTo(-s * 0.65, s * 0.20);
+    ctx.closePath();
+    ctx.fill();
+
+    // Body line / character crease
+    ctx.strokeStyle = '#a86b00';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-s * 1.00, s * 0.18);
+    ctx.lineTo( s * 1.00, s * 0.18);
+    ctx.stroke();
+
+    // Headlight — glowing white
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(s * 0.85, -s * 0.02, s * 0.12, s * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Tail light — magenta
+    ctx.fillStyle = '#ff5cf2';
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.95, -s * 0.05, s * 0.08, s * 0.05, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Wheels — two big black tires with spinning rims
+    for (const wx of [-s * 0.55, s * 0.55]) {
+      // Tire
+      ctx.fillStyle = '#0e0e0e';
+      ctx.beginPath();
+      ctx.arc(wx, s * 0.40, s * 0.30, 0, Math.PI * 2);
+      ctx.fill();
+      // Rim
+      ctx.fillStyle = '#cccccc';
+      ctx.beginPath();
+      ctx.arc(wx, s * 0.40, s * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0e0e0e';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Spinning spokes
+      ctx.save();
+      ctx.translate(wx, s * 0.40);
+      ctx.rotate(wheelSpin);
+      ctx.strokeStyle = '#0e0e0e';
+      ctx.lineWidth = 2;
+      for (let k = 0; k < 5; k++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos((k / 5) * Math.PI * 2) * s * 0.16, Math.sin((k / 5) * Math.PI * 2) * s * 0.16);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // Center cap
+      ctx.fillStyle = '#0e0e0e';
+      ctx.beginPath();
+      ctx.arc(wx, s * 0.40, s * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawPillowcase(c, light, dark, wingT) {
+    // Soft silk pillow — rounded rectangle, fold lines,
+    // tasseled corners, gentle wobble.
+    const s = c.size;
+    const wob = Math.sin(wingT * 2) * 0.04;
+    const w = s * 1.20;
+    const h = s * 0.85;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.65, w * 0.70, s * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pillow body — rounded blob with sag
+    ctx.fillStyle = '#f5d4e8';   // silk pink
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    // top edge with slight wobble
+    ctx.moveTo(-w * 0.50, -h * 0.45);
+    ctx.quadraticCurveTo(0, -h * (0.55 + wob), w * 0.50, -h * 0.45);
+    // right edge
+    ctx.quadraticCurveTo(w * 0.62, 0, w * 0.50, h * 0.50);
+    // bottom edge
+    ctx.quadraticCurveTo(0, h * (0.62 - wob), -w * 0.50, h * 0.50);
+    // left edge
+    ctx.quadraticCurveTo(-w * 0.62, 0, -w * 0.50, -h * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Silk highlight band — diagonal sheen
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(-w * 0.18, -h * 0.18, w * 0.30, h * 0.10, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Fold lines from each corner toward center
+    ctx.strokeStyle = '#d49bc4';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.45, -h * 0.40);
+    ctx.quadraticCurveTo(-w * 0.15, -h * 0.10, 0, 0);
+    ctx.moveTo( w * 0.45, -h * 0.40);
+    ctx.quadraticCurveTo( w * 0.15, -h * 0.10, 0, 0);
+    ctx.moveTo(-w * 0.45,  h * 0.45);
+    ctx.quadraticCurveTo(-w * 0.15,  h * 0.10, 0, 0);
+    ctx.moveTo( w * 0.45,  h * 0.45);
+    ctx.quadraticCurveTo( w * 0.15,  h * 0.10, 0, 0);
+    ctx.stroke();
+
+    // Center button (silk pillow tuft)
+    ctx.fillStyle = '#ff5cf2';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.10, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Tassels at the 4 corners
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1.5;
+    const corners = [
+      [-w * 0.50, -h * 0.45],
+      [ w * 0.50, -h * 0.45],
+      [ w * 0.50,  h * 0.50],
+      [-w * 0.50,  h * 0.50],
+    ];
+    for (const [tx, ty] of corners) {
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(tx + (tx > 0 ? 4 : -4), ty + (ty > 0 ? 4 : -4));
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(tx + (tx > 0 ? 4 : -4), ty + (ty > 0 ? 4 : -4), 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // -------------------------------------------------------
   // CREATURE DRAW — translates/rotates/scales then dispatches
   // to the type-specific routine.
   // -------------------------------------------------------
@@ -1336,7 +1701,9 @@
     // Some creatures have intentional non-rotating orientation
     const noRot = c.type === 'butterfly' || c.type === 'fish' ||
                   c.type === 'rocket' || c.type === 'note' ||
-                  c.type === 'mushroom' || c.type === 'bee';
+                  c.type === 'mushroom' || c.type === 'bee' ||
+                  c.type === 'helmet' || c.type === 'supercar' ||
+                  c.type === 'pillowcase';
     if (!noRot) {
       ctx.rotate(c.rot * 0.3);
     }
@@ -1363,6 +1730,10 @@
       case 'bat':       drawBat(c, light, dark, wingT); break;
       case 'note':      drawNote(c, light, dark, wingT); break;
       case 'cassette':  drawCassette(c, light, dark, wingT); break;
+      // b060 — per-track override art
+      case 'helmet':     drawHelmet(c, light, dark, wingT); break;
+      case 'supercar':   drawSupercar(c, light, dark, wingT); break;
+      case 'pillowcase': drawPillowcase(c, light, dark, wingT); break;
     }
 
     ctx.restore();  // pops translate/rotate/scale

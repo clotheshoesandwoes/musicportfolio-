@@ -1,5 +1,69 @@
 # CHANGELOG
 
+## b060 — 2026-04-08 — Player bar pinned + per-track icon overrides (ODST/Rolla/pillowcase)
+
+User on b059: *"play previous song and next position changes based on song title. ensure those 3 buttons are static"* + follow-up *"i want matching emojis or emoticons cool art for songs. for ODST i want a halo ODST helmet or halo odst soldier; for rolla can u do a lambo or something some cool fast supercar; silk pillowcase = pillowcase"*
+
+Two unrelated fixes shipped together because both are tiny.
+
+### 1. Player bar controls — pinned, no drift
+
+The b015-era flexbox layout had `.player-track-info { flex: 0 1 220px }` (desktop) and `flex: 0 1 auto` (mobile). The `flex-shrink: 1` on desktop let it collapse below 220px under content pressure, and the `auto` basis on mobile made the element width literally equal to the title text width. Either way, when the title changed length the prev/play/next buttons slid horizontally — exactly what the user reported.
+
+Fix in [style.css](style.css):
+- **Desktop**: `.player-track-info { flex: 0 0 220px; overflow: hidden; }` — no shrink, no grow, fixed 220px box. Long titles get cut by `text-overflow: ellipsis`. Controls now sit at exactly the same x-coordinate regardless of title.
+- **Mobile** (line ~810): `.player-track-info { flex: 1 1 0; min-width: 0; overflow: hidden; }` + `.player-controls { flex: 0 0 auto; }`. Track-info fills all available space; the 3 controls anchor to the right edge of the bar where they belong.
+
+Two CSS hunks, no JS changes.
+
+### 2. Per-track icon overrides (3 hero creatures)
+
+Specific song titles now render as bespoke hero icons instead of random creature types. Three to start:
+
+| Title match (case-insensitive substring) | Creature type | Drawer |
+|---|---|---|
+| `odst` | `helmet` | Angular ODST-style helmet w/ cyan visor + grille + blinking antenna nub + lime "ODST" stencil |
+| `rolla` | `supercar` | Hot-yellow Lambo wedge w/ cyan windshield reflection + side intake + glowing headlight + magenta tail light + 2 spinning rims |
+| `silk pillowcase` | `pillowcase` | Soft silk pink pillow w/ wobble + diagonal sheen + 4-corner fold lines + magenta center tuft + tasseled corners |
+
+Override system in [js/wall.js](js/wall.js):
+
+- **`ICON_OVERRIDES` array** at the top of the file maps `match` (lowercase substring) → `type` (drawer name). Adding more is just a new array entry + a draw function + a dispatch case.
+- **`getOverrideType(title)`** returns the type if any entry matches, else null.
+- **`buildCreatures`** runs `getOverrideType(title)` BEFORE the random type roll. If matched AND the trackIndex hasn't been overridden yet (tracked in an `overrideUsed` Set), the creature gets the override type.
+- **First match wins per trackIndex**: with 100 creatures cycling through ~117 tracks, only the FIRST creature for each special track becomes the hero icon. Any additional creatures sharing that track stay random. Means each special song has exactly one visually distinctive instance on the wall — not 12 giant pillowcases stacking up.
+- **Override creatures are forced to depth 2 (front)** and `size = max(size * 1.4, 40)` so they read as hero elements above the regular creatures.
+- **Override types are added to the `noRot` list** in `drawCreature` so the helmet/car/pillow stay upright instead of slowly rotating.
+- **Three new dispatch cases** in the `drawCreature` switch.
+
+The 3 new drawers are intentionally more detailed than the random creature types — multi-color, multi-element, with character. Each is ~50–80 lines of canvas paths.
+
+### Files modified
+- [style.css](style.css) — `.player-track-info` desktop + mobile flex rules, `.player-controls` mobile flex
+- [js/wall.js](js/wall.js) — `ICON_OVERRIDES` map + `getOverrideType` helper, `overrideUsed` Set in `buildCreatures`, override branch in type selection, force depth 2 + size bump, 3 new drawer functions (`drawHelmet`, `drawSupercar`, `drawPillowcase`), 3 new dispatch cases, 3 new noRot type checks. ~370 lines net added.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b059 → b060`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/`
+2. Click between several tracks with very different title lengths (e.g. "Dutch" → "Mario Island Funky Beat" → "ODST"). The prev/play/next buttons should NOT move at all.
+3. Same on mobile — controls anchored to the right edge of the player bar, not floating around.
+4. Look on the wall for: a yellow Lambo (Rolla), a sci-fi helmet with a cyan visor and "ODST" stencil (ODST), and a soft pink pillow with a magenta tuft (Silk Pillowcase). All 3 should be larger than the random creatures and on the front depth layer.
+5. Click any of them → that song plays.
+
+### Adding more overrides
+Add an entry to `ICON_OVERRIDES`:
+```js
+{ match: 'hotel california', type: 'hotelsign' },
+```
+Then add `function drawHotelsign(c, light, dark, wingT) { ... }`, a `case 'hotelsign'` line in `drawCreature`'s switch, and (if it should stay upright) a check in the `noRot` list.
+
+### What this is NOT
+- Not asset-based — still all canvas paths, no image files
+- Not user-configurable — overrides are hard-coded in [js/wall.js](js/wall.js)
+- Not a category system — each entry maps to a specific drawer, not a tag
+
 ## b059 — 2026-04-08 — Wall: parallax + audio reactive + neighborhood + constellations
 
 User on b058: showed a screenshot with the gradient mesh blowing out the center to pure white (the 7 nebulas had converged in the middle), then asked *"how can we make this cooler better etc"*. I proposed a "Top 5" plan; user said *"yes"*. All five shipped here in one commit.

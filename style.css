@@ -205,7 +205,10 @@ input { font-family: var(--font-body); }
   align-items: center;
   gap: 12px;
   min-width: 0;
-  flex: 0 1 220px;
+  /* b060 — fixed 220px, no shrink. Was `0 1 220px` which let
+     the controls slide left/right based on title length. */
+  flex: 0 0 220px;
+  overflow: hidden;
 }
 
 .player-art {
@@ -802,7 +805,13 @@ input { font-family: var(--font-body); }
   .view-container { bottom: var(--player-h); }
 
   .player-inner { padding: 0 12px; gap: 10px; }
-  .player-track-info { flex: 0 1 auto; min-width: 0; }
+  /* b060 — mobile: track-info fills remaining space so the
+     prev/play/next controls anchor to the RIGHT edge of the
+     player bar regardless of title length. Was `0 1 auto`
+     which sized the element to the title text width and let
+     the controls slide horizontally. */
+  .player-track-info { flex: 1 1 0; min-width: 0; overflow: hidden; }
+  .player-controls { flex: 0 0 auto; }
   .player-art { width: 36px; height: 36px; border-radius: 8px; }
   .player-title { font-size: 12px; }
   .player-seek { display: none; }
