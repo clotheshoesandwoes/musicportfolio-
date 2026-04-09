@@ -1,5 +1,113 @@
 # CHANGELOG
 
+## b059 — 2026-04-08 — Wall: parallax + audio reactive + neighborhood + constellations
+
+User on b058: showed a screenshot with the gradient mesh blowing out the center to pure white (the 7 nebulas had converged in the middle), then asked *"how can we make this cooler better etc"*. I proposed a "Top 5" plan; user said *"yes"*. All five shipped here in one commit.
+
+### 1. Background blowout fix
+
+The b058 nebulas were drifting around hash-derived anchors, which let them all wander into the canvas center simultaneously and additively blow out to white. Three-part fix in [js/wall.js](js/wall.js) `buildNebulas` + `drawBackground`:
+
+- **Count down 7 → 5**
+- **Alphas down ~25%** (0.55-0.60 → 0.30-0.45)
+- **Anchors LOCKED to a 5-quadrant spread**: 4 corners + 1 center, normalized to W/H. They literally cannot converge.
+- **Drift amplitudes clamped** at 80–140 / 60–110 (was 140–300 / 110–250) so they stay in their quadrant.
+- `drawBackground` wraps the additive layer in a frame-level `globalAlpha = 0.55 + bands.treble * 0.30` which CAPS the additive sum and pulses with the audio treble band.
+
+### 2. Parallax depth — 3 layers (back / mid / front)
+
+`buildCreatures` now rolls a depth value per creature from `h3 % 100`:
+- `0` (**back**, 25%): 0.55× scale, 0.55 alpha, 0.55× drift amp, 0.60× drift speed
+- `1` (**mid**, 60%): 1.00× everything (current behavior)
+- `2` (**front**, 15%): 1.30× scale, 1.00 alpha, 1.40× drift amp, 1.30× drift speed
+
+The values are stored on each creature (`depth`, `depthAlpha`) and applied at build time to `size` and the drift speeds/amplitudes. `drawCreature` applies `depthAlpha` via an outer `ctx.save() / globalAlpha / ctx.restore()` wrap so back creatures render at 0.55 opacity.
+
+The main draw loop now does **3 passes** instead of 1: `for (pass = 0; pass < 3; pass++)` walks the creatures and only draws ones whose depth matches the current pass. Back drawn first, then mid, then front, then hovered last on top. 3 × 100 iterations = 300, still trivial.
+
+Front-depth creatures also get a 1.15× halo radius multiplier in `drawCreature`.
+
+### 3. Real audio reactive bands (bass / mid / treble)
+
+`getBeat()` (single scalar from b056) replaced with `getAudioBands()`:
+
+```js
+return {
+  bass:   avg(data[0..5]),
+  mid:    avg(data[5..31]),
+  treble: avg(data[31..end]),
+};
+```
+
+All normalized 0..1. Three uses, one per band:
+
+- **Bass** → creature scale pulse. `targetScale = 1 + bass * 0.18` (was `beat * 0.06`). Triple the impact when something's playing.
+- **Mid** → wing/spin animation speedup. Inside `drawCreature`: `wingT = (t + c.wingPhase) * (1 + mid * 1.2)`. Butterflies flap faster, drone blades spin faster, fish tails wag faster, EVERYTHING speeds up to the music when the mid-range is pumping.
+- **Treble** → background nebula brightness pulse. Inside `drawBackground`: `globalAlpha = 0.55 + bands.treble * 0.30`. The whole gradient mesh brightens on hi-hats / cymbals / vocals.
+
+When nothing is playing, all 3 bands return 0 and behavior is identical to a static wall.
+
+### 4. Playing-creature neighborhood
+
+Each frame, the draw loop:
+1. Collects all creatures whose `trackIndex === state.currentTrack` into `playingCreatures[]`
+2. For every other creature, checks if it's within 200px of any playing creature → flags `c.inNeighborhood = true`
+3. Draws a faint lime line from each playing creature to each neighborhood creature with distance-falloff alpha (max 0.45)
+4. `drawCreature` adds +0.20 to the `depthAlpha` for any creature with `inNeighborhood = true`, so back-layer dim creatures visibly "light up" near the song
+
+Visual effect: when you start a track, the area around its creature(s) on the wall glows brighter, with lime threads connecting the playing creature to its neighbors. Works even when the same track maps to multiple creatures (the neighborhoods overlap).
+
+### 5. Constellation lines
+
+`buildConstellations()` runs once at the end of `buildCreatures`. O(n²) double-loop checks every creature pair; if their `baseX/baseY` distance is < 75px, the pair `[i, j]` is pushed to `constellations[]`. Capped at 250 pairs.
+
+Each frame, the draw loop walks `constellations` and draws a faint white line between the CURRENT positions (not base) of each pair. Distance-falloff alpha (max 0.10) — barely visible by themselves, but they create a star-map background pattern that makes empty regions feel intentional. Lines longer than 130px are skipped (cursor pulled the pair too far apart).
+
+Drawn UNDER everything else so they read as a background layer.
+
+### Draw order (final)
+1. Background (dark plum + 5 capped nebulas + scanlines + vignette)
+2. Glyphs (ambient sparkle layer)
+3. **Constellations** (faint white pair lines)
+4. **Neighborhood lines** (faint lime lines, only when something's playing)
+5. **Cursor threads** (lime lines from cursor to nearby creatures, desktop only)
+6. **Creatures back pass** (depth 0)
+7. **Creatures mid pass** (depth 1)
+8. **Creatures front pass** (depth 2)
+9. **Playing rings** (rotating dashed lime circles around playing creatures)
+10. **Hovered creature** (always on top)
+11. **Burst rings** (click animation)
+
+### Files modified
+- [js/wall.js](js/wall.js) — `buildNebulas` (5 anchors + clamped drift), `drawBackground` takes `bands`, `buildCreatures` (depth roll), new `buildConstellations`, `getBeat → getAudioBands`, `drawCreature` (depthAlpha + bands.bass/mid + neighborhood boost + matching restore), main draw loop restructured with playing detection, neighborhood marking, constellation draw, neighborhood line draw, 3-pass depth render, playing ring moved AFTER creatures. ~190 lines net added.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b058 → b059`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/` → background should look darker plum, no white blowout in the center, nebula colors visible in 5 distinct soft regions instead of one overwhelming wash.
+2. Look for size variation among creatures — some should be visibly small + dim (back), some normal (mid), some big and crisp (front).
+3. **Play any track** → creatures around the playing one should glow brighter, with faint lime lines connecting them. The wing/spin animations should visibly speed up. Bass hits should pulse all creatures larger. Treble should brighten the background.
+4. Move mouse → cursor threads still work, plus the constellation lines should stretch as creatures drift.
+5. The currently-playing rotating dashed ring should now be visible ON TOP of the creature (was being covered before).
+
+### Knobs (all in [js/wall.js](js/wall.js))
+- Depth split percentages in `buildCreatures` (`< 25 / < 85 / else`)
+- Depth scale/alpha/drift/speed multipliers in `buildCreatures`
+- Audio band sensitivity in `drawCreature` (`bass * 0.18`, `mid * 1.2`)
+- Treble background pulse in `drawBackground` (`bands.treble * 0.30`)
+- Neighborhood radius `200` in `draw()`
+- Neighborhood alpha boost `+0.20` in `drawCreature`
+- Constellation pair threshold `75` and stretched-line cutoff `130` and max alpha `0.10` in `buildConstellations` / `draw()`
+- Nebula anchors `[0.20, 0.25] / [0.80, 0.30] / [0.50, 0.55] / [0.25, 0.80] / [0.78, 0.78]` in `buildNebulas`
+- Background base `globalAlpha` `0.55` in `drawBackground`
+
+### What this is NOT
+- Not WebGL — still pure 2D canvas
+- Not asset-based — still procedural
+- Not search-filtered (still shows all)
+- Not type-aware drift (fish still don't school, butterflies still don't figure-8 — that's a follow-up if this lands well)
+
 ## b058 — 2026-04-08 — Wall: gradient mesh bg, mobile cap, cursor interaction
 
 User on b057: *"what would u do to improve overall experience, also i wanna change background too basic and bland i feel like for all of our icons. would love a dynamic or live background."* I proposed a 7-item plan; user said *"proceed"*. Single commit, all 7 changes.

@@ -26,7 +26,8 @@
   let creatures = [];
   let glyphs = [];
   let nebulas = [];
-  let bursts = [];     // b058 — click burst rings, fade and expand
+  let bursts = [];          // b058 — click burst rings
+  let constellations = [];  // b059 — precomputed creature pair indices for star-map lines
   let hovered = -1;
   let t0 = 0;
   const isMobile = () => window.innerWidth < 768;
@@ -196,36 +197,50 @@
   }
 
   // -------------------------------------------------------
-  // NEBULAS — gradient-mesh background. b058: replaces the
-  // checker entirely. 7 huge soft color blobs that drift +
-  // morph their radii on sine, additively layered over a
-  // dark plum base. Reads as "alive color wash" instead of
-  // "static checker pattern".
+  // NEBULAS — b059 fix for the b058 center-blowout. The 7
+  // blobs were converging on the middle and washing the
+  // wall to white. Three-part fix:
+  //   1. Count down 7 → 5
+  //   2. Alphas down ~25%
+  //   3. baseX/baseY are forced to a 5-quadrant spread
+  //      so they CAN'T all stack in the center, and the
+  //      drift amplitude is clamped < quadrant size.
+  // The additive layer in drawBackground also caps with
+  // a frame-level globalAlpha (0.65 + treble pulse).
   // -------------------------------------------------------
   function buildNebulas() {
     nebulas = [];
     const colors = [
-      'rgba(74, 216, 255, 0.55)',   // cyan
-      'rgba(255, 92, 242, 0.55)',   // hot pink
-      'rgba(156, 255, 58, 0.42)',   // lime
-      'rgba(168, 85, 247, 0.60)',   // purple
-      'rgba(10, 255, 156, 0.40)',   // mint
-      'rgba(255, 122, 26, 0.38)',   // orange
-      'rgba(74, 216, 255, 0.40)',   // second cyan accent
+      'rgba(74, 216, 255, 0.40)',   // cyan
+      'rgba(255, 92, 242, 0.42)',   // hot pink
+      'rgba(156, 255, 58, 0.32)',   // lime
+      'rgba(168, 85, 247, 0.45)',   // purple
+      'rgba(255, 122, 26, 0.30)',   // orange
+    ];
+    // 5 anchor positions spread across the canvas — one per
+    // quadrant + one center. Guarantees no convergence.
+    const anchors = [
+      [0.20, 0.25],
+      [0.80, 0.30],
+      [0.50, 0.55],
+      [0.25, 0.80],
+      [0.78, 0.78],
     ];
     for (let i = 0; i < colors.length; i++) {
       const h = hash('neb' + i, 33);
+      const [ax, ay] = anchors[i];
       nebulas.push({
-        baseX: (h % 1000) / 1000 * W,
-        baseY: ((h >> 8) % 1000) / 1000 * H,
-        radius: 540 + (h % 480),     // huge soft blobs
+        baseX: ax * W,
+        baseY: ay * H,
+        radius: 460 + (h % 340),     // slightly smaller
         color: colors[i],
         speedX: 0.05 + (h % 100) / 1600,
         speedY: 0.04 + ((h >> 4) % 100) / 1700,
-        ampX: 140 + (h % 160),       // big drift amplitude
-        ampY: 110 + ((h >> 6) % 140),
+        // Drift amplitudes capped at ~120/100 — can't reach
+        // the next anchor's territory, so they stay in their lane
+        ampX: 80 + (h % 60),
+        ampY: 60 + ((h >> 6) % 50),
         phase: ((h >> 12) % 1000) / 1000 * Math.PI * 2,
-        // Pulse the radius too so blobs morph in size
         radiusPulseSpeed: 0.20 + ((h >> 9) % 100) / 600,
         radiusPulseAmp: 0.15 + ((h >> 11) % 100) / 500,
       });
@@ -296,28 +311,66 @@
       // b057 — wider size range so creatures don't all look "same".
       // ~70% small (14-26), ~30% larger hero (28-44).
       const sizeRoll = (h2 % 100);
-      const size = sizeRoll < 70
+      let size = sizeRoll < 70
         ? 14 + (h1 % 13)
         : 28 + (h1 % 17);
 
+      // b059 — parallax depth: 25% back, 60% mid, 15% front.
+      // Back is smaller + dimmer + slower; front is larger +
+      // brighter + faster. Real visual hierarchy.
+      const depthRoll = (h3 % 100);
+      const depth = depthRoll < 25 ? 0 : depthRoll < 85 ? 1 : 2;
+      const depthScale     = depth === 0 ? 0.55 : depth === 1 ? 1.00 : 1.30;
+      const depthAlpha     = depth === 0 ? 0.55 : depth === 1 ? 1.00 : 1.00;
+      const depthDriftMult = depth === 0 ? 0.55 : depth === 1 ? 1.00 : 1.40;
+      const depthSpeedMult = depth === 0 ? 0.60 : depth === 1 ? 1.00 : 1.30;
+
+      size = size * depthScale;
+
       creatures.push({
         type,
+        depth,
+        depthAlpha,
         baseX, baseY,
         x: baseX, y: baseY,
         size,
         colorIdx: (i * 3 + h1) % PALETTE.length,  // also stride colors
         driftPhase: (h2 % 1000) / 1000 * Math.PI * 2,
-        driftSpeedX: 0.3 + (h2 % 100) / 240,
-        driftSpeedY: 0.25 + (h3 % 100) / 280,
-        driftAmpX: 14 + (h1 % 18),
-        driftAmpY: 10 + (h3 % 14),
+        driftSpeedX: (0.3 + (h2 % 100) / 240) * depthSpeedMult,
+        driftSpeedY: (0.25 + (h3 % 100) / 280) * depthSpeedMult,
+        driftAmpX: (14 + (h1 % 18)) * depthDriftMult,
+        driftAmpY: (10 + (h3 % 14)) * depthDriftMult,
         rotSpeed: ((h2 % 200) - 100) / 800,
         rot: (h3 % 360) / 360 * Math.PI * 2,
         wingPhase: (h1 % 1000) / 1000 * Math.PI * 2,
         trackIndex,
         title: title,
         scale: 1,
+        inNeighborhood: false,
       });
+    }
+
+    // b059 — precompute constellation pairs for the star-map
+    // line layer (creature i↔j with base distance < 75px).
+    buildConstellations();
+  }
+
+  // -------------------------------------------------------
+  // CONSTELLATIONS — precomputed creature pair indices for
+  // the star-map line layer. O(n²) once at build time, cap 250.
+  // -------------------------------------------------------
+  function buildConstellations() {
+    constellations = [];
+    const threshold = 75;
+    for (let i = 0; i < creatures.length; i++) {
+      for (let j = i + 1; j < creatures.length; j++) {
+        const dx = creatures[i].baseX - creatures[j].baseX;
+        const dy = creatures[i].baseY - creatures[j].baseY;
+        if (dx * dx + dy * dy < threshold * threshold) {
+          constellations.push([i, j]);
+          if (constellations.length >= 250) return;
+        }
+      }
     }
   }
 
@@ -340,19 +393,21 @@
   }
 
   // -------------------------------------------------------
-  // BACKGROUND — b058 gradient mesh. Dark plum base with
-  // 7 huge additive color blobs that drift + morph radius.
-  // No more checker (it was fighting the creatures for
-  // attention). Subtle scanlines + corner vignette stay.
+  // BACKGROUND — b059 takes optional `bands` for a treble-
+  // reactive nebula brightness pulse. The additive layer is
+  // wrapped in a frame-level globalAlpha (0.55 baseline +
+  // treble * 0.30) which CAPS the additive sum and fixes
+  // the b058 center-blowout where 7 blobs converged.
   // -------------------------------------------------------
-  function drawBackground(t) {
-    // Dark plum base (was hot magenta — too dominant)
+  function drawBackground(t, bands) {
+    // Dark plum base
     ctx.fillStyle = '#1a0820';
     ctx.fillRect(0, 0, W, H);
 
-    // Gradient mesh — additive blobs that drift + pulse radius
+    // Gradient mesh — additive blobs, but capped by globalAlpha
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.55 + (bands ? bands.treble * 0.30 : 0);
     for (const n of nebulas) {
       const cx = n.baseX + Math.sin(t * n.speedX + n.phase) * n.ampX;
       const cy = n.baseY + Math.cos(t * n.speedY + n.phase * 0.7) * n.ampY;
@@ -1241,21 +1296,33 @@
     c.rot += c.rotSpeed * 0.02;
   }
 
-  function drawCreature(c, t, isHover, beat) {
-    const targetScale = isHover ? 1.35 : (1 + beat * 0.06);
+  function drawCreature(c, t, isHover, bands) {
+    const bass = bands ? bands.bass : 0;
+    const mid = bands ? bands.mid : 0;
+    const targetScale = isHover ? 1.35 : (1 + bass * 0.18);
     c.scale += (targetScale - c.scale) * 0.18;
 
     const [light, dark] = PALETTE[c.colorIdx];
-    const wingT = t + c.wingPhase;
+    // b059 — wing/spin animation speedup tied to mid-band audio.
+    // 0 mid → normal speed; 1 mid → 2.2x.
+    const wingT = (t + c.wingPhase) * (1 + mid * 1.2);
 
-    // b057 — soft additive glow halo, much subtler than b056
-    // (alpha 0.30/0.55 → 0.10/0.28, radius 2.0×/2.6× → 1.5×/2.1×).
-    // Mobile skips the per-creature halo entirely to keep frame
-    // time down on phones with 100 creatures.
+    // b059 — apply depth alpha (back layer = 0.55, mid/front = 1.0).
+    // Neighborhood creatures of the playing track get a +0.18 boost
+    // so they visibly "light up" near the playing one.
+    const baseAlpha = c.depthAlpha + (c.inNeighborhood ? 0.20 : 0);
+    const drawAlpha = Math.min(1, baseAlpha);
+
+    ctx.save();
+    ctx.globalAlpha = drawAlpha;
+
+    // b057 — soft additive glow halo, b059 mobile-skipped.
+    // Front-depth creatures get a slightly stronger halo.
     if (!isMobile()) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const haloR = c.size * c.scale * (isHover ? 2.1 : 1.5);
+      const haloMult = c.depth === 2 ? 1.15 : 1.0;
+      const haloR = c.size * c.scale * (isHover ? 2.1 : 1.5) * haloMult;
       const halo = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, haloR);
       halo.addColorStop(0, hexToRgba(light, isHover ? 0.28 : 0.10));
       halo.addColorStop(1, hexToRgba(light, 0));
@@ -1298,7 +1365,8 @@
       case 'cassette':  drawCassette(c, light, dark, wingT); break;
     }
 
-    ctx.restore();
+    ctx.restore();  // pops translate/rotate/scale
+    ctx.restore();  // b059 — pops the outer globalAlpha (depthAlpha)
   }
 
   // -------------------------------------------------------
@@ -1365,31 +1433,117 @@
   }
 
   // -------------------------------------------------------
-  // AUDIO REACT — beat scalar from getFrequencyData
+  // AUDIO REACT — b059 split into 3 bands (bass / mid / treble)
+  // for richer reactivity than the b056 single-scalar beat.
+  //   bass   → creature scale pulse (0..0.18)
+  //   mid    → wing/spin animation speedup (0..1.2x extra)
+  //   treble → background nebula brightness pulse (0..0.30)
   // -------------------------------------------------------
-  function getBeat() {
-    if (typeof getFrequencyData !== 'function') return 0;
+  function getAudioBands() {
+    if (typeof getFrequencyData !== 'function') {
+      return { bass: 0, mid: 0, treble: 0 };
+    }
     const data = getFrequencyData();
-    if (!data || data.length === 0) return 0;
-    let sum = 0;
-    const n = Math.min(data.length, 16);
-    for (let i = 0; i < n; i++) sum += data[i];
-    return Math.min(1, (sum / n) / 200);
+    if (!data || data.length === 0) return { bass: 0, mid: 0, treble: 0 };
+    let b = 0, m = 0, tr = 0;
+    const bassEnd = Math.min(5, data.length);
+    const midEnd = Math.min(31, data.length);
+    for (let i = 0; i < bassEnd; i++) b += data[i];
+    for (let i = bassEnd; i < midEnd; i++) m += data[i];
+    for (let i = midEnd; i < data.length; i++) tr += data[i];
+    const bassN = bassEnd || 1;
+    const midN = (midEnd - bassEnd) || 1;
+    const treN = (data.length - midEnd) || 1;
+    return {
+      bass:   Math.min(1, (b / bassN) / 200),
+      mid:    Math.min(1, (m / midN) / 200),
+      treble: Math.min(1, (tr / treN) / 200),
+    };
   }
 
   // -------------------------------------------------------
   function draw() {
     if (!ctx || !canvas) return;
     const t = (performance.now() - t0) * 0.001;
-    const beat = getBeat();
+    const bands = getAudioBands();
 
-    drawBackground(t);
+    drawBackground(t, bands);
     drawGlyphs(t);
 
     // Update creature positions BEFORE hit test so the
     // current frame's positions are what we test against.
     for (let i = 0; i < creatures.length; i++) updateCreature(creatures[i], t);
     hitTest();
+
+    // b059 — find creatures whose track is currently playing,
+    // then mark all creatures within 200px of any playing one
+    // as "in neighborhood". They get a +0.20 alpha boost in
+    // drawCreature so the wall visibly clusters around the song.
+    const playingIdx = (typeof state !== 'undefined' && state) ? state.currentTrack : -1;
+    const playingCreatures = [];
+    for (const c of creatures) {
+      c.inNeighborhood = false;
+      if (playingIdx >= 0 && c.trackIndex === playingIdx) playingCreatures.push(c);
+    }
+    if (playingCreatures.length > 0) {
+      for (const c of creatures) {
+        if (c.trackIndex === playingIdx) continue;
+        for (const p of playingCreatures) {
+          const dx = p.x - c.x;
+          const dy = p.y - c.y;
+          if (dx * dx + dy * dy < 200 * 200) {
+            c.inNeighborhood = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // b059 — constellation lines: faint white pair lines that
+    // stretch as creatures drift. Drawn UNDER everything else
+    // so they read as a star map background layer.
+    if (constellations.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      for (const [i, j] of constellations) {
+        const a = creatures[i], b = creatures[j];
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 130) continue;  // hide stretched lines (cursor pulled apart)
+        ctx.globalAlpha = (1 - d / 130) * 0.10;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // b059 — neighborhood connection lines: faint lime lines
+    // from each playing creature to each creature in its
+    // neighborhood. Distance-falloff alpha.
+    if (playingCreatures.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#9cff3a';
+      ctx.lineWidth = 1.2;
+      for (const p of playingCreatures) {
+        for (const c of creatures) {
+          if (!c.inNeighborhood) continue;
+          const dx = p.x - c.x;
+          const dy = p.y - c.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d > 200 || d < 0.01) continue;
+          ctx.globalAlpha = (1 - d / 200) * 0.45;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(c.x, c.y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
 
     // b058 — cursor connecting lines: thin lime threads from
     // the cursor to any creature within 90px. Skipped on mobile.
@@ -1412,13 +1566,22 @@
       ctx.restore();
     }
 
-    // b058 — currently-playing ring: slow rotating dashed lime
-    // circle around any creature whose trackIndex matches the
-    // currently-playing track. state.currentTrack is the global.
-    const playingIdx = (typeof state !== 'undefined' && state) ? state.currentTrack : -1;
+    // b059 — 3-pass parallax draw order: back → mid → front.
+    // Hovered always drawn last on top. Within each depth pass
+    // we skip the hovered index.
+    for (let pass = 0; pass < 3; pass++) {
+      for (let i = 0; i < creatures.length; i++) {
+        if (creatures[i].depth !== pass) continue;
+        if (i === hovered) continue;
+        drawCreature(creatures[i], t, false, bands);
+      }
+    }
+
+    // b058 — currently-playing ring AFTER creatures so it sits
+    // on top. Slow rotating dashed lime circle around the
+    // creature(s) whose trackIndex matches the playing track.
     if (playingIdx >= 0) {
-      for (const c of creatures) {
-        if (c.trackIndex !== playingIdx) continue;
+      for (const c of playingCreatures) {
         ctx.save();
         ctx.translate(c.x, c.y);
         ctx.rotate(t * 0.6);
@@ -1433,20 +1596,13 @@
       }
     }
 
-    // Draw all non-hovered creatures, then hovered on top
-    for (let i = 0; i < creatures.length; i++) {
-      if (i === hovered) continue;
-      drawCreature(creatures[i], t, false, beat);
-    }
-    // b058 — info panel: collapsed to one line. Toast (PLAYING)
-    // takes priority for ~1.4s after click, otherwise hover label,
-    // otherwise the default "click any creature →".
+    // b058 — info panel.
     const lab = document.getElementById('wallLabel');
     const tit = document.getElementById('wallTitle');
     const showToast = performance.now() < toastUntil;
 
     if (hovered >= 0) {
-      drawCreature(creatures[hovered], t, true, beat);
+      drawCreature(creatures[hovered], t, true, bands);
       drawTooltip(creatures[hovered]);
       if (lab) lab.textContent = showToast ? toastText : ('▸ ' + creatures[hovered].title.toLowerCase());
       if (tit) tit.style.display = 'none';
