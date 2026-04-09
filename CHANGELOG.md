@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## b064 — 2026-04-08 — 15 more hero icons (39 total, 22% of catalog)
+
+User: *"more more more more more props or whatever"*
+
+15 more: Take Me Home (house), Real Love (pulsing heart), Spotlight (swaying spotlight on tripod), Final Chapter (purple book), Wired (glowing lightning bolt), Stop Light (cycling traffic light), Wind Blows (windmill w/ rotating blades), I Will Survive (pumping fist), Shroomy (cute red mushroom w/ spots), Runaway (cyan sneaker w/ swoosh), Shoebox (orange box w/ lid + tissue), Two of Us (two drifting hearts), Car Mixtape (spinning vinyl disc), Emo Rock (guitar pick w/ bolt + "EMO"), Formidable (golden crown w/ jewels).
+
+Total override count: **39** (3 + 9 + 12 + 15). ~22% of the 177-track catalog now has custom hero art. wall.js is ~4,080 lines.
+
 ## b063 — 2026-04-08 — 12 more hero icons (resumes the b061 batch)
 
 User on b062: *"yes"* to resuming the 12-icon batch I'd paused to ship the pagination fix. Picking it back up.

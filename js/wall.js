@@ -97,6 +97,22 @@
     { match: 'birthday',         type: 'cake'        }, // Birthday Freestyle → cake
     { match: 'wallet',           type: 'wallet'      }, // Wallet → wallet
     { match: 'lotus',            type: 'lotusflower' }, // Lotus (Try to Breathe) → lotus
+    // b064 — 15 more
+    { match: 'take me home',     type: 'house'       },
+    { match: 'real love',        type: 'bigheart'    },
+    { match: 'spotlight',        type: 'spotlight'   },
+    { match: 'final chapter',    type: 'book'        },
+    { match: 'wired',            type: 'lightbolt'   },
+    { match: 'stop light',       type: 'trafficlight'},
+    { match: 'wind blows',       type: 'windmill'    },
+    { match: 'i will survive',   type: 'fist'        },
+    { match: 'shroomy',          type: 'shroom'      },
+    { match: 'runaway',          type: 'sneaker'     },
+    { match: 'shoebox',          type: 'shoebox'     },
+    { match: 'two of us',        type: 'twohearts'   },
+    { match: 'car mixtape',      type: 'vinyldisc'   },
+    { match: 'emo rock',         type: 'guitarpick'  },
+    { match: 'formidable',       type: 'crown'       },
   ];
 
   function getOverrideType(title) {
@@ -3109,6 +3125,508 @@
   }
 
   // -------------------------------------------------------
+  // b064 — 15 MORE OVERRIDE DRAWERS
+  // -------------------------------------------------------
+
+  function drawHouse(c, light, dark, wingT) {
+    const s = c.size;
+    // Walls
+    ctx.fillStyle = '#f5ecd8';
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.70, -s * 0.20, s * 1.40, s * 1.00);
+    ctx.strokeRect(-s * 0.70, -s * 0.20, s * 1.40, s * 1.00);
+    // Roof
+    ctx.fillStyle = '#ff2a4a';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.20);
+    ctx.lineTo(0, -s * 0.85);
+    ctx.lineTo(s * 0.85, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Door
+    ctx.fillStyle = '#5a3a08';
+    ctx.fillRect(-s * 0.15, s * 0.20, s * 0.30, s * 0.60);
+    ctx.strokeRect(-s * 0.15, s * 0.20, s * 0.30, s * 0.60);
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath(); ctx.arc(s * 0.08, s * 0.50, s * 0.03, 0, Math.PI * 2); ctx.fill();
+    // Window
+    ctx.fillStyle = '#4ad8ff';
+    ctx.fillRect(-s * 0.55, 0, s * 0.28, s * 0.22);
+    ctx.strokeRect(-s * 0.55, 0, s * 0.28, s * 0.22);
+    ctx.fillRect(s * 0.27, 0, s * 0.28, s * 0.22);
+    ctx.strokeRect(s * 0.27, 0, s * 0.28, s * 0.22);
+    // Chimney
+    ctx.fillStyle = '#888888';
+    ctx.fillRect(s * 0.30, -s * 0.75, s * 0.18, s * 0.35);
+    ctx.strokeRect(s * 0.30, -s * 0.75, s * 0.18, s * 0.35);
+    // Smoke puff
+    ctx.fillStyle = '#cccccc';
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.arc(s * 0.39, -s * 0.85, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.44, -s * 0.97, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBigheart(c, light, dark, wingT) {
+    const s = c.size;
+    const pulse = 1 + Math.sin(wingT * 3) * 0.08;
+    ctx.save(); ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#ff2a4a';
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.30);
+    ctx.bezierCurveTo(-s * 0.05, s * 0.10, -s * 0.85, -s * 0.20, -s * 0.50, -s * 0.60);
+    ctx.bezierCurveTo(-s * 0.20, -s * 0.90, 0, -s * 0.55, 0, -s * 0.30);
+    ctx.bezierCurveTo(0, -s * 0.55, s * 0.20, -s * 0.90, s * 0.50, -s * 0.60);
+    ctx.bezierCurveTo(s * 0.85, -s * 0.20, s * 0.05, s * 0.10, 0, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Sheen
+    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.30, -s * 0.40, s * 0.15, s * 0.10, -0.5, 0, Math.PI * 2);
+    ctx.fill(); ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawSpotlight(c, light, dark, wingT) {
+    const s = c.size;
+    const sway = Math.sin(wingT * 1.5) * 0.15;
+    // Beam cone
+    ctx.save(); ctx.rotate(sway);
+    ctx.fillStyle = 'rgba(255,232,51,0.30)';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.15, s * 0.20);
+    ctx.lineTo(s * 0.15, s * 0.20);
+    ctx.lineTo(s * 0.65, s * 1.20);
+    ctx.lineTo(-s * 0.65, s * 1.20);
+    ctx.closePath();
+    ctx.fill();
+    // Lamp housing
+    ctx.fillStyle = '#3a3a3a';
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.35, s * 0.25);
+    ctx.lineTo(-s * 0.20, -s * 0.10);
+    ctx.lineTo(s * 0.20, -s * 0.10);
+    ctx.lineTo(s * 0.35, s * 0.25);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Bulb face
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.08, s * 0.22, s * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    // Tripod stand
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.10); ctx.lineTo(0, -s * 0.65); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.65);
+    ctx.lineTo(-s * 0.30, -s * 0.90); ctx.moveTo(0, -s * 0.65);
+    ctx.lineTo(s * 0.30, -s * 0.90); ctx.stroke();
+  }
+
+  function drawBook(c, light, dark, wingT) {
+    const s = c.size;
+    // Pages (side view — stacked)
+    ctx.fillStyle = '#f5ecd8';
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.65, -s * 0.85, s * 1.20, s * 1.65);
+    ctx.strokeRect(-s * 0.65, -s * 0.85, s * 1.20, s * 1.65);
+    // Cover (front)
+    ctx.fillStyle = '#a855f7';
+    ctx.fillRect(-s * 0.70, -s * 0.90, s * 1.20, s * 1.65);
+    ctx.strokeRect(-s * 0.70, -s * 0.90, s * 1.20, s * 1.65);
+    // Spine
+    ctx.fillStyle = '#7e22ce';
+    ctx.fillRect(-s * 0.70, -s * 0.90, s * 0.12, s * 1.65);
+    ctx.strokeRect(-s * 0.70, -s * 0.90, s * 0.12, s * 1.65);
+    // Title block
+    ctx.fillStyle = '#ffe833';
+    ctx.fillRect(-s * 0.40, -s * 0.65, s * 0.70, s * 0.25);
+    ctx.font = `900 ${Math.max(6, s * 0.14)}px "JetBrains Mono", monospace`;
+    ctx.fillStyle = '#0e0e0e'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('FINAL', -s * 0.05, -s * 0.58);
+    ctx.fillText('CHAPTER', -s * 0.05, -s * 0.46);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // Star ornament
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? s * 0.12 : s * 0.05;
+      ctx.lineTo(-s * 0.05 + Math.cos(a) * r, s * 0.10 + Math.sin(a) * r);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawLightbolt(c, light, dark, wingT) {
+    const s = c.size;
+    const pulse = 0.7 + Math.sin(wingT * 6) * 0.3;
+    // Glow behind
+    ctx.fillStyle = '#ffe833'; ctx.globalAlpha = pulse * 0.3;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.95, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Bolt shape
+    ctx.fillStyle = '#ffe833'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.15, -s * 0.95);
+    ctx.lineTo(s * 0.40, -s * 0.95);
+    ctx.lineTo(s * 0.05, -s * 0.10);
+    ctx.lineTo(s * 0.45, -s * 0.10);
+    ctx.lineTo(-s * 0.20, s * 0.95);
+    ctx.lineTo(s * 0.05, s * 0.10);
+    ctx.lineTo(-s * 0.40, s * 0.10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  function drawTrafficlight(c, light, dark, wingT) {
+    const s = c.size;
+    const cycle = Math.floor(wingT * 0.4) % 3;
+    // Body
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.35, -s * 0.85, s * 0.70, s * 1.50);
+    ctx.strokeRect(-s * 0.35, -s * 0.85, s * 0.70, s * 1.50);
+    // 3 lights
+    const colors = ['#ff2a4a', '#ffe833', '#9cff3a'];
+    for (let i = 0; i < 3; i++) {
+      const y = -s * 0.60 + i * s * 0.45;
+      ctx.fillStyle = cycle === i ? colors[i] : '#1a1a1a';
+      ctx.beginPath(); ctx.arc(0, y, s * 0.18, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#333333'; ctx.stroke();
+      if (cycle === i) {
+        ctx.fillStyle = colors[i]; ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.arc(0, y, s * 0.30, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+    // Post
+    ctx.fillStyle = '#888888';
+    ctx.fillRect(-s * 0.06, s * 0.65, s * 0.12, s * 0.40);
+    ctx.strokeRect(-s * 0.06, s * 0.65, s * 0.12, s * 0.40);
+  }
+
+  function drawWindmill(c, light, dark, wingT) {
+    const s = c.size;
+    // Tower
+    ctx.fillStyle = '#f5ecd8'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, s * 0.90);
+    ctx.lineTo(-s * 0.15, -s * 0.30);
+    ctx.lineTo(s * 0.15, -s * 0.30);
+    ctx.lineTo(s * 0.30, s * 0.90);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Door
+    ctx.fillStyle = '#5a3a08';
+    ctx.beginPath();
+    ctx.arc(0, s * 0.70, s * 0.12, Math.PI, 0);
+    ctx.lineTo(s * 0.12, s * 0.90);
+    ctx.lineTo(-s * 0.12, s * 0.90);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Blades — rotating
+    ctx.save(); ctx.translate(0, -s * 0.30); ctx.rotate(wingT * 2);
+    ctx.fillStyle = '#cccccc'; ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      ctx.save(); ctx.rotate((i / 4) * Math.PI * 2);
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.06, 0);
+      ctx.lineTo(-s * 0.10, -s * 0.85);
+      ctx.lineTo(s * 0.10, -s * 0.85);
+      ctx.lineTo(s * 0.06, 0);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    // Center hub
+    ctx.fillStyle = '#888888';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawFist(c, light, dark, wingT) {
+    const s = c.size;
+    const pump = 1 + Math.sin(wingT * 3) * 0.05;
+    ctx.save(); ctx.scale(pump, pump);
+    // Wrist
+    ctx.fillStyle = '#f5d490'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.25, s * 0.30, s * 0.50, s * 0.40);
+    ctx.strokeRect(-s * 0.25, s * 0.30, s * 0.50, s * 0.40);
+    // Fist body
+    ctx.fillStyle = '#f5d490';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.50, s * 0.30);
+    ctx.quadraticCurveTo(-s * 0.55, -s * 0.10, -s * 0.45, -s * 0.30);
+    ctx.lineTo(s * 0.45, -s * 0.30);
+    ctx.quadraticCurveTo(s * 0.55, -s * 0.10, s * 0.50, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Knuckle bumps
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.arc(i * s * 0.22, -s * 0.30, s * 0.12, Math.PI, 0);
+      ctx.fill(); ctx.stroke();
+    }
+    // Thumb
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.50, s * 0.05, s * 0.12, s * 0.18, 0.3, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Finger lines
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.12 + i * s * 0.22, -s * 0.18);
+      ctx.lineTo(-s * 0.12 + i * s * 0.22, s * 0.15);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawShroom(c, light, dark, wingT) {
+    const s = c.size;
+    // Stem
+    ctx.fillStyle = '#f5ecd8'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.25, s * 0.10);
+    ctx.lineTo(-s * 0.20, s * 0.85);
+    ctx.lineTo(s * 0.20, s * 0.85);
+    ctx.lineTo(s * 0.25, s * 0.10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Cap — big rainbow mushroom
+    ctx.fillStyle = '#ff2a4a';
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.05, s * 0.85, s * 0.60, 0, Math.PI, 0);
+    ctx.lineTo(s * 0.85, -s * 0.05);
+    ctx.lineTo(-s * 0.85, -s * 0.05);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Big white spots
+    ctx.fillStyle = '#ffffff';
+    const spots = [[-0.40, -0.25], [0.10, -0.40], [0.45, -0.20], [-0.15, -0.15]];
+    for (const [dx, dy] of spots) {
+      ctx.beginPath();
+      ctx.arc(s * dx, s * dy, s * 0.12, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+    // Eyes (cute)
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(-s * 0.12, s * 0.30, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.12, s * 0.30, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    // Smile
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, s * 0.38, s * 0.08, 0.1, Math.PI - 0.1); ctx.stroke();
+  }
+
+  function drawSneaker(c, light, dark, wingT) {
+    const s = c.size;
+    // Sole
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, s * 0.45);
+    ctx.lineTo(s * 0.95, s * 0.45);
+    ctx.lineTo(s * 0.95, s * 0.30);
+    ctx.lineTo(-s * 0.85, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Body
+    ctx.fillStyle = '#4ad8ff';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.80, s * 0.30);
+    ctx.lineTo(-s * 0.80, -s * 0.10);
+    ctx.quadraticCurveTo(-s * 0.30, -s * 0.35, s * 0.20, -s * 0.25);
+    ctx.lineTo(s * 0.90, -s * 0.05);
+    ctx.lineTo(s * 0.95, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Toe box
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.30, s * 0.30);
+    ctx.lineTo(s * 0.45, -s * 0.15);
+    ctx.lineTo(s * 0.95, s * 0.05);
+    ctx.lineTo(s * 0.95, s * 0.30);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Laces
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const x = -s * 0.40 + i * s * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(x, -s * 0.05);
+      ctx.lineTo(x + s * 0.10, -s * 0.20);
+      ctx.stroke();
+    }
+    // Nike-ish swoosh
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.65, s * 0.25);
+    ctx.quadraticCurveTo(s * 0.10, s * 0.35, s * 0.60, -s * 0.10);
+    ctx.stroke();
+  }
+
+  function drawShoebox(c, light, dark, wingT) {
+    const s = c.size;
+    // Box body
+    ctx.fillStyle = '#ff7a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.85, -s * 0.25, s * 1.70, s * 0.90);
+    ctx.strokeRect(-s * 0.85, -s * 0.25, s * 1.70, s * 0.90);
+    // Lid (angled open)
+    ctx.fillStyle = '#ff9a4a';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.90, -s * 0.25);
+    ctx.lineTo(-s * 0.75, -s * 0.65);
+    ctx.lineTo(s * 0.95, -s * 0.65);
+    ctx.lineTo(s * 0.90, -s * 0.25);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Label on front
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-s * 0.40, s * 0.05, s * 0.80, s * 0.30);
+    ctx.strokeRect(-s * 0.40, s * 0.05, s * 0.80, s * 0.30);
+    ctx.fillStyle = '#0e0e0e';
+    ctx.font = `900 ${Math.max(6, s * 0.14)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('SIZE 10', 0, s * 0.13);
+    ctx.fillText('KANI', 0, s * 0.27);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // Tissue paper sticking out
+    ctx.fillStyle = '#f5ecd8'; ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, -s * 0.25);
+    ctx.quadraticCurveTo(0, -s * 0.50, s * 0.30, -s * 0.25);
+    ctx.closePath();
+    ctx.fill(); ctx.globalAlpha = 1;
+  }
+
+  function drawTwohearts(c, light, dark, wingT) {
+    const s = c.size;
+    const offset = Math.sin(wingT * 2) * s * 0.05;
+    // Heart helper
+    function heart(hx, hy, hs, col) {
+      ctx.fillStyle = col; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(hx, hy + hs * 0.30);
+      ctx.bezierCurveTo(hx - hs * 0.05, hy + hs * 0.10, hx - hs * 0.85, hy - hs * 0.20, hx - hs * 0.50, hy - hs * 0.60);
+      ctx.bezierCurveTo(hx - hs * 0.20, hy - hs * 0.90, hx, hy - hs * 0.55, hx, hy - hs * 0.30);
+      ctx.bezierCurveTo(hx, hy - hs * 0.55, hx + hs * 0.20, hy - hs * 0.90, hx + hs * 0.50, hy - hs * 0.60);
+      ctx.bezierCurveTo(hx + hs * 0.85, hy - hs * 0.20, hx + hs * 0.05, hy + hs * 0.10, hx, hy + hs * 0.30);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+    heart(-s * 0.25 - offset, s * 0.05, s * 0.70, '#ff5cf2');
+    heart(s * 0.25 + offset, -s * 0.05, s * 0.70, '#ff2a4a');
+  }
+
+  function drawVinyldisc(c, light, dark, wingT) {
+    const s = c.size;
+    ctx.save(); ctx.rotate(wingT * 1.5);
+    // Disc
+    ctx.fillStyle = '#0e0e0e'; ctx.strokeStyle = '#333333'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.85, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Grooves
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+    for (let r = 0.30; r < 0.85; r += 0.10) {
+      ctx.beginPath(); ctx.arc(0, 0, s * r, 0, Math.PI * 2); ctx.stroke();
+    }
+    // Label center
+    ctx.fillStyle = '#ff5cf2';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5; ctx.stroke();
+    // Label text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${Math.max(5, s * 0.12)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('KANI', 0, -s * 0.06);
+    ctx.fillText('MIX', 0, s * 0.08);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // Spindle hole
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawGuitarpick(c, light, dark, wingT) {
+    const s = c.size;
+    const wobble = Math.sin(wingT * 2) * 0.08;
+    ctx.save(); ctx.rotate(wobble);
+    // Pick body — rounded triangle
+    ctx.fillStyle = '#0e0e0e'; ctx.strokeStyle = '#333333'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.90);
+    ctx.quadraticCurveTo(-s * 0.80, -s * 0.10, -s * 0.55, -s * 0.65);
+    ctx.quadraticCurveTo(0, -s * 0.95, s * 0.55, -s * 0.65);
+    ctx.quadraticCurveTo(s * 0.80, -s * 0.10, 0, s * 0.90);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Inner design — lightning bolt
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.05, -s * 0.50);
+    ctx.lineTo(s * 0.15, -s * 0.50);
+    ctx.lineTo(s * 0.02, -s * 0.08);
+    ctx.lineTo(s * 0.18, -s * 0.08);
+    ctx.lineTo(-s * 0.08, s * 0.50);
+    ctx.lineTo(s * 0.02, s * 0.05);
+    ctx.lineTo(-s * 0.15, s * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    // Text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${Math.max(5, s * 0.12)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('EMO', 0, -s * 0.68);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
+
+  function drawCrown(c, light, dark, wingT) {
+    const s = c.size;
+    const glint = (Math.sin(wingT * 4) + 1) * 0.5;
+    // Crown body
+    ctx.fillStyle = '#ffe833'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.80, s * 0.40);
+    ctx.lineTo(-s * 0.80, -s * 0.10);
+    ctx.lineTo(-s * 0.50, -s * 0.55);
+    ctx.lineTo(-s * 0.20, -s * 0.10);
+    ctx.lineTo(0, -s * 0.65);
+    ctx.lineTo(s * 0.20, -s * 0.10);
+    ctx.lineTo(s * 0.50, -s * 0.55);
+    ctx.lineTo(s * 0.80, -s * 0.10);
+    ctx.lineTo(s * 0.80, s * 0.40);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Base band
+    ctx.fillStyle = '#a86b00';
+    ctx.fillRect(-s * 0.80, s * 0.20, s * 1.60, s * 0.20);
+    ctx.strokeRect(-s * 0.80, s * 0.20, s * 1.60, s * 0.20);
+    // 3 jewels on the band
+    const jewels = [['#ff2a4a', -s * 0.40], ['#4ad8ff', 0], ['#9cff3a', s * 0.40]];
+    for (const [jc, jx] of jewels) {
+      ctx.fillStyle = jc;
+      ctx.beginPath();
+      ctx.moveTo(jx, s * 0.22);
+      ctx.lineTo(jx + s * 0.08, s * 0.30);
+      ctx.lineTo(jx, s * 0.38);
+      ctx.lineTo(jx - s * 0.08, s * 0.30);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+    // Tip jewels
+    const tips = [[-s * 0.50, -s * 0.55], [0, -s * 0.65], [s * 0.50, -s * 0.55]];
+    for (const [tx, ty] of tips) {
+      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.5 + glint * 0.5;
+      ctx.beginPath(); ctx.arc(tx, ty, s * 0.06, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // -------------------------------------------------------
   // CREATURE DRAW — translates/rotates/scales then dispatches
   // to the type-specific routine.
   // -------------------------------------------------------
@@ -3190,7 +3708,16 @@
                   c.type === 'lemon' || c.type === 'beachhut' ||
                   c.type === 'skull' || c.type === 'roadsign' ||
                   c.type === 'cashstack' || c.type === 'cake' ||
-                  c.type === 'wallet' || c.type === 'lotusflower';
+                  c.type === 'wallet' || c.type === 'lotusflower' ||
+                  // b064 — 15 more
+                  c.type === 'house' || c.type === 'bigheart' ||
+                  c.type === 'spotlight' || c.type === 'book' ||
+                  c.type === 'lightbolt' || c.type === 'trafficlight' ||
+                  c.type === 'windmill' || c.type === 'fist' ||
+                  c.type === 'shroom' || c.type === 'sneaker' ||
+                  c.type === 'shoebox' || c.type === 'twohearts' ||
+                  c.type === 'vinyldisc' || c.type === 'guitarpick' ||
+                  c.type === 'crown';
     if (!noRot) {
       ctx.rotate(c.rot * 0.3);
     }
@@ -3244,6 +3771,34 @@
       case 'cake':        drawCake(c, light, dark, wingT); break;
       case 'wallet':      drawWallet(c, light, dark, wingT); break;
       case 'lotusflower': drawLotusflower(c, light, dark, wingT); break;
+      // b064 — 15 more override types
+      case 'thunderbird':  drawThunderbird(c, light, dark, wingT); break;
+      case 'sun':          drawSun(c, light, dark, wingT); break;
+      case 'grenade':      drawGrenade(c, light, dark, wingT); break;
+      case 'boombox':      drawBoombox(c, light, dark, wingT); break;
+      case 'lemon':        drawLemon(c, light, dark, wingT); break;
+      case 'beachhut':     drawBeachhut(c, light, dark, wingT); break;
+      case 'skull':        drawSkull(c, light, dark, wingT); break;
+      case 'roadsign':     drawRoadsign(c, light, dark, wingT); break;
+      case 'cashstack':    drawCashstack(c, light, dark, wingT); break;
+      case 'cake':         drawCake(c, light, dark, wingT); break;
+      case 'wallet':       drawWallet(c, light, dark, wingT); break;
+      case 'lotusflower':  drawLotusflower(c, light, dark, wingT); break;
+      case 'house':        drawHouse(c, light, dark, wingT); break;
+      case 'bigheart':     drawBigheart(c, light, dark, wingT); break;
+      case 'spotlight':    drawSpotlight(c, light, dark, wingT); break;
+      case 'book':         drawBook(c, light, dark, wingT); break;
+      case 'lightbolt':    drawLightbolt(c, light, dark, wingT); break;
+      case 'trafficlight': drawTrafficlight(c, light, dark, wingT); break;
+      case 'windmill':     drawWindmill(c, light, dark, wingT); break;
+      case 'fist':         drawFist(c, light, dark, wingT); break;
+      case 'shroom':       drawShroom(c, light, dark, wingT); break;
+      case 'sneaker':      drawSneaker(c, light, dark, wingT); break;
+      case 'shoebox':      drawShoebox(c, light, dark, wingT); break;
+      case 'twohearts':    drawTwohearts(c, light, dark, wingT); break;
+      case 'vinyldisc':    drawVinyldisc(c, light, dark, wingT); break;
+      case 'guitarpick':   drawGuitarpick(c, light, dark, wingT); break;
+      case 'crown':        drawCrown(c, light, dark, wingT); break;
     }
 
     ctx.restore();  // pops translate/rotate/scale
