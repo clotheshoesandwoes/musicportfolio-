@@ -1,5 +1,61 @@
 # CHANGELOG
 
+## b061 — 2026-04-08 — 9 more hero icons for signature tracks
+
+User on b060: *"yes pls"* to my offer of 9 additional custom icons. All shipped here.
+
+### New icon overrides
+
+| Title match | Type | What it draws |
+|---|---|---|
+| `space star` | `spaceship` | Sleek arrowhead cruiser w/ cyan engine trail, yellow flame core, angled delta wings, cyan cockpit dome |
+| `hotel california` | `hotelsign` | Vertical neon "HOTEL" sign on a pole with magenta border + cyan letters that pulse, yellow star ornament at the bottom |
+| `coffee` | `coffeecup` | White ceramic cup w/ saucer, brown coffee surface w/ crema highlight, handle, 3 animated steam wisps rising from the cup |
+| `robot` | `robotbody` | Boxy retro robot — antenna w/ blinking LED, square head w/ visor + cyan eye dots + grille mouth, body w/ chest panel screen + rivets, stub arms, tread feet |
+| `stayin` | `discoball` | Hanging disco ball w/ chain, mirror tile grid clipped to circle, 6 colored highlight tiles, 5 sparkle dots orbiting the outside |
+| `mario` | `mariostar` | Cute 5-point yellow star w/ inner highlight ring + cartoon eyes + smile + gentle wobble |
+| `chains` | `chainlink` | 3 interlocked metal chain links (alternating angle) w/ inner cutouts + curved highlights, slight sway |
+| `nirvana` | `wonkysmile` | Yellow circle smiley w/ X eyes + crooked scribble mouth + magenta tongue sticking out the side |
+| `arkham` | `villainmask` | Joker-style face — green hair clumps, pale oval, dark sunken eyes w/ white pupil dots, wide red grin w/ teeth, purple "?" scar on cheek |
+
+### How it landed
+Three localized edits to [js/wall.js](js/wall.js):
+
+1. **`ICON_OVERRIDES`** array got 9 new entries inserted between the b060 ones and the closing `]`. Order matters because first-match-wins — `space star` is before any future generic `space` entry, etc.
+2. **9 new `draw*` functions** inserted directly after `drawPillowcase()`. Each is ~50–80 lines of canvas paths. Same `(c, light, dark, wingT)` signature as the rest, animated where appropriate (steam wisps on coffee, blinking eyes on robot, orbiting sparkles on disco ball, blinking antenna on robot, pulsing neon on hotel sign).
+3. **9 new switch cases** in `drawCreature` dispatch + 9 new entries in the `noRot` list (all 9 are intentional-orientation icons that should stay upright).
+
+The build/dispatch/cap/depth/halo/audio-reactive logic from b059–b060 all carries through unchanged — these new drawers are just data plugged into the existing system. Each special track gets exactly one front-depth, size-bumped hero icon on the wall (the FIRST creature that lands on that trackIndex; any extras stay random). Tracks like `Nirvana (Alt Lyrics)` also match the `nirvana` substring so the smiley shows up for both.
+
+### Files modified
+- [js/wall.js](js/wall.js) — 9 ICON_OVERRIDES entries, 9 new drawer functions, 9 dispatch cases, 9 noRot entries. ~600 lines net added.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b060 → b061`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+Total override count is now **12 hero icons** (3 from b060 + 9 from b061).
+
+### How to test
+1. Hard refresh `cantmute.me/`
+2. Find each hero icon on the wall:
+   - `Space Star Galactica` → arrowhead spaceship with engine trail
+   - `Hotel California` → vertical neon HOTEL sign
+   - `Coffee (Back in the Day)` → ceramic cup with steam
+   - `Robot Song` → boxy retro robot
+   - `Stayin' Alive` → hanging disco ball
+   - `Mario Island Funky Beat` → smiling Mario star
+   - `Chains (Grunge)` → 3 interlocked chain links
+   - `Nirvana` AND `Nirvana (Alt Lyrics)` → wonky smiley with tongue
+   - `Arkham Villain` → green-hair joker face
+3. Click any of them → that song plays
+4. Hover any of them → tooltip shows the title
+
+### Adding more
+Same recipe as b060: array entry + draw function + switch case + (optionally) noRot entry. The system scales linearly.
+
+### Potential candidates for next round (not done in this commit)
+Looking at the title list, future hero icon possibilities: "Thunderbird" (lightning bird), "Best Day Ever (Clarity)" (sun), "Warzone" (helmet/grenade), "Streets" (boombox), "Lemonade" (lemon), "Beachouse" (beach hut), "Sickboi" (skull), "10 Miles" (road sign), "Money Ain't a Thing" (cash stack), "Birthday Freestyle" (cake)...
+
 ## b060 — 2026-04-08 — Player bar pinned + per-track icon overrides (ODST/Rolla/pillowcase)
 
 User on b059: *"play previous song and next position changes based on song title. ensure those 3 buttons are static"* + follow-up *"i want matching emojis or emoticons cool art for songs. for ODST i want a halo ODST helmet or halo odst soldier; for rolla can u do a lambo or something some cool fast supercar; silk pillowcase = pillowcase"*

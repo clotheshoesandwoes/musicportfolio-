@@ -61,10 +61,23 @@
   // any additional creatures sharing that track stay random.
   // Add more entries here to give more songs custom art — each
   // override type needs a draw* function and a dispatch case.
+  // ORDER MATTERS — first match wins. Put more-specific
+  // matches before less-specific ones (e.g. "space star"
+  // before any future "space" entry).
   const ICON_OVERRIDES = [
-    { match: 'odst',            type: 'helmet'     },  // ODST → ODST helmet
-    { match: 'rolla',           type: 'supercar'   },  // Rolla → Lambo
-    { match: 'silk pillowcase', type: 'pillowcase' },  // Silk Pillowcase → pillow
+    { match: 'odst',             type: 'helmet'     },  // ODST → halo ODST helmet
+    { match: 'rolla',            type: 'supercar'   },  // Rolla → yellow Lambo
+    { match: 'silk pillowcase',  type: 'pillowcase' },  // Silk Pillowcase → silk pillow
+    // b061 — additional hero icons for signature tracks
+    { match: 'space star',       type: 'spaceship'  },  // Space Star Galactica → spaceship
+    { match: 'hotel california', type: 'hotelsign'  },  // Hotel California → neon hotel sign
+    { match: 'coffee',           type: 'coffeecup'  },  // Coffee (Back in the Day) → cup
+    { match: 'robot',            type: 'robotbody'  },  // Robot Song → robot
+    { match: "stayin",           type: 'discoball'  },  // Stayin' Alive → disco ball
+    { match: 'mario',            type: 'mariostar'  },  // Mario Island → Mario star
+    { match: 'chains',           type: 'chainlink'  },  // Chains (Grunge) → chain links
+    { match: 'nirvana',          type: 'wonkysmile' },  // Nirvana / Nirvana (Alt) → smiley
+    { match: 'arkham',           type: 'villainmask'},  // Arkham Villain → villain mask
   ];
 
   function getOverrideType(title) {
@@ -1635,6 +1648,579 @@
   }
 
   // -------------------------------------------------------
+  // b061 — 9 ADDITIONAL OVERRIDE DRAWERS
+  // -------------------------------------------------------
+
+  function drawSpaceship(c, light, dark, wingT) {
+    // Sleek angular sci-fi cruiser with engine glow trail
+    const s = c.size;
+    const flame = (Math.sin(wingT * 14) + 1) * 0.5;
+
+    // Engine trail (drawn first, behind body)
+    for (let i = 6; i >= 1; i--) {
+      ctx.fillStyle = '#4ad8ff';
+      ctx.globalAlpha = (i / 6) * 0.40;
+      ctx.beginPath();
+      ctx.ellipse(-s * (0.85 + i * 0.18), 0, s * 0.18, s * 0.10 * (i / 6), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Hull body — long arrowhead pointing right
+    ctx.fillStyle = '#cccccc';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.20);
+    ctx.lineTo(-s * 0.45, -s * 0.30);
+    ctx.lineTo( s * 0.55, -s * 0.18);
+    ctx.lineTo( s * 1.05,  0);
+    ctx.lineTo( s * 0.55,  s * 0.18);
+    ctx.lineTo(-s * 0.45,  s * 0.30);
+    ctx.lineTo(-s * 0.85,  s * 0.20);
+    ctx.lineTo(-s * 0.65,  0);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Top spine highlight
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.40, -s * 0.10);
+    ctx.lineTo( s * 0.55, -s * 0.05);
+    ctx.lineTo( s * 0.55,  s * 0.05);
+    ctx.lineTo(-s * 0.40,  s * 0.10);
+    ctx.closePath();
+    ctx.fill();
+
+    // Wings — angled back delta
+    ctx.fillStyle = '#3a4555';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.10, -s * 0.10);
+    ctx.lineTo(-s * 0.55, -s * 0.55);
+    ctx.lineTo(-s * 0.30, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.10, s * 0.10);
+    ctx.lineTo(-s * 0.55, s * 0.55);
+    ctx.lineTo(-s * 0.30, s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Cockpit — cyan dome on top of nose
+    ctx.fillStyle = '#4ad8ff';
+    ctx.beginPath();
+    ctx.ellipse(s * 0.40, -s * 0.05, s * 0.18, s * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s * 0.45, -s * 0.08, s * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Engine flame (yellow core inside the trail)
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.10);
+    ctx.lineTo(-s * (1.10 + flame * 0.20), 0);
+    ctx.lineTo(-s * 0.85,  s * 0.10);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawHotelsign(c, light, dark, wingT) {
+    // Vertical neon "HOTEL" sign on a pole. Tropical Cali vibe.
+    const s = c.size;
+    const blink = (Math.sin(wingT * 3) + 1) * 0.5;
+
+    // Pole
+    ctx.fillStyle = '#3a3a3a';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(-s * 0.06, -s * 0.10, s * 0.12, s * 1.10);
+    ctx.strokeRect(-s * 0.06, -s * 0.10, s * 0.12, s * 1.10);
+
+    // Sign body
+    const w = s * 0.85, h = s * 1.20;
+    ctx.fillStyle = '#0a1018';
+    ctx.lineWidth = 2;
+    ctx.fillRect(-w / 2, -h * 0.95, w, h);
+    ctx.strokeRect(-w / 2, -h * 0.95, w, h);
+
+    // Neon outer border (magenta)
+    ctx.strokeStyle = '#ff5cf2';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.6 + blink * 0.4;
+    ctx.strokeRect(-w / 2 + 4, -h * 0.95 + 4, w - 8, h - 8);
+    ctx.globalAlpha = 1;
+
+    // "HOTEL" letters stacked vertically — cyan neon
+    ctx.fillStyle = '#4ad8ff';
+    ctx.globalAlpha = 0.7 + blink * 0.3;
+    const letters = ['H', 'O', 'T', 'E', 'L'];
+    ctx.font = `900 ${Math.max(7, s * 0.22)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < letters.length; i++) {
+      ctx.fillText(letters[i], 0, -h * 0.78 + i * (h * 0.18));
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha = 1;
+
+    // Bottom star ornament
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? s * 0.13 : s * 0.05;
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r + s * 0.10);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.stroke();
+  }
+
+  function drawCoffeecup(c, light, dark, wingT) {
+    // White ceramic cup w/ brown coffee + animated steam
+    const s = c.size;
+
+    // Saucer
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.65, s * 0.95, s * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Cup body — wider at top
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.10);
+    ctx.lineTo(-s * 0.45,  s * 0.55);
+    ctx.lineTo( s * 0.45,  s * 0.55);
+    ctx.lineTo( s * 0.55, -s * 0.10);
+    ctx.lineTo( s * 0.55, -s * 0.20);
+    ctx.lineTo(-s * 0.55, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Coffee surface — brown ellipse at the rim
+    ctx.fillStyle = '#3a1a08';
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.20, s * 0.55, s * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Coffee crema highlight
+    ctx.fillStyle = '#a86b00';
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.10, -s * 0.22, s * 0.20, s * 0.04, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Handle — right side oval
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(s * 0.65, s * 0.18, s * 0.18, s * 0.22, 0, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.stroke();
+
+    // Steam wisps — 3 animated curves rising from the cup
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.75;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      const baseX = i * s * 0.20;
+      ctx.moveTo(baseX, -s * 0.30);
+      for (let k = 1; k <= 6; k++) {
+        const y = -s * 0.30 - k * s * 0.13;
+        const x = baseX + Math.sin(wingT * 3 + k * 0.6 + i) * s * 0.12;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawRobotbody(c, light, dark, wingT) {
+    // Boxy retro robot — antenna, LED eyes, body, treads
+    const s = c.size;
+    const blink = Math.sin(wingT * 4) > 0.5 ? 0 : 1;
+
+    // Antenna
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.95);
+    ctx.lineTo(0, -s * 0.70);
+    ctx.stroke();
+    ctx.fillStyle = blink ? '#ff5cf2' : '#9cff3a';
+    ctx.beginPath();
+    ctx.arc(0, -s * 1.00, s * 0.08, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Head — square
+    ctx.fillStyle = '#cccccc';
+    ctx.fillRect(-s * 0.45, -s * 0.70, s * 0.90, s * 0.55);
+    ctx.strokeRect(-s * 0.45, -s * 0.70, s * 0.90, s * 0.55);
+
+    // Eye visor — black band with two LED dots
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(-s * 0.35, -s * 0.55, s * 0.70, s * 0.18);
+    ctx.fillStyle = '#4ad8ff';
+    ctx.globalAlpha = 0.6 + blink * 0.4;
+    ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.46, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( s * 0.18, -s * 0.46, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Mouth — small grille
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * s * 0.08, -s * 0.30);
+      ctx.lineTo(i * s * 0.08, -s * 0.20);
+      ctx.stroke();
+    }
+
+    // Body — slightly wider rounded rect
+    ctx.fillStyle = '#9aa5b5';
+    ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.55, -s * 0.10, s * 1.10, s * 0.65);
+    ctx.strokeRect(-s * 0.55, -s * 0.10, s * 1.10, s * 0.65);
+
+    // Chest panel — colored screen
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(-s * 0.30, s * 0.05, s * 0.60, s * 0.30);
+    ctx.fillStyle = '#9cff3a';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(-s * 0.26, s * 0.09, s * 0.52, s * 0.10);
+    ctx.fillStyle = '#ffe833';
+    ctx.fillRect(-s * 0.26, s * 0.22, s * 0.36, s * 0.08);
+    ctx.globalAlpha = 1;
+
+    // Side rivets
+    ctx.fillStyle = '#666666';
+    for (const ry of [-s * 0.02, s * 0.18, s * 0.40]) {
+      ctx.beginPath(); ctx.arc(-s * 0.48, ry, s * 0.04, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc( s * 0.48, ry, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Arms — short stubs
+    ctx.fillStyle = '#9aa5b5';
+    ctx.fillRect(-s * 0.75, s * 0.05, s * 0.18, s * 0.40);
+    ctx.strokeRect(-s * 0.75, s * 0.05, s * 0.18, s * 0.40);
+    ctx.fillRect( s * 0.57, s * 0.05, s * 0.18, s * 0.40);
+    ctx.strokeRect( s * 0.57, s * 0.05, s * 0.18, s * 0.40);
+
+    // Tread feet
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(-s * 0.55, s * 0.55, s * 0.50, s * 0.20);
+    ctx.fillRect( s * 0.05, s * 0.55, s * 0.50, s * 0.20);
+  }
+
+  function drawDiscoball(c, light, dark, wingT) {
+    // Hanging disco ball with rotating sparkle
+    const s = c.size;
+
+    // Hanging chain
+    ctx.strokeStyle = '#888888';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.10);
+    ctx.lineTo(0, -s * 0.85);
+    ctx.stroke();
+    // Top loop
+    ctx.fillStyle = '#cccccc';
+    ctx.beginPath();
+    ctx.arc(0, -s * 1.00, s * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.stroke();
+
+    // Ball body
+    ctx.fillStyle = '#cccccc';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.85, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Mirror tile grid — clipped to circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.85, 0, Math.PI * 2);
+    ctx.clip();
+    // Vertical "longitude" arcs
+    ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+    ctx.lineWidth = 1;
+    for (let i = -5; i <= 5; i++) {
+      const x = (i / 5) * s * 0.85;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, Math.abs(x), s * 0.85, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Horizontal lines
+    for (let i = -4; i <= 4; i++) {
+      const y = (i / 5) * s * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.85, y);
+      ctx.lineTo( s * 0.85, y);
+      ctx.stroke();
+    }
+    // Random colored mirror highlights
+    const tiles = [
+      ['#4ad8ff', -0.3, -0.3],
+      ['#ff5cf2',  0.2, -0.4],
+      ['#ffe833', -0.5,  0.2],
+      ['#9cff3a',  0.4,  0.3],
+      ['#ffffff', -0.1,  0.0],
+      ['#a855f7',  0.0, -0.5],
+    ];
+    for (const [col, tx, ty] of tiles) {
+      ctx.fillStyle = col;
+      ctx.fillRect(tx * s, ty * s, s * 0.16, s * 0.16);
+    }
+    ctx.restore();
+
+    // Sparkle dots orbiting
+    const sp = wingT * 1.5;
+    for (let i = 0; i < 5; i++) {
+      const a = sp + i * (Math.PI * 2 / 5);
+      const r = s * 1.10;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      const sx = Math.cos(a) * r;
+      const sy = Math.sin(a) * r;
+      ctx.moveTo(sx, sy - 4);
+      ctx.lineTo(sx + 4, sy);
+      ctx.lineTo(sx, sy + 4);
+      ctx.lineTo(sx - 4, sy);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawMariostar(c, light, dark, wingT) {
+    // Cute Mario-style 5-point star with face
+    const s = c.size;
+    const wob = Math.sin(wingT * 4) * 0.15;
+
+    ctx.save();
+    ctx.rotate(wob * 0.3);
+
+    // Star outline + fill
+    ctx.fillStyle = '#ffe833';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? s * 0.95 : s * 0.40;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Inner highlight ring
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? s * 0.75 : s * 0.30;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // Eyes — two cartoon ovals
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(-s * 0.18, -s * 0.05, s * 0.12, s * 0.16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse( s * 0.18, -s * 0.05, s * 0.12, s * 0.16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Pupils
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(-s * 0.16, -s * 0.02, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( s * 0.20, -s * 0.02, s * 0.06, 0, Math.PI * 2); ctx.fill();
+
+    // Smile
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, s * 0.10, s * 0.20, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawChainlink(c, light, dark, wingT) {
+    // 3 interlocked metal chain links, slight sway
+    const s = c.size;
+    const sway = Math.sin(wingT * 1.5) * 0.10;
+
+    ctx.save();
+    ctx.rotate(sway);
+
+    // Helper: draw one oval link at (x, y) with rotation
+    function link(lx, ly, rot, col1, col2) {
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.rotate(rot);
+      // Outer
+      ctx.fillStyle = col1;
+      ctx.strokeStyle = '#0e0e0e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.30, s * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      // Inner cutout (background show-through approximation)
+      ctx.fillStyle = '#1a0820';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.18, s * 0.32, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Highlight
+      ctx.strokeStyle = col2;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.05, -s * 0.10, s * 0.20, s * 0.28, 0, Math.PI * 1.1, Math.PI * 1.7);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Three links — alternating angle
+    link(0, -s * 0.65, 0, '#aaaaaa', '#ffffff');
+    link(0,  0,        Math.PI / 2, '#888888', '#cccccc');
+    link(0,  s * 0.65, 0, '#aaaaaa', '#ffffff');
+
+    ctx.restore();
+  }
+
+  function drawWonkysmile(c, light, dark, wingT) {
+    // Nirvana-style wonky smiley face — yellow circle, X eyes,
+    // crooked mouth + tongue
+    const s = c.size;
+
+    // Face
+    ctx.fillStyle = '#ffe833';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.85, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // X eyes
+    ctx.lineWidth = 3;
+    const eyeR = s * 0.10;
+    // left
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.32 - eyeR, -s * 0.20 - eyeR);
+    ctx.lineTo(-s * 0.32 + eyeR, -s * 0.20 + eyeR);
+    ctx.moveTo(-s * 0.32 + eyeR, -s * 0.20 - eyeR);
+    ctx.lineTo(-s * 0.32 - eyeR, -s * 0.20 + eyeR);
+    ctx.stroke();
+    // right
+    ctx.beginPath();
+    ctx.moveTo( s * 0.32 - eyeR, -s * 0.20 - eyeR);
+    ctx.lineTo( s * 0.32 + eyeR, -s * 0.20 + eyeR);
+    ctx.moveTo( s * 0.32 + eyeR, -s * 0.20 - eyeR);
+    ctx.lineTo( s * 0.32 - eyeR, -s * 0.20 + eyeR);
+    ctx.stroke();
+
+    // Crooked mouth — wonky scribble curve
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.40, s * 0.20);
+    ctx.quadraticCurveTo(-s * 0.20, s * 0.50, 0, s * 0.30);
+    ctx.quadraticCurveTo( s * 0.20, s * 0.55, s * 0.45, s * 0.18);
+    ctx.stroke();
+
+    // Tongue sticking out the right side
+    ctx.fillStyle = '#ff5cf2';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.30, s * 0.30);
+    ctx.quadraticCurveTo(s * 0.50, s * 0.50, s * 0.60, s * 0.42);
+    ctx.quadraticCurveTo(s * 0.55, s * 0.30, s * 0.42, s * 0.28);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  function drawVillainmask(c, light, dark, wingT) {
+    // Joker-style villain face — pale, red lips, green hair,
+    // dark eyes. Slightly tilted manic energy.
+    const s = c.size;
+
+    // Hair behind (green clumps)
+    ctx.fillStyle = '#0aff9c';
+    ctx.strokeStyle = '#0e0e0e';
+    ctx.lineWidth = 2;
+    for (let i = -3; i <= 3; i++) {
+      ctx.beginPath();
+      const ax = i * s * 0.20;
+      ctx.moveTo(ax - s * 0.12, -s * 0.30);
+      ctx.lineTo(ax,            -s * 0.95);
+      ctx.lineTo(ax + s * 0.12, -s * 0.30);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+
+    // Face — pale oval
+    ctx.fillStyle = '#f5ecd8';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.70, s * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Dark eye sockets
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.28, -s * 0.10, s * 0.18, s * 0.22, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse( s * 0.28, -s * 0.10, s * 0.18, s * 0.22, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // Tiny white pupil dots
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-s * 0.25, -s * 0.10, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( s * 0.31, -s * 0.10, s * 0.04, 0, Math.PI * 2); ctx.fill();
+
+    // Wide red grin
+    ctx.fillStyle = '#ff2a4a';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.50, s * 0.20);
+    ctx.quadraticCurveTo(0, s * 0.75, s * 0.50, s * 0.20);
+    ctx.quadraticCurveTo(0, s * 0.55, -s * 0.50, s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Teeth line
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.45, s * 0.27);
+    ctx.quadraticCurveTo(0, s * 0.55, s * 0.45, s * 0.27);
+    ctx.stroke();
+    // Vertical teeth ticks
+    for (let i = -3; i <= 3; i++) {
+      ctx.strokeStyle = '#0e0e0e';
+      ctx.lineWidth = 1;
+      const tx = i * s * 0.10;
+      ctx.beginPath();
+      ctx.moveTo(tx, s * 0.27 + Math.abs(i) * 0.01 * s);
+      ctx.lineTo(tx, s * 0.40);
+      ctx.stroke();
+    }
+
+    // Question mark scar on cheek
+    ctx.fillStyle = '#a855f7';
+    ctx.font = `bold ${Math.max(8, s * 0.30)}px "Syne", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('?', s * 0.55, -s * 0.25);
+    ctx.textAlign = 'left';
+  }
+
+  // -------------------------------------------------------
   // CREATURE DRAW — translates/rotates/scales then dispatches
   // to the type-specific routine.
   // -------------------------------------------------------
@@ -1703,7 +2289,13 @@
                   c.type === 'rocket' || c.type === 'note' ||
                   c.type === 'mushroom' || c.type === 'bee' ||
                   c.type === 'helmet' || c.type === 'supercar' ||
-                  c.type === 'pillowcase';
+                  c.type === 'pillowcase' ||
+                  // b061 — additional override types stay upright
+                  c.type === 'spaceship' || c.type === 'hotelsign' ||
+                  c.type === 'coffeecup' || c.type === 'robotbody' ||
+                  c.type === 'discoball' || c.type === 'mariostar' ||
+                  c.type === 'chainlink' || c.type === 'wonkysmile' ||
+                  c.type === 'villainmask';
     if (!noRot) {
       ctx.rotate(c.rot * 0.3);
     }
@@ -1734,6 +2326,16 @@
       case 'helmet':     drawHelmet(c, light, dark, wingT); break;
       case 'supercar':   drawSupercar(c, light, dark, wingT); break;
       case 'pillowcase': drawPillowcase(c, light, dark, wingT); break;
+      // b061 — 9 more override types
+      case 'spaceship':   drawSpaceship(c, light, dark, wingT); break;
+      case 'hotelsign':   drawHotelsign(c, light, dark, wingT); break;
+      case 'coffeecup':   drawCoffeecup(c, light, dark, wingT); break;
+      case 'robotbody':   drawRobotbody(c, light, dark, wingT); break;
+      case 'discoball':   drawDiscoball(c, light, dark, wingT); break;
+      case 'mariostar':   drawMariostar(c, light, dark, wingT); break;
+      case 'chainlink':   drawChainlink(c, light, dark, wingT); break;
+      case 'wonkysmile':  drawWonkysmile(c, light, dark, wingT); break;
+      case 'villainmask': drawVillainmask(c, light, dark, wingT); break;
     }
 
     ctx.restore();  // pops translate/rotate/scale
