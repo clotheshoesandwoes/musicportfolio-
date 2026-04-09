@@ -1,7 +1,7 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b064
-**Updated:** 2026-04-08
+**Build:** b065
+**Updated:** 2026-04-09
 
 ## Design references
 - [VISION.md](VISION.md) — design bible: project vision, Drake's-site reference, art direction, palette table, click→card system design, scene density priorities, what's in/out of scope. **Read before any "luxury" or scenery feature work.**

@@ -185,7 +185,7 @@
       align-items:center;
       gap:8px;
     `;
-    shuffleBtn.innerHTML = `<span style="font-size:14px;">↻</span> <span id="wallPageLabel">NEXT</span>`;
+    shuffleBtn.innerHTML = `<span style="font-size:14px;">↻</span> <span id="wallPageLabel">SHUFFLE</span>`;
     shuffleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       pageIndex++;
@@ -197,12 +197,10 @@
     function updatePageLabel() {
       const lbl = document.getElementById('wallPageLabel');
       if (!lbl) return;
-      const tracks = window.tracks || [];
-      if (tracks.length === 0) { lbl.textContent = 'NEXT'; return; }
-      const minCount = isMobile() ? MIN_CREATURES_MOBILE : MIN_CREATURES_DESKTOP;
-      const N = Math.min(Math.max(tracks.length, minCount), isMobile() ? 32 : 117);
-      const totalPages = Math.max(1, Math.ceil(tracks.length / N));
-      lbl.textContent = `${pageIndex + 1}/${totalPages}`;
+      // b065 — just show the shuffle count so the user knows
+      // it's doing something. No "page X/Y" since it's a full
+      // random permutation now, not linear pages.
+      lbl.textContent = pageIndex === 0 ? 'SHUFFLE' : `#${pageIndex + 1}`;
     }
     // Stash for the resize handler so we can refresh after rebuild
     container._updatePageLabel = updatePageLabel;
@@ -393,14 +391,27 @@
     if (tracks.length === 0) return;
     const minCount = isMobile() ? MIN_CREATURES_MOBILE : MIN_CREATURES_DESKTOP;
     const N = Math.min(Math.max(tracks.length, minCount), isMobile() ? 32 : 117);
-    // b061 — pagination: each page surfaces a different slice
-    // of the track list. Page size = creature count, so flipping
-    // pages cycles through every track in the catalog over
-    // ceil(tracks.length / N) presses.
-    const pageSize = N;
-    const totalPages = Math.max(1, Math.ceil(tracks.length / pageSize));
-    pageIndex = ((pageIndex % totalPages) + totalPages) % totalPages;
-    const pageOffset = pageIndex * pageSize;
+    // b065 — shuffle-based pagination. The old linear offset
+    // (pageOffset = pageIndex * N) failed because with 117
+    // creatures and 177 tracks, page 1 wrapped 57 duplicates
+    // back from the start — the user saw "mostly the same songs".
+    //
+    // New approach: build a shuffled permutation of ALL track
+    // indices, seeded by pageIndex so each press gives a
+    // deterministically different arrangement. Then creature i
+    // picks trackIndices[i % trackIndices.length]. Every press
+    // genuinely reshuffles which songs map to which creatures.
+    const trackIndices = [];
+    for (let k = 0; k < tracks.length; k++) trackIndices.push(k);
+    // Fisher-Yates shuffle seeded by pageIndex (deterministic)
+    let seed = pageIndex * 2654435761 + 1;
+    function nextSeed() { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed; }
+    for (let k = trackIndices.length - 1; k > 0; k--) {
+      const j = nextSeed() % (k + 1);
+      const tmp = trackIndices[k];
+      trackIndices[k] = trackIndices[j];
+      trackIndices[j] = tmp;
+    }
 
     const margin = 60;
     // b058 — dart-throwing poisson placement: each creature
@@ -423,10 +434,11 @@
     }
 
     for (let i = 0; i < N; i++) {
-      // b061 — page-aware track index. With 30 creatures and
-      // 177 tracks, page 0 shows tracks 0..29, page 1 shows
-      // 30..59, etc. Wraps via modulo so we never index OOB.
-      const trackIndex = (i + pageOffset) % tracks.length;
+      // b065 — shuffle-based: creature i grabs from the shuffled
+      // permutation. With 117 creatures and 177 tracks, the first
+      // 117 entries of the shuffled array are used. Each pageIndex
+      // bump gives a completely different permutation.
+      const trackIndex = trackIndices[i % trackIndices.length];
       const title = tracks[trackIndex].title || ('untitled-' + trackIndex);
       // Per-CREATURE seed (not per-track) so multiple creatures sharing
       // a track still get different types, positions, and motion.

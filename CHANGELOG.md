@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## b065 — 2026-04-09 — Fix shuffle: seeded Fisher-Yates instead of linear page offset
+
+User on b064: *"cycle doesn't actually change or bring any unseen songs to screen"*
+
+**Root cause:** The b062 pagination used a linear offset: `trackIndex = (i + pageIndex * N) % tracks.length`. With 117 creatures and 177 tracks on desktop, page 0 covered tracks 0–116 and page 1 covered tracks 117–176 + **wrapped 57 duplicates back** from tracks 0–56. The user saw mostly the same songs on both pages because 48% of page 1 was duplicates from page 0. On mobile (32 creatures, 6 pages) it worked better but still had wrap issues on the last page.
+
+**Fix:** Replaced the linear offset with a **seeded Fisher-Yates shuffle** of the entire track index array. Each `pageIndex` value produces a completely different permutation via a deterministic LCG PRNG (`seed = pageIndex * 2654435761 + 1`, then standard `(seed * 1664525 + 1013904223) & 0x7fffffff`). Creature `i` picks `trackIndices[i % trackIndices.length]` from the shuffled array.
+
+Now every button press genuinely reshuffles which songs map to which creatures. No duplicates within a single page (unless N > tracks.length, which can't happen — N is capped at 117 and there are 177 tracks). Different hero icons surface on different shuffles because the permutation changes which trackIndices land in the first N slots.
+
+**Also updated:** the button label from `1/N` page counter to `SHUFFLE` (initial) / `#2`, `#3`, etc. (after presses). The old "page X of Y" was misleading since it's a full random permutation now, not linear pages.
+
+### Files modified
+- [js/wall.js](js/wall.js) — replaced `pageOffset` linear math with Fisher-Yates shuffle block, updated `updatePageLabel` to show shuffle count, button initial text changed from "NEXT" to "SHUFFLE"
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b064 → b065`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/`
+2. Hover several creatures and note their titles
+3. Click the `↻ SHUFFLE` button
+4. Hover the same positions — the titles should be **completely different songs**
+5. The hero icons (ODST, Lambo, skull, etc.) should appear in different positions (or not at all if their trackIndex didn't land in the first N slots of this shuffle)
+6. Click the button repeatedly — each press gives a genuinely new arrangement, label increments `#2`, `#3`, `#4`...
+
 ## b064 — 2026-04-08 — 15 more hero icons (39 total, 22% of catalog)
 
 User: *"more more more more more props or whatever"*
