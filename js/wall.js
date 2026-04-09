@@ -30,6 +30,12 @@
   let constellations = [];  // b059 — precomputed creature pair indices for star-map lines
   let hovered = -1;
   let t0 = 0;
+  // b061 — pagination so the user can see ALL 177 tracks even
+  // when only ~30 creatures fit on a mobile screen. pageIndex
+  // bumps per shuffle button click; buildCreatures offsets the
+  // trackIndex by `pageIndex * pageSize` so each page surfaces
+  // a different slice of the catalog.
+  let pageIndex = 0;
   const isMobile = () => window.innerWidth < 768;
 
   // Tight hyperpop / Marathon-ish accent palette
@@ -120,6 +126,58 @@
     `;
     container.appendChild(info);
 
+    // b061 — page shuffle button. Bottom-right floating button
+    // that bumps pageIndex and rebuilds creatures so the user
+    // can cycle through ALL tracks on mobile (30 at a time).
+    // Renders on desktop too — handy for cycling through 117
+    // creatures when you have 177 tracks.
+    const shuffleBtn = document.createElement('button');
+    shuffleBtn.id = 'wallShuffleBtn';
+    shuffleBtn.type = 'button';
+    shuffleBtn.style.cssText = `
+      position:absolute;
+      right:16px;
+      bottom:96px;
+      z-index:50;
+      background:rgba(14,14,14,0.75);
+      backdrop-filter:blur(8px);
+      color:#9cff3a;
+      border:1.5px solid #9cff3a;
+      border-radius:999px;
+      padding:10px 16px;
+      font-family:'JetBrains Mono', monospace;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:0.10em;
+      cursor:pointer;
+      box-shadow:0 0 20px rgba(156,255,58,0.25);
+      pointer-events:auto;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    `;
+    shuffleBtn.innerHTML = `<span style="font-size:14px;">↻</span> <span id="wallPageLabel">NEXT</span>`;
+    shuffleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pageIndex++;
+      buildCreatures();
+      updatePageLabel();
+    });
+    container.appendChild(shuffleBtn);
+
+    function updatePageLabel() {
+      const lbl = document.getElementById('wallPageLabel');
+      if (!lbl) return;
+      const tracks = window.tracks || [];
+      if (tracks.length === 0) { lbl.textContent = 'NEXT'; return; }
+      const minCount = isMobile() ? MIN_CREATURES_MOBILE : MIN_CREATURES_DESKTOP;
+      const N = Math.min(Math.max(tracks.length, minCount), isMobile() ? 32 : 117);
+      const totalPages = Math.max(1, Math.ceil(tracks.length / N));
+      lbl.textContent = `${pageIndex + 1}/${totalPages}`;
+    }
+    // Stash for the resize handler so we can refresh after rebuild
+    container._updatePageLabel = updatePageLabel;
+
     container.addEventListener('mousemove', onMouse);
     container.addEventListener('mouseleave', onLeave);
     container.addEventListener('touchmove', onTouch, { passive: true });
@@ -127,6 +185,7 @@
     container.addEventListener('click', onClick);
 
     resize();
+    updatePageLabel();
     window.addEventListener('resize', resize);
     t0 = performance.now();
     draw();
@@ -229,6 +288,7 @@
     buildCreatures();
     buildGlyphs();
     buildNebulas();
+    if (container && container._updatePageLabel) container._updatePageLabel();
   }
 
   // -------------------------------------------------------
@@ -304,6 +364,14 @@
     if (tracks.length === 0) return;
     const minCount = isMobile() ? MIN_CREATURES_MOBILE : MIN_CREATURES_DESKTOP;
     const N = Math.min(Math.max(tracks.length, minCount), isMobile() ? 32 : 117);
+    // b061 — pagination: each page surfaces a different slice
+    // of the track list. Page size = creature count, so flipping
+    // pages cycles through every track in the catalog over
+    // ceil(tracks.length / N) presses.
+    const pageSize = N;
+    const totalPages = Math.max(1, Math.ceil(tracks.length / pageSize));
+    pageIndex = ((pageIndex % totalPages) + totalPages) % totalPages;
+    const pageOffset = pageIndex * pageSize;
 
     const margin = 60;
     // b058 — dart-throwing poisson placement: each creature
@@ -326,7 +394,10 @@
     }
 
     for (let i = 0; i < N; i++) {
-      const trackIndex = i % tracks.length;
+      // b061 — page-aware track index. With 30 creatures and
+      // 177 tracks, page 0 shows tracks 0..29, page 1 shows
+      // 30..59, etc. Wraps via modulo so we never index OOB.
+      const trackIndex = (i + pageOffset) % tracks.length;
       const title = tracks[trackIndex].title || ('untitled-' + trackIndex);
       // Per-CREATURE seed (not per-track) so multiple creatures sharing
       // a track still get different types, positions, and motion.

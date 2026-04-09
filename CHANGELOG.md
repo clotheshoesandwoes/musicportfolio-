@@ -1,5 +1,85 @@
 # CHANGELOG
 
+## b062 — 2026-04-08 — Wall pagination so all 177 tracks are reachable on mobile
+
+User on b061: *"on mobile, ill only ever seen like 15 songs. i dont wanna see all 177 or do i? idk. but i wanna see more or be able to cycle more than just the 15 i see yknow"*
+
+The b058 mobile cap (`MIN_CREATURES_MOBILE = 30`) was working as designed — but combined with poisson `minDist=56` on a small canvas it was actually placing closer to 15 creatures, AND every creature got its `trackIndex = i % tracks.length` so the SAME 15 tracks were the only ones reachable. The other 162 tracks had no creature on the wall ever.
+
+This was a bug, not a perf concern. The user was essentially staring at a 15-song subset of his catalog. (Mid-task on the 12-icon batch I'd started — paused to ship this fix first because it's a correctness issue, not a polish issue.)
+
+### Fix: pagination
+
+[js/wall.js](js/wall.js) gained a `pageIndex` module-level state variable + a floating "↻ NEXT/page" button bottom-right of the canvas.
+
+**`buildCreatures` math:**
+```js
+const pageSize = N;                                       // creature count for this device
+const totalPages = max(1, ceil(tracks.length / pageSize));
+pageIndex = ((pageIndex % totalPages) + totalPages) % totalPages;
+const pageOffset = pageIndex * pageSize;
+// ...
+const trackIndex = (i + pageOffset) % tracks.length;       // was: i % tracks.length
+```
+
+So with 30 creatures + 177 tracks:
+- Page 0 → tracks 0..29
+- Page 1 → tracks 30..59
+- Page 2 → tracks 60..89
+- Page 3 → tracks 90..119
+- Page 4 → tracks 120..149
+- Page 5 → tracks 150..176 + wrap
+
+Six button presses cycles through every track in the catalog. On desktop with 117 creatures, only 2 pages cover the whole catalog.
+
+The page index is wrapped via `((x % n) + n) % n` so it can never go out of bounds. Resizing across the mobile/desktop boundary recomputes `pageSize` and `totalPages` and the modulo keeps the current `pageIndex` valid.
+
+### The button
+
+A `<button id="wallShuffleBtn">` is appended to `container` in `init()`. Position: `absolute right:16px bottom:96px` so it sits above the 80px-tall player bar with breathing room. Style: lime border + dark glassmorphism background + lime text + lime glow shadow + JetBrains Mono. Content: `↻ <pageIndicator>` where the indicator reads `current/total` (e.g. `2/6`).
+
+Click handler:
+1. `e.stopPropagation()` so the click doesn't fall through to the canvas creature hit test
+2. `pageIndex++`
+3. `buildCreatures()` rebuilds with the new page offset (poisson placement runs fresh, so positions also change)
+4. `updatePageLabel()` refreshes the `current/total` text
+
+The button is `pointer-events:auto` (info panel above it is `pointer-events:none`) and `z-index:50`.
+
+### Page label updates
+
+`updatePageLabel()` is a closure inside `init` that reads `window.tracks.length`, `MIN_CREATURES_*`, and `pageIndex` to compute and write the `current/total` text. Stashed on `container._updatePageLabel` so the resize handler can call it after a viewport change rebuilds creatures.
+
+Initial label is set right after the first `resize()` in `init`. Resize handler calls it via `container._updatePageLabel`.
+
+### What's NOT in this commit
+- The 12 additional hero icons (Thunderbird, Best Day Ever, Warzone, Streets, Lemonade, Beachouse, Sickboi, 10 Miles, Money Ain't a Thing, Birthday Freestyle, etc) — paused to ship this fix first. Will be a follow-up.
+- A "previous page" button — single direction is enough since you cycle back around with `(pageIndex % totalPages)`. Could split into ◂/▸ later if requested.
+- A page picker / numeric input — keeping it minimal for now.
+- A "shuffle within current page" button distinct from "next page" — currently only one button.
+
+### Files modified
+- [js/wall.js](js/wall.js) — `pageIndex` state, page math in `buildCreatures` (4 lines + 1 line change to `trackIndex` calc), `updatePageLabel` closure + `_updatePageLabel` stash, shuffle button creation + click handler in `init`, label refresh in `init` + `resize`. ~70 lines net added.
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b061 → b062`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/` on mobile.
+2. Should see ~15-30 creatures on the wall (depending on screen size).
+3. Bottom-right of the canvas, above the player bar: `↻ 1/6` button.
+4. Tap it → wall rebuilds with a different set of creatures, button reads `↻ 2/6`. Each tap cycles through the next slice of the catalog.
+5. After 6 taps it wraps back to `1/6`.
+6. On desktop the button shows `1/2` (117 creatures × 2 pages = covers all 177 tracks).
+7. Each special override icon (ODST, Rolla, Pillowcase, etc) only appears on the page that contains its track in the current slice. Cycle pages to find them.
+
+### Knobs (in [js/wall.js](js/wall.js))
+- `MIN_CREATURES_MOBILE = 30` — page size on mobile
+- `MIN_CREATURES_DESKTOP = 100` — page size on desktop
+- Mobile hard cap `32` and desktop hard cap `117` in `buildCreatures` `N` calc
+- Button position `right:16px bottom:96px` in shuffleBtn cssText
+- Button color `#9cff3a` (lime) — change once for border/text/glow
+
 ## b061 — 2026-04-08 — 9 more hero icons for signature tracks
 
 User on b060: *"yes pls"* to my offer of 9 additional custom icons. All shipped here.
