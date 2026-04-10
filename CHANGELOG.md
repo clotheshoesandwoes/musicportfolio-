@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## b066 — 2026-04-09 — 10 more hero icons (49 total, 28% of catalog)
+
+New custom creatures for 10 songs:
+- **Dutch** → `bluntwrap` — rolled backwood with lit tip + smoke wisps
+- **Amy Winespliff** → `beehive` — Amy Winehouse beehive hairdo with smoke + eyeliner
+- **Silo Galaxy** → `galaxy` — spiral galaxy disc with rotating arms + scattered stars
+- **Akira World - I'm Next Up** → `akira` — Kaneda's red motorcycle with glowing headlight
+- **Chicago Seven** → `deepdish` — deep dish pizza slice with melted cheese + pepperoni
+- **Chilly Nites** → `snowflake` — crystalline 6-arm snowflake, slow spin
+- **May Flowers** → `raincloud` — rain cloud with droplets + tiny flower sprouting below
+- **Soul** → `soulfire` — purple/cyan flame wisp with eyes
+- **Backyardian** → `treehouse` — treehouse with rope ladder, gentle sway
+- **Follow You** → `compass` — compass face with spinning needle
+
+### Files modified
+- [js/wall.js](js/wall.js) — 10 ICON_OVERRIDES entries, 10 draw functions, 10 dispatch cases
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b065 → b066`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
+### How to test
+1. Hard refresh `cantmute.me/`
+2. Click SHUFFLE a few times until you see the new icons
+3. Hover each to confirm it maps to the right song title
+4. Check the bluntwrap smoke animates, galaxy spins, compass needle rotates, snowflake drifts
+
 ## b065 — 2026-04-09 — Fix shuffle: seeded Fisher-Yates instead of linear page offset
 
 User on b064: *"cycle doesn't actually change or bring any unseen songs to screen"*

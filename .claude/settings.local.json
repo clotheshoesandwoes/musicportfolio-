@@ -35,7 +35,11 @@
       "Bash(git branch:*)",
       "Bash('/c/Users/B4TTL/AppData/Local/Programs/Python/Python313/Scripts/git-filter-repo.EXE' --path audio-mp3/ --invert-paths --force)",
       "Bash(git fetch:*)",
-      "Bash(node --check c:/Users/B4TTL/musicportfolio/js/world.js)"
+      "Bash(node --check c:/Users/B4TTL/musicportfolio/js/world.js)",
+      "Bash(node --check js/world-paint.js)",
+      "Bash(node --check js/app.js)",
+      "Bash(node --check js/world-marathon.js)",
+      "Bash(node --check js/wall.js)"
     ]
   }
 }

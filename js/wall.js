@@ -113,6 +113,17 @@
     { match: 'car mixtape',      type: 'vinyldisc'   },
     { match: 'emo rock',         type: 'guitarpick'  },
     { match: 'formidable',       type: 'crown'       },
+    // b066 — 10 more
+    { match: 'dutch',            type: 'bluntwrap'   },
+    { match: 'amy winespliff',   type: 'beehive'     },
+    { match: 'silo galaxy',     type: 'galaxy'      },
+    { match: 'akira world',      type: 'akira'       },
+    { match: 'chicago seven',    type: 'deepdish'    },
+    { match: 'chilly nites',     type: 'snowflake'   },
+    { match: 'may flowers',      type: 'raincloud'   },
+    { match: 'soul',             type: 'soulfire'    },
+    { match: 'backyardian',      type: 'treehouse'   },
+    { match: 'follow you',       type: 'compass'     },
   ];
 
   function getOverrideType(title) {
@@ -3638,6 +3649,416 @@
     }
   }
 
+  // b066 — 10 more hero icons --------------------------------
+
+  function drawBluntwrap(c, light, dark, wingT) {
+    const s = c.size;
+    const curl = Math.sin(wingT * 1.5) * 0.04;
+    ctx.save(); ctx.rotate(curl);
+    // Outer leaf wrap
+    ctx.fillStyle = '#7a4a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.18);
+    ctx.quadraticCurveTo(-s * 0.95, 0, -s * 0.85, s * 0.18);
+    ctx.lineTo(s * 0.75, s * 0.18);
+    ctx.quadraticCurveTo(s * 0.95, 0, s * 0.75, -s * 0.18);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Inner tobacco texture lines
+    ctx.strokeStyle = '#5a3210'; ctx.lineWidth = 1;
+    for (let i = -3; i <= 3; i++) {
+      const lx = i * s * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(lx, -s * 0.14);
+      ctx.lineTo(lx + s * 0.06, s * 0.14);
+      ctx.stroke();
+    }
+    // Burnt/lit tip — orange glow
+    const glow = (Math.sin(wingT * 3) + 1) * 0.3 + 0.4;
+    ctx.fillStyle = `rgba(255,120,20,${glow})`;
+    ctx.beginPath();
+    ctx.ellipse(s * 0.82, 0, s * 0.12, s * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff4400';
+    ctx.beginPath();
+    ctx.ellipse(s * 0.82, 0, s * 0.07, s * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Smoke wisps
+    ctx.strokeStyle = 'rgba(200,200,200,0.35)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const sx = s * 0.90 + i * s * 0.08;
+      const sy = -s * 0.10 - i * s * 0.20;
+      const wave = Math.sin(wingT * 2 + i * 1.5) * s * 0.10;
+      ctx.beginPath();
+      ctx.moveTo(sx, 0);
+      ctx.quadraticCurveTo(sx + wave, sy * 0.5, sx - wave * 0.5, sy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawBeehive(c, light, dark, wingT) {
+    const s = c.size;
+    // Big beehive hair shape
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, s * 0.45);
+    ctx.quadraticCurveTo(-s * 0.70, s * 0.10, -s * 0.55, -s * 0.25);
+    ctx.quadraticCurveTo(-s * 0.45, -s * 0.85, 0, -s * 0.90);
+    ctx.quadraticCurveTo(s * 0.45, -s * 0.85, s * 0.55, -s * 0.25);
+    ctx.quadraticCurveTo(s * 0.70, s * 0.10, s * 0.55, s * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Horizontal texture lines across the beehive
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const ly = -s * 0.60 + i * s * 0.22;
+      const w = s * (0.30 + i * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(-w, ly);
+      ctx.quadraticCurveTo(0, ly + s * 0.04, w, ly);
+      ctx.stroke();
+    }
+    // Smoke wisps curling off
+    ctx.strokeStyle = 'rgba(180,180,180,0.30)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 2; i++) {
+      const ox = s * (0.25 + i * 0.20);
+      const wave = Math.sin(wingT * 2 + i * 2) * s * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(ox, -s * 0.50 - i * s * 0.15);
+      ctx.quadraticCurveTo(ox + wave, -s * 0.75, ox - wave, -s * 1.00);
+      ctx.stroke();
+    }
+    // Eyeliner eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(-s * 0.18, s * 0.20, s * 0.10, s * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s * 0.18, s * 0.20, s * 0.10, s * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(-s * 0.18, s * 0.20, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.18, s * 0.20, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    // Winged eyeliner flick
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-s * 0.28, s * 0.18); ctx.lineTo(-s * 0.35, s * 0.12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.28, s * 0.18); ctx.lineTo(s * 0.35, s * 0.12); ctx.stroke();
+    // Beauty mark
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(s * 0.25, s * 0.35, s * 0.025, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawGalaxy(c, light, dark, wingT) {
+    const s = c.size;
+    ctx.save(); ctx.rotate(wingT * 0.3);
+    // Outer glow
+    const grad = ctx.createRadialGradient(0, 0, s * 0.05, 0, 0, s * 0.85);
+    grad.addColorStop(0, 'rgba(168,85,247,0.6)');
+    grad.addColorStop(0.4, 'rgba(74,216,255,0.25)');
+    grad.addColorStop(1, 'rgba(74,216,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.85, 0, Math.PI * 2); ctx.fill();
+    // Spiral arms
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2.5;
+    for (let arm = 0; arm < 2; arm++) {
+      ctx.beginPath();
+      for (let t = 0; t < 3.5; t += 0.1) {
+        const r = s * 0.08 + t * s * 0.18;
+        const a = t * 1.2 + arm * Math.PI;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r * 0.45; // flatten to disc
+        if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    // Bright core
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.07, 0, Math.PI * 2); ctx.fill();
+    // Scatter stars
+    ctx.fillStyle = '#ffffff';
+    const stars = [[-0.5, -0.15], [0.4, 0.20], [-0.3, 0.25], [0.55, -0.10], [0.1, -0.30], [-0.6, 0.05]];
+    for (const [dx, dy] of stars) {
+      ctx.beginPath(); ctx.arc(s * dx, s * dy, s * 0.02, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawAkira(c, light, dark, wingT) {
+    const s = c.size;
+    const lean = Math.sin(wingT * 1.2) * 0.05;
+    ctx.save(); ctx.rotate(lean);
+    // Body — red motorcycle
+    ctx.fillStyle = '#e02020'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.80, s * 0.05);
+    ctx.quadraticCurveTo(-s * 0.60, -s * 0.50, -s * 0.15, -s * 0.45);
+    ctx.lineTo(s * 0.25, -s * 0.40);
+    ctx.quadraticCurveTo(s * 0.70, -s * 0.35, s * 0.85, s * 0.05);
+    ctx.lineTo(s * 0.85, s * 0.20);
+    ctx.lineTo(-s * 0.80, s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Front wheel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.arc(-s * 0.55, s * 0.35, s * 0.22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#555';
+    ctx.beginPath(); ctx.arc(-s * 0.55, s * 0.35, s * 0.10, 0, Math.PI * 2); ctx.fill();
+    // Rear wheel
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.arc(s * 0.60, s * 0.35, s * 0.22, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#555';
+    ctx.beginPath(); ctx.arc(s * 0.60, s * 0.35, s * 0.10, 0, Math.PI * 2); ctx.fill();
+    // Windshield
+    ctx.fillStyle = 'rgba(74,216,255,0.35)';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.20, -s * 0.45);
+    ctx.lineTo(-s * 0.30, -s * 0.70);
+    ctx.lineTo(-s * 0.05, -s * 0.65);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Headlight glow
+    const glow = (Math.sin(wingT * 3) + 1) * 0.3 + 0.4;
+    ctx.fillStyle = `rgba(255,230,100,${glow})`;
+    ctx.beginPath(); ctx.arc(-s * 0.78, s * 0.00, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    // Taillight
+    ctx.fillStyle = '#ff2a4a';
+    ctx.fillRect(s * 0.78, -s * 0.05, s * 0.08, s * 0.15);
+    ctx.restore();
+  }
+
+  function drawDeepdish(c, light, dark, wingT) {
+    const s = c.size;
+    // Deep crust wall
+    ctx.fillStyle = '#c89040'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.80, -s * 0.15);
+    ctx.lineTo(-s * 0.70, s * 0.55);
+    ctx.lineTo(s * 0.70, s * 0.55);
+    ctx.lineTo(s * 0.80, -s * 0.15);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Cheese/sauce top
+    ctx.fillStyle = '#e83020';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.75, -s * 0.10);
+    ctx.lineTo(-s * 0.65, s * 0.45);
+    ctx.lineTo(s * 0.65, s * 0.45);
+    ctx.lineTo(s * 0.75, -s * 0.10);
+    ctx.closePath();
+    ctx.fill();
+    // Cheese drip
+    ctx.fillStyle = '#ffe833';
+    const drips = [-0.50, -0.15, 0.20, 0.50];
+    for (const dx of drips) {
+      ctx.beginPath();
+      ctx.moveTo(s * (dx - 0.08), -s * 0.12);
+      ctx.quadraticCurveTo(s * dx, -s * 0.30, s * (dx + 0.08), -s * 0.12);
+      ctx.fill();
+    }
+    // Melted cheese blobs on top
+    ctx.fillStyle = '#ffe070';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.10, s * 0.50, s * 0.20, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Pepperoni
+    ctx.fillStyle = '#a02010';
+    const peps = [[-0.25, 0.05], [0.20, 0.15], [0, 0.30], [-0.10, 0.20], [0.30, 0.00]];
+    for (const [dx, dy] of peps) {
+      ctx.beginPath(); ctx.arc(s * dx, s * dy, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    // Steam
+    ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const sx = s * (-0.25 + i * 0.25);
+      const wave = Math.sin(wingT * 2 + i) * s * 0.08;
+      ctx.beginPath();
+      ctx.moveTo(sx, -s * 0.15);
+      ctx.quadraticCurveTo(sx + wave, -s * 0.40, sx - wave, -s * 0.60);
+      ctx.stroke();
+    }
+  }
+
+  function drawSnowflake(c, light, dark, wingT) {
+    const s = c.size;
+    ctx.save(); ctx.rotate(wingT * 0.2);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    // 6 main arms
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i;
+      ctx.save(); ctx.rotate(a);
+      // Main arm
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -s * 0.80); ctx.stroke();
+      // Side branches
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.35); ctx.lineTo(-s * 0.18, -s * 0.50); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.35); ctx.lineTo(s * 0.18, -s * 0.50); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.55); ctx.lineTo(-s * 0.12, -s * 0.68); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.55); ctx.lineTo(s * 0.12, -s * 0.68); ctx.stroke();
+      ctx.restore();
+    }
+    // Center dot
+    ctx.fillStyle = '#4ad8ff';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    // Glint
+    const glint = (Math.sin(wingT * 4) + 1) * 0.3;
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + glint})`;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRaincloud(c, light, dark, wingT) {
+    const s = c.size;
+    // Cloud body (3 circles + flat bottom)
+    ctx.fillStyle = '#aab8c8'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(-s * 0.30, -s * 0.15, s * 0.35, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(s * 0.15, -s * 0.25, s * 0.40, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(s * 0.45, -s * 0.05, s * 0.30, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Flat bottom fill
+    ctx.fillRect(-s * 0.65, -s * 0.10, s * 1.10, s * 0.25);
+    // Rain drops
+    ctx.fillStyle = '#4ad8ff';
+    for (let i = 0; i < 5; i++) {
+      const rx = -s * 0.45 + i * s * 0.22;
+      const ry = s * 0.25 + ((wingT * 80 + i * 37) % 60) / 60 * s * 0.40;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.quadraticCurveTo(rx - s * 0.03, ry + s * 0.08, rx, ry + s * 0.10);
+      ctx.quadraticCurveTo(rx + s * 0.03, ry + s * 0.08, rx, ry);
+      ctx.fill();
+    }
+    // Tiny flower sprouting from bottom-center
+    ctx.fillStyle = '#9cff3a';
+    ctx.fillRect(-s * 0.015, s * 0.55, s * 0.03, s * 0.25);
+    ctx.fillStyle = '#ff5cf2';
+    ctx.beginPath(); ctx.arc(0, s * 0.50, s * 0.09, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffe833';
+    ctx.beginPath(); ctx.arc(0, s * 0.50, s * 0.04, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawSoulfire(c, light, dark, wingT) {
+    const s = c.size;
+    const flicker = Math.sin(wingT * 4) * s * 0.04;
+    // Outer flame glow
+    const grad = ctx.createRadialGradient(0, s * 0.10, s * 0.05, 0, -s * 0.15, s * 0.65);
+    grad.addColorStop(0, 'rgba(168,85,247,0.7)');
+    grad.addColorStop(0.5, 'rgba(74,216,255,0.3)');
+    grad.addColorStop(1, 'rgba(74,216,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(0, -s * 0.10, s * 0.65, 0, Math.PI * 2); ctx.fill();
+    // Flame body
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.80 + flicker);
+    ctx.quadraticCurveTo(-s * 0.50, -s * 0.30, -s * 0.40, s * 0.30);
+    ctx.quadraticCurveTo(-s * 0.20, s * 0.55, 0, s * 0.50);
+    ctx.quadraticCurveTo(s * 0.20, s * 0.55, s * 0.40, s * 0.30);
+    ctx.quadraticCurveTo(s * 0.50, -s * 0.30, 0, -s * 0.80 + flicker);
+    ctx.fill();
+    // Inner flame
+    ctx.fillStyle = '#4ad8ff';
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.50 + flicker);
+    ctx.quadraticCurveTo(-s * 0.20, -s * 0.10, -s * 0.18, s * 0.25);
+    ctx.quadraticCurveTo(0, s * 0.40, s * 0.18, s * 0.25);
+    ctx.quadraticCurveTo(s * 0.20, -s * 0.10, 0, -s * 0.50 + flicker);
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-s * 0.10, s * 0.05, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.10, s * 0.05, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(-s * 0.10, s * 0.05, s * 0.03, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.10, s * 0.05, s * 0.03, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawTreehouse(c, light, dark, wingT) {
+    const s = c.size;
+    const sway = Math.sin(wingT * 1.2) * 0.03;
+    ctx.save(); ctx.rotate(sway);
+    // Tree trunk
+    ctx.fillStyle = '#6b3a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.12, -s * 0.10, s * 0.24, s * 0.90);
+    ctx.strokeRect(-s * 0.12, -s * 0.10, s * 0.24, s * 0.90);
+    // Platform
+    ctx.fillStyle = '#8b5a2a';
+    ctx.fillRect(-s * 0.55, -s * 0.10, s * 1.10, s * 0.10);
+    ctx.strokeRect(-s * 0.55, -s * 0.10, s * 1.10, s * 0.10);
+    // House body
+    ctx.fillStyle = '#c89040';
+    ctx.fillRect(-s * 0.45, -s * 0.55, s * 0.90, s * 0.45);
+    ctx.strokeRect(-s * 0.45, -s * 0.55, s * 0.90, s * 0.45);
+    // Roof
+    ctx.fillStyle = '#e02020';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.55);
+    ctx.lineTo(0, -s * 0.90);
+    ctx.lineTo(s * 0.55, -s * 0.55);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Window
+    ctx.fillStyle = '#ffe833';
+    ctx.fillRect(-s * 0.12, -s * 0.45, s * 0.24, s * 0.20);
+    ctx.strokeRect(-s * 0.12, -s * 0.45, s * 0.24, s * 0.20);
+    // Window cross
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.45); ctx.lineTo(0, -s * 0.25); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-s * 0.12, -s * 0.35); ctx.lineTo(s * 0.12, -s * 0.35); ctx.stroke();
+    // Rope ladder
+    ctx.strokeStyle = '#8b5a2a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-s * 0.06, -s * 0.00); ctx.lineTo(-s * 0.10, s * 0.80); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.06, -s * 0.00); ctx.lineTo(s * 0.10, s * 0.80); ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      const ry = s * 0.10 + i * s * 0.18;
+      ctx.beginPath(); ctx.moveTo(-s * 0.08, ry); ctx.lineTo(s * 0.08, ry); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawCompass(c, light, dark, wingT) {
+    const s = c.size;
+    // Outer ring
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#c89040'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.80, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Inner face
+    ctx.fillStyle = '#f5ecd8';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.68, 0, Math.PI * 2); ctx.fill();
+    // Cardinal ticks
+    ctx.fillStyle = '#0e0e0e';
+    ctx.font = `900 ${Math.max(5, s * 0.16)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('N', 0, -s * 0.50);
+    ctx.fillText('S', 0, s * 0.50);
+    ctx.fillText('E', s * 0.50, 0);
+    ctx.fillText('W', -s * 0.50, 0);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // Needle — spins
+    ctx.save(); ctx.rotate(wingT * 0.8);
+    // North half (red)
+    ctx.fillStyle = '#e02020';
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.45);
+    ctx.lineTo(-s * 0.07, 0);
+    ctx.lineTo(s * 0.07, 0);
+    ctx.closePath();
+    ctx.fill();
+    // South half (white)
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.45);
+    ctx.lineTo(-s * 0.07, 0);
+    ctx.lineTo(s * 0.07, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // Center pin
+    ctx.fillStyle = '#c89040';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.06, 0, Math.PI * 2); ctx.fill();
+  }
+
   // -------------------------------------------------------
   // CREATURE DRAW — translates/rotates/scales then dispatches
   // to the type-specific routine.
@@ -3811,6 +4232,16 @@
       case 'vinyldisc':    drawVinyldisc(c, light, dark, wingT); break;
       case 'guitarpick':   drawGuitarpick(c, light, dark, wingT); break;
       case 'crown':        drawCrown(c, light, dark, wingT); break;
+      case 'bluntwrap':    drawBluntwrap(c, light, dark, wingT); break;
+      case 'beehive':      drawBeehive(c, light, dark, wingT); break;
+      case 'galaxy':       drawGalaxy(c, light, dark, wingT); break;
+      case 'akira':        drawAkira(c, light, dark, wingT); break;
+      case 'deepdish':     drawDeepdish(c, light, dark, wingT); break;
+      case 'snowflake':    drawSnowflake(c, light, dark, wingT); break;
+      case 'raincloud':    drawRaincloud(c, light, dark, wingT); break;
+      case 'soulfire':     drawSoulfire(c, light, dark, wingT); break;
+      case 'treehouse':    drawTreehouse(c, light, dark, wingT); break;
+      case 'compass':      drawCompass(c, light, dark, wingT); break;
     }
 
     ctx.restore();  // pops translate/rotate/scale
