@@ -2375,77 +2375,67 @@
   // -------------------------------------------------------
 
   function drawThunderbird(c, light, dark, wingT) {
-    // Stylized thunderbird — wide wings, lightning bolts trailing
+    // Classic Ford Thunderbird — convertible side profile
     const s = c.size;
-    const flap = Math.sin(wingT * 5) * 0.25 + 0.75;
-
-    // Wings — angular, indigo
-    ctx.fillStyle = '#3a4555';
-    ctx.strokeStyle = '#0e0e0e';
-    ctx.lineWidth = 2;
-    // Left wing
+    const cruise = Math.sin(wingT * 1.2) * 0.02;
+    ctx.save(); ctx.rotate(cruise);
+    // Body — long sleek profile, cherry red
+    ctx.fillStyle = '#cc2020'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-s * 0.40, -s * 0.35 * flap);
-    ctx.lineTo(-s * 0.95, -s * 0.10 * flap);
-    ctx.lineTo(-s * 1.10,  s * 0.10);
-    ctx.lineTo(-s * 0.65,  s * 0.05);
-    ctx.lineTo(-s * 0.30,  s * 0.20);
-    ctx.lineTo(0, s * 0.05);
+    ctx.moveTo(-s * 0.90, s * 0.10);
+    ctx.lineTo(-s * 0.85, -s * 0.10);
+    ctx.quadraticCurveTo(-s * 0.70, -s * 0.25, -s * 0.40, -s * 0.28);
+    ctx.lineTo(s * 0.15, -s * 0.28);
+    ctx.quadraticCurveTo(s * 0.45, -s * 0.28, s * 0.65, -s * 0.15);
+    ctx.lineTo(s * 0.90, -s * 0.05);
+    ctx.lineTo(s * 0.90, s * 0.15);
+    ctx.lineTo(-s * 0.90, s * 0.15);
     ctx.closePath();
     ctx.fill(); ctx.stroke();
-    // Right wing
+    // Windshield
+    ctx.fillStyle = 'rgba(74,216,255,0.35)';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo( s * 0.40, -s * 0.35 * flap);
-    ctx.lineTo( s * 0.95, -s * 0.10 * flap);
-    ctx.lineTo( s * 1.10,  s * 0.10);
-    ctx.lineTo( s * 0.65,  s * 0.05);
-    ctx.lineTo( s * 0.30,  s * 0.20);
-    ctx.lineTo(0, s * 0.05);
+    ctx.moveTo(-s * 0.10, -s * 0.28);
+    ctx.lineTo(-s * 0.20, -s * 0.48);
+    ctx.lineTo(s * 0.10, -s * 0.48);
+    ctx.lineTo(s * 0.15, -s * 0.28);
     ctx.closePath();
     ctx.fill(); ctx.stroke();
-
-    // Body
-    ctx.fillStyle = '#0e0e0e';
+    // Chrome trim line
+    ctx.strokeStyle = '#c0c0c0'; ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(0, 0, s * 0.16, s * 0.30, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Head
-    ctx.fillStyle = '#3a4555';
+    ctx.moveTo(-s * 0.85, s * 0.02);
+    ctx.lineTo(s * 0.85, s * 0.02);
+    ctx.stroke();
+    // Front bumper / chrome
+    ctx.fillStyle = '#c0c0c0';
+    ctx.fillRect(-s * 0.92, s * 0.05, s * 0.08, s * 0.10);
+    // Rear fin — the classic T-bird detail
+    ctx.fillStyle = '#cc2020'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, -s * 0.30, s * 0.14, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-    // Beak
-    ctx.fillStyle = '#ffe833';
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 0.32);
-    ctx.lineTo(s * 0.10, -s * 0.30);
-    ctx.lineTo(0, -s * 0.20);
+    ctx.moveTo(s * 0.75, -s * 0.15);
+    ctx.lineTo(s * 0.90, -s * 0.25);
+    ctx.lineTo(s * 0.90, -s * 0.05);
     ctx.closePath();
     ctx.fill(); ctx.stroke();
-    // Eye
-    ctx.fillStyle = '#ffe833';
-    ctx.beginPath();
-    ctx.arc(-s * 0.04, -s * 0.32, s * 0.03, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Lightning bolts — 2 trailing the wings
-    ctx.fillStyle = '#ffe833';
-    ctx.strokeStyle = '#0e0e0e';
-    ctx.lineWidth = 1.5;
-    for (const sx of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(sx * s * 0.85, s * 0.20);
-      ctx.lineTo(sx * s * 0.95, s * 0.45);
-      ctx.lineTo(sx * s * 0.78, s * 0.45);
-      ctx.lineTo(sx * s * 0.92, s * 0.80);
-      ctx.lineTo(sx * s * 0.75, s * 0.55);
-      ctx.lineTo(sx * s * 0.85, s * 0.55);
-      ctx.closePath();
-      ctx.fill(); ctx.stroke();
-    }
+    // Headlight
+    const glow = (Math.sin(wingT * 3) + 1) * 0.3 + 0.4;
+    ctx.fillStyle = `rgba(255,230,100,${glow})`;
+    ctx.beginPath(); ctx.arc(-s * 0.88, s * 0.00, s * 0.05, 0, Math.PI * 2); ctx.fill();
+    // Taillight
+    ctx.fillStyle = '#ff2a4a';
+    ctx.beginPath(); ctx.arc(s * 0.88, s * 0.02, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    // Front wheel
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(-s * 0.55, s * 0.22, s * 0.14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c0c0c0';
+    ctx.beginPath(); ctx.arc(-s * 0.55, s * 0.22, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    // Rear wheel
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(s * 0.55, s * 0.22, s * 0.14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c0c0c0';
+    ctx.beginPath(); ctx.arc(s * 0.55, s * 0.22, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
   function drawSun(c, light, dark, wingT) {
