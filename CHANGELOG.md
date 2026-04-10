@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## b068 — 2026-04-09 — 15 more hero icons (74 total, 42% of catalog)
+
+New custom creatures for 15 songs:
+- **Passion Pit Remix** → `firepit` — fire pit with dancing flames + embers
+- **Rock (Full)** → `electricguitar` — red electric guitar with strings + frets
+- **Gunning** → `crosshair` — scope/crosshair reticle, slow spin
+- **Emo** → `brokencd` — cracked iridescent CD with mascara tear drops
+- **Days Get Longer** → `hourglass` — hourglass with trickling sand stream
+- **Ohohohohoho** → `laughskull` — skull with dropped jaw, glowing eyes, shaking
+- **Jolly Mood Turn Sour** → `sourcandy` — half-pink half-green candy with drip + two faces
+- **Louie 003 (Remix)** → `duffel` — designer duffel bag with K monogram
+- **Hol' Up Freestyle** → `stophand` — open palm stop hand
+- **Moods** → `masks` — comedy/tragedy theater masks, tilting
+- **Underrated** → `trophy` — golden trophy with dust particles + star
+- **Nice Lil Indie Moonlight** → `crescent` — crescent moon with twinkling stars
+- **4-5 Years** → `calendar` — calendar with X'd-off days + peeling corner
+- **On Tour Soon** → `tourbus` — black tour bus with purple stripe + KANI
+- **Cute (Rolo)** → `candybar` — gold-wrapped Rolo candy bar, partially unwrapped
+
+### Files modified
+- [js/wall.js](js/wall.js) — 15 ICON_OVERRIDES entries, 15 draw functions, 15 dispatch cases
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b067 → b068`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b067 — 2026-04-09 — 10 more hero icons (59 total, 33% of catalog)
 
 New custom creatures for 10 songs:
