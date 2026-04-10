@@ -27,7 +27,7 @@ New custom creatures for 10 songs:
 - **Amy Winespliff** → `beehive` — Amy Winehouse beehive hairdo with smoke + eyeliner
 - **Silo Galaxy** → `galaxy` — spiral galaxy disc with rotating arms + scattered stars
 - **Akira World - I'm Next Up** → `akira` — Kaneda's red motorcycle with glowing headlight
-- **Chicago Seven** → `deepdish` — deep dish pizza slice with melted cheese + pepperoni
+- **Chicago Seven** → `riotshield` — blood-splattered riot shield with scratched visor (the trial, the protest, the violence)
 - **Chilly Nites** → `snowflake` — crystalline 6-arm snowflake, slow spin
 - **May Flowers** → `raincloud` — rain cloud with droplets + tiny flower sprouting below
 - **Soul** → `soulfire` — purple/cyan flame wisp with eyes

@@ -118,7 +118,7 @@
     { match: 'amy winespliff',   type: 'beehive'     },
     { match: 'silo galaxy',     type: 'galaxy'      },
     { match: 'akira world',      type: 'akira'       },
-    { match: 'chicago seven',    type: 'deepdish'    },
+    { match: 'chicago seven',    type: 'riotshield'  },
     { match: 'chilly nites',     type: 'snowflake'   },
     { match: 'may flowers',      type: 'raincloud'   },
     { match: 'soul',             type: 'soulfire'    },
@@ -3836,56 +3836,55 @@
     ctx.restore();
   }
 
-  function drawDeepdish(c, light, dark, wingT) {
+  function drawRiotshield(c, light, dark, wingT) {
     const s = c.size;
-    // Deep crust wall
-    ctx.fillStyle = '#c89040'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    const shake = Math.sin(wingT * 6) * 0.02;
+    ctx.save(); ctx.rotate(shake);
+    // Shield body — tall rectangle with rounded top
+    ctx.fillStyle = 'rgba(60,60,60,0.85)'; ctx.strokeStyle = '#444'; ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(-s * 0.80, -s * 0.15);
-    ctx.lineTo(-s * 0.70, s * 0.55);
-    ctx.lineTo(s * 0.70, s * 0.55);
-    ctx.lineTo(s * 0.80, -s * 0.15);
+    ctx.moveTo(-s * 0.50, s * 0.75);
+    ctx.lineTo(-s * 0.50, -s * 0.30);
+    ctx.quadraticCurveTo(-s * 0.50, -s * 0.80, 0, -s * 0.80);
+    ctx.quadraticCurveTo(s * 0.50, -s * 0.80, s * 0.50, -s * 0.30);
+    ctx.lineTo(s * 0.50, s * 0.75);
     ctx.closePath();
     ctx.fill(); ctx.stroke();
-    // Cheese/sauce top
-    ctx.fillStyle = '#e83020';
+    // Visor window — scratched polycarbonate
+    ctx.fillStyle = 'rgba(120,140,160,0.30)';
+    ctx.fillRect(-s * 0.38, -s * 0.55, s * 0.76, s * 0.30);
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(-s * 0.38, -s * 0.55, s * 0.76, s * 0.30);
+    // Scratch marks across visor
+    ctx.strokeStyle = 'rgba(200,200,200,0.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-s * 0.30, -s * 0.50); ctx.lineTo(s * 0.10, -s * 0.30); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.05, -s * 0.52); ctx.lineTo(s * 0.35, -s * 0.35); ctx.stroke();
+    // Blood splatter — main streak
+    ctx.fillStyle = 'rgba(180,20,20,0.7)';
     ctx.beginPath();
-    ctx.moveTo(-s * 0.75, -s * 0.10);
-    ctx.lineTo(-s * 0.65, s * 0.45);
-    ctx.lineTo(s * 0.65, s * 0.45);
-    ctx.lineTo(s * 0.75, -s * 0.10);
-    ctx.closePath();
+    ctx.moveTo(-s * 0.15, -s * 0.60);
+    ctx.quadraticCurveTo(-s * 0.25, -s * 0.20, -s * 0.20, s * 0.20);
+    ctx.quadraticCurveTo(-s * 0.18, s * 0.35, -s * 0.10, s * 0.40);
+    ctx.quadraticCurveTo(-s * 0.05, s * 0.20, -s * 0.05, -s * 0.10);
+    ctx.quadraticCurveTo(-s * 0.03, -s * 0.40, -s * 0.15, -s * 0.60);
     ctx.fill();
-    // Cheese drip
-    ctx.fillStyle = '#ffe833';
-    const drips = [-0.50, -0.15, 0.20, 0.50];
-    for (const dx of drips) {
-      ctx.beginPath();
-      ctx.moveTo(s * (dx - 0.08), -s * 0.12);
-      ctx.quadraticCurveTo(s * dx, -s * 0.30, s * (dx + 0.08), -s * 0.12);
-      ctx.fill();
+    // Smaller splatter drops
+    ctx.fillStyle = 'rgba(160,15,15,0.6)';
+    const splats = [[0.20, -0.10, 0.06], [0.30, 0.15, 0.04], [-0.30, 0.40, 0.05], [0.10, 0.50, 0.04], [0.25, 0.35, 0.03]];
+    for (const [dx, dy, r] of splats) {
+      ctx.beginPath(); ctx.arc(s * dx, s * dy, s * r, 0, Math.PI * 2); ctx.fill();
     }
-    // Melted cheese blobs on top
-    ctx.fillStyle = '#ffe070';
+    // Drip running down from main streak
+    ctx.strokeStyle = 'rgba(150,10,10,0.5)'; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(0, s * 0.10, s * 0.50, s * 0.20, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Pepperoni
-    ctx.fillStyle = '#a02010';
-    const peps = [[-0.25, 0.05], [0.20, 0.15], [0, 0.30], [-0.10, 0.20], [0.30, 0.00]];
-    for (const [dx, dy] of peps) {
-      ctx.beginPath(); ctx.arc(s * dx, s * dy, s * 0.08, 0, Math.PI * 2); ctx.fill();
-    }
-    // Steam
-    ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 1.5;
-    for (let i = 0; i < 3; i++) {
-      const sx = s * (-0.25 + i * 0.25);
-      const wave = Math.sin(wingT * 2 + i) * s * 0.08;
-      ctx.beginPath();
-      ctx.moveTo(sx, -s * 0.15);
-      ctx.quadraticCurveTo(sx + wave, -s * 0.40, sx - wave, -s * 0.60);
-      ctx.stroke();
-    }
+    ctx.moveTo(-s * 0.10, s * 0.40);
+    ctx.quadraticCurveTo(-s * 0.08, s * 0.55, -s * 0.12, s * 0.70);
+    ctx.stroke();
+    // Handle glimpse on back (two horizontal bars)
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-s * 0.25, s * 0.10); ctx.lineTo(s * 0.25, s * 0.10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-s * 0.25, s * 0.45); ctx.lineTo(s * 0.25, s * 0.45); ctx.stroke();
+    ctx.restore();
   }
 
   function drawSnowflake(c, light, dark, wingT) {
@@ -4655,7 +4654,7 @@
       case 'beehive':      drawBeehive(c, light, dark, wingT); break;
       case 'galaxy':       drawGalaxy(c, light, dark, wingT); break;
       case 'akira':        drawAkira(c, light, dark, wingT); break;
-      case 'deepdish':     drawDeepdish(c, light, dark, wingT); break;
+      case 'riotshield':   drawRiotshield(c, light, dark, wingT); break;
       case 'snowflake':    drawSnowflake(c, light, dark, wingT); break;
       case 'raincloud':    drawRaincloud(c, light, dark, wingT); break;
       case 'soulfire':     drawSoulfire(c, light, dark, wingT); break;
