@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## b067 — 2026-04-09 — 10 more hero icons (59 total, 33% of catalog)
+
+New custom creatures for 10 songs:
+- **Fucking Up His Liver** → `bottle` — tipped liquor bottle with spilling liquid
+- **C'est La Vie** → `beret` — French beret with curly mustache
+- **Turned Into Taylor Swift** → `sparklymic` — bedazzled microphone with sparkle stars
+- **Neopolitan Dreams** → `icecream` — neapolitan ice cream cone (3 scoops + drip)
+- **Caught in Thoughts** → `brain` — pink brain with wrinkles + floating thought bubbles
+- **Down Down Down** → `anchor` — swaying anchor with flukes
+- **No Service** → `nophone` — phone with empty signal bars + red X
+- **Kani Demarco's Memoir** → `quill` — feather quill pen with ink trail
+- **Clarity** → `diamond` — faceted diamond with glint sparkle
+- **Fall Away** → `falleaf` — tumbling autumn leaf with veins
+
+### Files modified
+- [js/wall.js](js/wall.js) — 10 ICON_OVERRIDES entries, 10 draw functions, 10 dispatch cases
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b066 → b067`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b066 — 2026-04-09 — 10 more hero icons (49 total, 28% of catalog)
 
 New custom creatures for 10 songs:

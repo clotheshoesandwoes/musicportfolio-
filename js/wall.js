@@ -124,6 +124,17 @@
     { match: 'soul',             type: 'soulfire'    },
     { match: 'backyardian',      type: 'treehouse'   },
     { match: 'follow you',       type: 'compass'     },
+    // b067 — 10 more
+    { match: 'fucking up his liver', type: 'bottle'    },
+    { match: "c'est la vie",     type: 'beret'       },
+    { match: 'turned into taylor', type: 'sparklymic' },
+    { match: 'neopolitan',       type: 'icecream'    },
+    { match: 'caught in thoughts', type: 'brain'     },
+    { match: 'down down down',   type: 'anchor'      },
+    { match: 'no service',       type: 'nophone'     },
+    { match: 'memoir',           type: 'quill'       },
+    { match: 'clarity',          type: 'diamond'     },
+    { match: 'fall away',        type: 'falleaf'     },
   ];
 
   function getOverrideType(title) {
@@ -4059,6 +4070,414 @@
     ctx.beginPath(); ctx.arc(0, 0, s * 0.06, 0, Math.PI * 2); ctx.fill();
   }
 
+  // b067 — 10 more hero icons --------------------------------
+
+  function drawBottle(c, light, dark, wingT) {
+    const s = c.size;
+    const tilt = Math.sin(wingT * 1.0) * 0.08;
+    ctx.save(); ctx.rotate(0.25 + tilt);
+    // Body
+    ctx.fillStyle = '#2a5a20'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.25, -s * 0.20);
+    ctx.lineTo(-s * 0.25, s * 0.65);
+    ctx.quadraticCurveTo(-s * 0.25, s * 0.80, -s * 0.10, s * 0.80);
+    ctx.lineTo(s * 0.10, s * 0.80);
+    ctx.quadraticCurveTo(s * 0.25, s * 0.80, s * 0.25, s * 0.65);
+    ctx.lineTo(s * 0.25, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Neck
+    ctx.fillStyle = '#2a5a20';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.12, -s * 0.20);
+    ctx.lineTo(-s * 0.10, -s * 0.65);
+    ctx.lineTo(s * 0.10, -s * 0.65);
+    ctx.lineTo(s * 0.12, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Label
+    ctx.fillStyle = '#f5ecd8';
+    ctx.fillRect(-s * 0.20, s * 0.05, s * 0.40, s * 0.30);
+    ctx.strokeRect(-s * 0.20, s * 0.05, s * 0.40, s * 0.30);
+    // Spill coming from mouth
+    ctx.fillStyle = 'rgba(180,120,40,0.50)';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.08, -s * 0.65);
+    ctx.quadraticCurveTo(-s * 0.30, -s * 0.80, -s * 0.45, -s * 0.70);
+    ctx.quadraticCurveTo(-s * 0.35, -s * 0.68, -s * 0.08, -s * 0.60);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawBeret(c, light, dark, wingT) {
+    const s = c.size;
+    // Head silhouette
+    ctx.fillStyle = '#f5d0a0'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, s * 0.15, s * 0.40, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Beret
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.10);
+    ctx.quadraticCurveTo(-s * 0.50, -s * 0.60, 0, -s * 0.55);
+    ctx.quadraticCurveTo(s * 0.50, -s * 0.50, s * 0.55, -s * 0.10);
+    ctx.lineTo(-s * 0.55, -s * 0.10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Beret nub
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.arc(0, -s * 0.55, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    // Brim
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-s * 0.55, -s * 0.10); ctx.lineTo(s * 0.55, -s * 0.10); ctx.stroke();
+    // Eyes
+    ctx.fillStyle = '#0e0e0e';
+    ctx.beginPath(); ctx.arc(-s * 0.12, s * 0.10, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.12, s * 0.10, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    // Curly mustache
+    ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.22, s * 0.28);
+    ctx.quadraticCurveTo(-s * 0.15, s * 0.22, -s * 0.03, s * 0.28);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.22, s * 0.28);
+    ctx.quadraticCurveTo(s * 0.15, s * 0.22, s * 0.03, s * 0.28);
+    ctx.stroke();
+    // Mustache curl tips
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.22, s * 0.28);
+    ctx.quadraticCurveTo(-s * 0.28, s * 0.22, -s * 0.30, s * 0.18);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.22, s * 0.28);
+    ctx.quadraticCurveTo(s * 0.28, s * 0.22, s * 0.30, s * 0.18);
+    ctx.stroke();
+  }
+
+  function drawSparklymic(c, light, dark, wingT) {
+    const s = c.size;
+    // Mic handle
+    ctx.fillStyle = '#c0c0c0'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.fillRect(-s * 0.08, -s * 0.05, s * 0.16, s * 0.75);
+    ctx.strokeRect(-s * 0.08, -s * 0.05, s * 0.16, s * 0.75);
+    // Mic head (rounded top)
+    ctx.fillStyle = '#888';
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.05, s * 0.22, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // Grille lines
+    ctx.strokeStyle = '#666'; ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      const gy = -s * 0.05 + i * s * 0.06;
+      ctx.beginPath(); ctx.moveTo(-s * 0.15, gy); ctx.lineTo(s * 0.15, gy); ctx.stroke();
+    }
+    // Sparkles around the mic
+    ctx.fillStyle = '#ffe833';
+    const sparkles = [[-0.35, -0.25], [0.40, -0.15], [-0.30, 0.15], [0.35, 0.30], [0.10, -0.40], [-0.15, -0.45]];
+    for (const [dx, dy] of sparkles) {
+      const pulse = (Math.sin(wingT * 3 + dx * 10 + dy * 7) + 1) * 0.5;
+      ctx.globalAlpha = 0.4 + pulse * 0.6;
+      const ss = s * 0.04;
+      const sx = s * dx, sy = s * dy;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - ss); ctx.lineTo(sx + ss * 0.3, sy - ss * 0.3);
+      ctx.lineTo(sx + ss, sy); ctx.lineTo(sx + ss * 0.3, sy + ss * 0.3);
+      ctx.lineTo(sx, sy + ss); ctx.lineTo(sx - ss * 0.3, sy + ss * 0.3);
+      ctx.lineTo(sx - ss, sy); ctx.lineTo(sx - ss * 0.3, sy - ss * 0.3);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawIcecream(c, light, dark, wingT) {
+    const s = c.size;
+    // Cone
+    ctx.fillStyle = '#c89040'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, -s * 0.05);
+    ctx.lineTo(0, s * 0.85);
+    ctx.lineTo(s * 0.30, -s * 0.05);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Waffle pattern
+    ctx.strokeStyle = '#a07030'; ctx.lineWidth = 1;
+    for (let i = 0; i < 4; i++) {
+      const y = s * 0.05 + i * s * 0.18;
+      const w = s * 0.28 - i * s * 0.06;
+      ctx.beginPath(); ctx.moveTo(-w, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    // 3 scoops — neapolitan (strawberry, chocolate, vanilla)
+    const scoops = [
+      { cx: -s * 0.15, cy: -s * 0.15, col: '#f5d0a0' },  // vanilla
+      { cx:  s * 0.15, cy: -s * 0.15, col: '#6b3a1a' },  // chocolate
+      { cx:  0,         cy: -s * 0.42, col: '#ff7a9a' },  // strawberry
+    ];
+    for (const sc of scoops) {
+      ctx.fillStyle = sc.col;
+      ctx.beginPath(); ctx.arc(sc.cx, sc.cy, s * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    // Drip
+    const drip = Math.sin(wingT * 1.5) * s * 0.03;
+    ctx.fillStyle = '#ff7a9a';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.10, -s * 0.20);
+    ctx.quadraticCurveTo(-s * 0.15, s * 0.05 + drip, -s * 0.05, s * 0.10 + drip);
+    ctx.quadraticCurveTo(-s * 0.02, -s * 0.10, -s * 0.10, -s * 0.20);
+    ctx.fill();
+  }
+
+  function drawBrain(c, light, dark, wingT) {
+    const s = c.size;
+    // Main brain shape — two hemispheres
+    ctx.fillStyle = '#ff9aaa'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    // Left hemisphere
+    ctx.beginPath();
+    ctx.arc(-s * 0.18, 0, s * 0.50, 0.5, Math.PI * 2 - 0.5);
+    ctx.fill(); ctx.stroke();
+    // Right hemisphere
+    ctx.beginPath();
+    ctx.arc(s * 0.18, 0, s * 0.50, 0.5 + Math.PI, Math.PI * 3 - 0.5);
+    ctx.fill(); ctx.stroke();
+    // Center groove
+    ctx.strokeStyle = '#d06070'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.48);
+    ctx.quadraticCurveTo(-s * 0.03, 0, 0, s * 0.48);
+    ctx.stroke();
+    // Wrinkle lines
+    ctx.strokeStyle = '#d06070'; ctx.lineWidth = 1.5;
+    const wrinkles = [
+      [[-0.45, -0.20], [-0.15, -0.25]],
+      [[-0.40, 0.10], [-0.10, 0.05]],
+      [[0.15, -0.30], [0.45, -0.20]],
+      [[0.10, 0.10], [0.40, 0.15]],
+    ];
+    for (const [a, b] of wrinkles) {
+      ctx.beginPath();
+      ctx.moveTo(s * a[0], s * a[1]);
+      ctx.quadraticCurveTo(s * (a[0] + b[0]) / 2, s * (a[1] + b[1]) / 2 - s * 0.08, s * b[0], s * b[1]);
+      ctx.stroke();
+    }
+    // Thought bubbles floating up
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    for (let i = 0; i < 3; i++) {
+      const bx = s * 0.30 + i * s * 0.12;
+      const by = -s * 0.55 - i * s * 0.22;
+      const br = s * (0.04 + i * 0.03);
+      const bob = Math.sin(wingT * 2 + i) * s * 0.04;
+      ctx.beginPath(); ctx.arc(bx, by + bob, br, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawAnchor(c, light, dark, wingT) {
+    const s = c.size;
+    const sway = Math.sin(wingT * 0.8) * 0.04;
+    ctx.save(); ctx.rotate(sway);
+    ctx.strokeStyle = '#888'; ctx.fillStyle = '#aaa'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    // Vertical shaft
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.55); ctx.lineTo(0, s * 0.45); ctx.stroke();
+    // Crossbar
+    ctx.beginPath(); ctx.moveTo(-s * 0.35, -s * 0.20); ctx.lineTo(s * 0.35, -s * 0.20); ctx.stroke();
+    // Ring at top
+    ctx.beginPath(); ctx.arc(0, -s * 0.65, s * 0.12, 0, Math.PI * 2); ctx.stroke();
+    // Left fluke (curved arm)
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.05, s * 0.45);
+    ctx.quadraticCurveTo(-s * 0.55, s * 0.40, -s * 0.45, s * 0.10);
+    ctx.stroke();
+    // Left arrow tip
+    ctx.fillStyle = '#888';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.45, s * 0.10);
+    ctx.lineTo(-s * 0.55, s * 0.20);
+    ctx.lineTo(-s * 0.35, s * 0.20);
+    ctx.closePath(); ctx.fill();
+    // Right fluke
+    ctx.beginPath();
+    ctx.moveTo(s * 0.05, s * 0.45);
+    ctx.quadraticCurveTo(s * 0.55, s * 0.40, s * 0.45, s * 0.10);
+    ctx.stroke();
+    // Right arrow tip
+    ctx.beginPath();
+    ctx.moveTo(s * 0.45, s * 0.10);
+    ctx.lineTo(s * 0.55, s * 0.20);
+    ctx.lineTo(s * 0.35, s * 0.20);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawNophone(c, light, dark, wingT) {
+    const s = c.size;
+    // Phone body
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#444'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.30, -s * 0.70);
+    ctx.quadraticCurveTo(-s * 0.30, -s * 0.80, -s * 0.20, -s * 0.80);
+    ctx.lineTo(s * 0.20, -s * 0.80);
+    ctx.quadraticCurveTo(s * 0.30, -s * 0.80, s * 0.30, -s * 0.70);
+    ctx.lineTo(s * 0.30, s * 0.70);
+    ctx.quadraticCurveTo(s * 0.30, s * 0.80, s * 0.20, s * 0.80);
+    ctx.lineTo(-s * 0.20, s * 0.80);
+    ctx.quadraticCurveTo(-s * 0.30, s * 0.80, -s * 0.30, s * 0.70);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Screen
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-s * 0.25, -s * 0.65, s * 0.50, s * 1.10);
+    // "No signal" bars (all empty)
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const bx = -s * 0.10 + i * s * 0.06;
+      const bh = s * (0.08 + i * 0.06);
+      ctx.strokeRect(bx, -s * 0.10 - bh + s * 0.14, s * 0.04, bh);
+    }
+    // Red X over bars
+    ctx.strokeStyle = '#ff2a4a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-s * 0.15, -s * 0.15); ctx.lineTo(s * 0.15, s * 0.15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.15, -s * 0.15); ctx.lineTo(-s * 0.15, s * 0.15); ctx.stroke();
+    // "No Service" text
+    ctx.fillStyle = '#555';
+    ctx.font = `700 ${Math.max(4, s * 0.09)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('NO SERVICE', 0, s * 0.35);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawQuill(c, light, dark, wingT) {
+    const s = c.size;
+    const bob = Math.sin(wingT * 1.5) * 0.03;
+    ctx.save(); ctx.rotate(-0.35 + bob);
+    // Feather vane — left side
+    ctx.fillStyle = '#f5ecd8'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.85);
+    ctx.quadraticCurveTo(-s * 0.35, -s * 0.50, -s * 0.25, -s * 0.10);
+    ctx.lineTo(0, -s * 0.05);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Feather vane — right side
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.85);
+    ctx.quadraticCurveTo(s * 0.30, -s * 0.45, s * 0.20, -s * 0.10);
+    ctx.lineTo(0, -s * 0.05);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Barb lines
+    ctx.strokeStyle = '#c8b890'; ctx.lineWidth = 0.8;
+    for (let i = 0; i < 6; i++) {
+      const t = 0.15 + i * 0.12;
+      const py = -s * 0.85 + t * s * 0.80;
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(-s * (0.25 - t * 0.15), py + s * 0.05); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(s * (0.20 - t * 0.12), py + s * 0.05); ctx.stroke();
+    }
+    // Quill shaft
+    ctx.strokeStyle = '#8b5a2a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.85); ctx.lineTo(0, s * 0.70); ctx.stroke();
+    // Nib
+    ctx.fillStyle = '#555';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.04, s * 0.60);
+    ctx.lineTo(0, s * 0.80);
+    ctx.lineTo(s * 0.04, s * 0.60);
+    ctx.closePath(); ctx.fill();
+    // Ink trail
+    ctx.fillStyle = 'rgba(30,30,80,0.45)';
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.80);
+    ctx.quadraticCurveTo(s * 0.10, s * 0.88, s * 0.05, s * 0.92);
+    ctx.quadraticCurveTo(-s * 0.05, s * 0.95, -s * 0.10, s * 0.90);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawDiamond(c, light, dark, wingT) {
+    const s = c.size;
+    const glint = (Math.sin(wingT * 4) + 1) * 0.5;
+    // Crown (top facets)
+    ctx.fillStyle = '#e0f0ff'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.80);
+    ctx.lineTo(-s * 0.55, -s * 0.20);
+    ctx.lineTo(-s * 0.25, -s * 0.20);
+    ctx.lineTo(0, -s * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c0e0ff';
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.80);
+    ctx.lineTo(s * 0.55, -s * 0.20);
+    ctx.lineTo(s * 0.25, -s * 0.20);
+    ctx.lineTo(0, -s * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Table
+    ctx.fillStyle = '#d8ecff';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.25, -s * 0.20);
+    ctx.lineTo(s * 0.25, -s * 0.20);
+    ctx.lineTo(0, -s * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Pavilion (bottom point)
+    ctx.fillStyle = '#a0d0ff';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.20);
+    ctx.lineTo(0, s * 0.75);
+    ctx.lineTo(0, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#80c0ff';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.55, -s * 0.20);
+    ctx.lineTo(0, s * 0.75);
+    ctx.lineTo(0, -s * 0.20);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Glint sparkle
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + glint * 0.7})`;
+    ctx.beginPath();
+    const gx = -s * 0.15, gy = -s * 0.35;
+    ctx.moveTo(gx, gy - s * 0.08); ctx.lineTo(gx + s * 0.03, gy);
+    ctx.lineTo(gx, gy + s * 0.08); ctx.lineTo(gx - s * 0.03, gy);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawFalleaf(c, light, dark, wingT) {
+    const s = c.size;
+    const tumble = Math.sin(wingT * 1.0) * 0.15;
+    ctx.save(); ctx.rotate(tumble);
+    // Leaf body
+    ctx.fillStyle = '#d44a00'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.70);
+    ctx.bezierCurveTo(-s * 0.65, -s * 0.55, -s * 0.70, s * 0.15, 0, s * 0.60);
+    ctx.bezierCurveTo(s * 0.70, s * 0.15, s * 0.65, -s * 0.55, 0, -s * 0.70);
+    ctx.fill(); ctx.stroke();
+    // Color gradient patches
+    ctx.fillStyle = '#e87020';
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.50);
+    ctx.bezierCurveTo(-s * 0.40, -s * 0.35, -s * 0.35, s * 0.05, 0, s * 0.30);
+    ctx.bezierCurveTo(s * 0.15, s * 0.10, s * 0.20, -s * 0.30, 0, -s * 0.50);
+    ctx.fill();
+    // Veins
+    ctx.strokeStyle = '#8b3000'; ctx.lineWidth = 1.5;
+    // Center vein
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.60); ctx.lineTo(0, s * 0.50); ctx.stroke();
+    // Side veins
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 4; i++) {
+      const vy = -s * 0.35 + i * s * 0.22;
+      ctx.beginPath(); ctx.moveTo(0, vy); ctx.lineTo(-s * 0.30, vy - s * 0.10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, vy); ctx.lineTo(s * 0.30, vy - s * 0.10); ctx.stroke();
+    }
+    // Stem
+    ctx.strokeStyle = '#5a2800'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.70); ctx.lineTo(s * 0.08, -s * 0.85); ctx.stroke();
+    ctx.restore();
+  }
+
   // -------------------------------------------------------
   // CREATURE DRAW — translates/rotates/scales then dispatches
   // to the type-specific routine.
@@ -4242,6 +4661,16 @@
       case 'soulfire':     drawSoulfire(c, light, dark, wingT); break;
       case 'treehouse':    drawTreehouse(c, light, dark, wingT); break;
       case 'compass':      drawCompass(c, light, dark, wingT); break;
+      case 'bottle':       drawBottle(c, light, dark, wingT); break;
+      case 'beret':        drawBeret(c, light, dark, wingT); break;
+      case 'sparklymic':   drawSparklymic(c, light, dark, wingT); break;
+      case 'icecream':     drawIcecream(c, light, dark, wingT); break;
+      case 'brain':        drawBrain(c, light, dark, wingT); break;
+      case 'anchor':       drawAnchor(c, light, dark, wingT); break;
+      case 'nophone':      drawNophone(c, light, dark, wingT); break;
+      case 'quill':        drawQuill(c, light, dark, wingT); break;
+      case 'diamond':      drawDiamond(c, light, dark, wingT); break;
+      case 'falleaf':      drawFalleaf(c, light, dark, wingT); break;
     }
 
     ctx.restore();  // pops translate/rotate/scale
