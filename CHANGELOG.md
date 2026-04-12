@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## b069 — 2026-04-12 — Background glow-up: starfield, parallax, shooting stars, bass pulse, grain
+
+Wall view background overhaul — five new layers stacked onto the existing nebula system:
+
+- **Twinkling starfield** — 300 stars (100 mobile) at varying sizes/brightness, sine-wave twinkle cycle, parallax-shifted by depth
+- **Mouse parallax** — stars (deepest), nebulas (mid), and glyphs (near) all shift at different rates as the cursor moves, smooth lerp with decay when mouse leaves
+- **Shooting stars** — random bright streaks spawn ~every 4.5 seconds from top/right edges, gradient tail, fade in/out over 0.6–1.1s
+- **Bass pulse** — subtle purple wash flashes on bass hits (>0.3 threshold, 0.18× scaling)
+- **Film grain** — 128×128 offscreen noise texture tiled with overlay blending at 4% opacity, random offset each frame for animated texture (desktop only)
+
+### Files modified
+- [js/wall.js](js/wall.js) — `buildStars()`, `buildGrain()`, `drawStars()`, `drawShootingStars()`, `drawGrain()`, parallax in `drawBackground`/`drawGlyphs`, bass pulse, dt tracking in `draw()`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b068 → b069`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b068 — 2026-04-09 — 15 more hero icons (74 total, 42% of catalog)
 
 New custom creatures for 15 songs:

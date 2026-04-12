@@ -28,6 +28,11 @@
   let nebulas = [];
   let bursts = [];          // b058 — click burst rings
   let constellations = [];  // b059 — precomputed creature pair indices for star-map lines
+  let stars = [];           // b069 — twinkling starfield
+  let shootingStars = [];   // b069 — shooting star streaks
+  let parallaxX = 0, parallaxY = 0;  // b069 — mouse parallax (-0.5 to 0.5)
+  let grainCanvas = null;   // b069 — offscreen noise texture
+  let lastFrameT = 0;       // b069 — for dt computation
   let hovered = -1;
   let t0 = 0;
   // b061 — pagination so the user can see ALL 177 tracks even
@@ -252,7 +257,9 @@
     resize();
     updatePageLabel();
     window.addEventListener('resize', resize);
+    buildGrain();
     t0 = performance.now();
+    lastFrameT = performance.now();
     draw();
   }
 
@@ -270,6 +277,9 @@
     canvas = ctx = container = null;
     creatures = [];
     glyphs = [];
+    stars = [];
+    shootingStars = [];
+    grainCanvas = null;
   }
 
   // -------------------------------------------------------
@@ -353,6 +363,7 @@
     buildCreatures();
     buildGlyphs();
     buildNebulas();
+    buildStars();
     if (container && container._updatePageLabel) container._updatePageLabel();
   }
 
@@ -595,6 +606,44 @@
   }
 
   // -------------------------------------------------------
+  // STARS — b069 twinkling starfield with depth layers
+  // -------------------------------------------------------
+  function buildStars() {
+    stars = [];
+    const N = isMobile() ? 100 : 300;
+    for (let i = 0; i < N; i++) {
+      const h = hash('star' + i, 77);
+      stars.push({
+        x: (h % 10000) / 10000 * W,
+        y: ((h >> 6) % 10000) / 10000 * H,
+        size: 0.3 + ((h >> 12) % 100) / 100 * 1.4,
+        twinkleSpeed: 0.5 + ((h >> 3) % 100) / 100 * 2.5,
+        twinklePhase: ((h >> 9) % 1000) / 1000 * Math.PI * 2,
+        depth: 0.3 + ((h >> 15) % 100) / 100 * 0.7,
+        baseAlpha: 0.25 + ((h >> 7) % 100) / 100 * 0.75,
+      });
+    }
+  }
+
+  // -------------------------------------------------------
+  // GRAIN — b069 offscreen noise texture for film grain
+  // -------------------------------------------------------
+  function buildGrain() {
+    grainCanvas = document.createElement('canvas');
+    grainCanvas.width = 128;
+    grainCanvas.height = 128;
+    const gCtx = grainCanvas.getContext('2d');
+    const imgData = gCtx.createImageData(128, 128);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (Math.random() * 255) | 0;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 30;
+    }
+    gCtx.putImageData(imgData, 0, 0);
+  }
+
+  // -------------------------------------------------------
   // BACKGROUND — b059 takes optional `bands` for a treble-
   // reactive nebula brightness pulse. The additive layer is
   // wrapped in a frame-level globalAlpha (0.55 baseline +
@@ -611,8 +660,8 @@
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.55 + (bands ? bands.treble * 0.30 : 0);
     for (const n of nebulas) {
-      const cx = n.baseX + Math.sin(t * n.speedX + n.phase) * n.ampX;
-      const cy = n.baseY + Math.cos(t * n.speedY + n.phase * 0.7) * n.ampY;
+      const cx = n.baseX + Math.sin(t * n.speedX + n.phase) * n.ampX + parallaxX * -18;
+      const cy = n.baseY + Math.cos(t * n.speedY + n.phase * 0.7) * n.ampY + parallaxY * -18;
       const radius = n.radius * (1 + Math.sin(t * n.radiusPulseSpeed + n.phase) * n.radiusPulseAmp);
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
       grad.addColorStop(0, n.color);
@@ -632,6 +681,100 @@
     vig.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
+
+    // b069 — bass pulse: subtle purple flash on heavy bass
+    if (bands && bands.bass > 0.3) {
+      const pulseA = (bands.bass - 0.3) * 0.18;
+      ctx.fillStyle = 'rgba(168, 85, 247, ' + pulseA + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // -------------------------------------------------------
+  // STARS — b069 twinkling + parallax-shifted
+  // -------------------------------------------------------
+  function drawStars(t) {
+    ctx.save();
+    for (const s of stars) {
+      const px = s.x + parallaxX * s.depth * -35;
+      const py = s.y + parallaxY * s.depth * -35;
+      const twinkle = 0.5 + 0.5 * Math.sin(t * s.twinkleSpeed + s.twinklePhase);
+      ctx.globalAlpha = s.baseAlpha * (0.2 + twinkle * 0.8);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(px, py, s.size * (0.7 + twinkle * 0.3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // SHOOTING STARS — b069 occasional bright streaks
+  // -------------------------------------------------------
+  function spawnShootingStar() {
+    const side = Math.random();
+    let sx, sy, angle;
+    if (side < 0.5) {
+      sx = Math.random() * W;
+      sy = -10;
+      angle = Math.PI * 0.25 + Math.random() * 0.5;
+    } else {
+      sx = W + 10;
+      sy = Math.random() * H * 0.4;
+      angle = Math.PI * 0.55 + Math.random() * 0.35;
+    }
+    shootingStars.push({
+      x: sx, y: sy, angle: angle,
+      speed: 350 + Math.random() * 500,
+      length: 50 + Math.random() * 120,
+      life: 0,
+      maxLife: 0.6 + Math.random() * 0.5,
+      width: 1 + Math.random() * 1.5,
+    });
+  }
+  function drawShootingStars(t, dt) {
+    if (Math.random() < dt / 4.5) spawnShootingStar();
+    if (shootingStars.length === 0) return;
+    ctx.save();
+    for (let i = shootingStars.length - 1; i >= 0; i--) {
+      const s = shootingStars[i];
+      s.life += dt;
+      if (s.life > s.maxLife) { shootingStars.splice(i, 1); continue; }
+      s.x += Math.cos(s.angle) * s.speed * dt;
+      s.y += Math.sin(s.angle) * s.speed * dt;
+      const p = s.life / s.maxLife;
+      const alpha = p < 0.15 ? p / 0.15 : 1 - (p - 0.15) / 0.85;
+      const tailX = s.x - Math.cos(s.angle) * s.length;
+      const tailY = s.y - Math.sin(s.angle) * s.length;
+      const grad = ctx.createLinearGradient(s.x, s.y, tailX, tailY);
+      grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.9) + ')');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = s.width;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(tailX, tailY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // FILM GRAIN — b069 subtle analog noise (desktop only)
+  // -------------------------------------------------------
+  function drawGrain() {
+    if (!grainCanvas || isMobile()) return;
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    ctx.globalCompositeOperation = 'overlay';
+    const ox = (Math.random() * 128) | 0;
+    const oy = (Math.random() * 128) | 0;
+    for (let x = -128; x < W + 128; x += 128) {
+      for (let y = -128; y < H + 128; y += 128) {
+        ctx.drawImage(grainCanvas, x + ox, y + oy);
+      }
+    }
+    ctx.restore();
   }
 
   // -------------------------------------------------------
@@ -640,8 +783,10 @@
   function drawGlyphs(t) {
     for (const g of glyphs) {
       const dy = Math.sin(t * g.speed + g.x * 0.01) * 8;
+      const gpx = parallaxX * -22 * g.scale;
+      const gpy = parallaxY * -22 * g.scale;
       ctx.save();
-      ctx.translate(g.x, g.y + dy);
+      ctx.translate(g.x + gpx, g.y + dy + gpy);
       ctx.rotate(g.rot + t * g.speed * 0.4);
       ctx.scale(g.scale, g.scale);
       ctx.fillStyle = g.color;
@@ -5361,10 +5506,24 @@
   // -------------------------------------------------------
   function draw() {
     if (!ctx || !canvas) return;
-    const t = (performance.now() - t0) * 0.001;
+    const now = performance.now();
+    const t = (now - t0) * 0.001;
+    const dt = Math.min((now - lastFrameT) / 1000, 0.1);
+    lastFrameT = now;
     const bands = getAudioBands();
 
+    // b069 — smooth parallax lerp toward mouse
+    if (mx > 0 && my > 0) {
+      parallaxX += ((mx - W * 0.5) / W - parallaxX) * 0.04;
+      parallaxY += ((my - H * 0.5) / H - parallaxY) * 0.04;
+    } else {
+      parallaxX *= 0.96;
+      parallaxY *= 0.96;
+    }
+
     drawBackground(t, bands);
+    drawStars(t);
+    drawShootingStars(t, dt);
     drawGlyphs(t);
 
     // Update creature positions BEFORE hit test so the
@@ -5510,7 +5669,6 @@
 
     // b058 — burst rings: expand + fade over 700ms.
     // Drawn last so they sit above everything.
-    const now = performance.now();
     for (let i = bursts.length - 1; i >= 0; i--) {
       const b = bursts[i];
       const age = (now - b.birth) / 700;
@@ -5530,6 +5688,8 @@
       ctx.stroke();
       ctx.restore();
     }
+
+    drawGrain();
 
     rafId = requestAnimationFrame(draw);
   }
