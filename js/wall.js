@@ -616,11 +616,11 @@
       stars.push({
         x: (h % 10000) / 10000 * W,
         y: ((h >> 6) % 10000) / 10000 * H,
-        size: 0.3 + ((h >> 12) % 100) / 100 * 1.4,
+        size: 0.8 + ((h >> 12) % 100) / 100 * 1.8,
         twinkleSpeed: 0.5 + ((h >> 3) % 100) / 100 * 2.5,
         twinklePhase: ((h >> 9) % 1000) / 1000 * Math.PI * 2,
         depth: 0.3 + ((h >> 15) % 100) / 100 * 0.7,
-        baseAlpha: 0.25 + ((h >> 7) % 100) / 100 * 0.75,
+        baseAlpha: 0.4 + ((h >> 7) % 100) / 100 * 0.6,
       });
     }
   }
@@ -5521,9 +5521,13 @@
       parallaxY *= 0.96;
     }
 
+    // b069 — reset canvas state at frame start to prevent leaks
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
     drawBackground(t, bands);
-    drawStars(t);
-    drawShootingStars(t, dt);
+    try { drawStars(t); } catch (e) { console.warn('drawStars', e); }
+    try { drawShootingStars(t, dt); } catch (e) { console.warn('drawShootingStars', e); }
     drawGlyphs(t);
 
     // Update creature positions BEFORE hit test so the
@@ -5689,7 +5693,7 @@
       ctx.restore();
     }
 
-    drawGrain();
+    try { drawGrain(); } catch (e) { console.warn('drawGrain', e); }
 
     rafId = requestAnimationFrame(draw);
   }
