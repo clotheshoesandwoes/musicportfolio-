@@ -45,8 +45,8 @@
 
   // b070 — dynamic mood cycling
   const MOOD_NAMES = ['cosmic', 'synthwave', 'aurora', 'glitch', 'psychedelic'];
-  const MOOD_DURATION = 40;  // seconds per mood
-  const MOOD_FADE = 8;       // crossfade seconds
+  const MOOD_DURATION = 18;  // seconds per mood
+  const MOOD_FADE = 4;       // crossfade seconds
 
   // Tight hyperpop / Marathon-ish accent palette
   const PALETTE = [
@@ -820,33 +820,33 @@
     ctx.globalCompositeOperation = 'lighter';
     const cx = W * 0.5, cy = H * 0.5;
 
-    // Slow rotating galaxy arms — 4 radial gradient blobs
-    const swirl = t * 0.06;
-    ctx.globalAlpha = alpha * 0.14;
+    // Rotating galaxy arms — 4 radial gradient blobs
+    const swirl = t * 0.1;
+    ctx.globalAlpha = alpha * 0.28;
     for (let arm = 0; arm < 4; arm++) {
       const angle = swirl + arm * Math.PI * 0.5;
-      const ax = cx + Math.cos(angle) * 220;
-      const ay = cy + Math.sin(angle) * 180;
-      const grad = ctx.createRadialGradient(ax, ay, 0, ax, ay, 280);
-      grad.addColorStop(0, 'rgba(120, 160, 255, 0.5)');
+      const ax = cx + Math.cos(angle) * 250;
+      const ay = cy + Math.sin(angle) * 200;
+      const grad = ctx.createRadialGradient(ax, ay, 0, ax, ay, 320);
+      grad.addColorStop(0, 'rgba(120, 160, 255, 0.7)');
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(ax - 280, ay - 280, 560, 560);
+      ctx.fillRect(ax - 320, ay - 320, 640, 640);
     }
 
     // Bright pulsing cluster points
-    ctx.globalAlpha = alpha * 0.3;
-    for (let i = 0; i < 10; i++) {
+    ctx.globalAlpha = alpha * 0.5;
+    for (let i = 0; i < 12; i++) {
       const h = hash('clust' + i, 55);
       const x = (h % 1000) / 1000 * W;
       const y = ((h >> 7) % 1000) / 1000 * H;
-      const pulse = 0.4 + 0.6 * Math.sin(t * 1.8 + i * 1.4);
-      const r = 2 + pulse * 5;
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 7);
-      grad.addColorStop(0, 'rgba(200, 220, 255, ' + (0.6 * pulse) + ')');
+      const pulse = 0.4 + 0.6 * Math.sin(t * 2.2 + i * 1.4);
+      const r = 3 + pulse * 7;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 8);
+      grad.addColorStop(0, 'rgba(200, 220, 255, ' + (0.8 * pulse) + ')');
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(x - r * 7, y - r * 7, r * 14, r * 14);
+      ctx.fillRect(x - r * 8, y - r * 8, r * 16, r * 16);
     }
     ctx.restore();
   }
@@ -858,8 +858,8 @@
     const horizonY = H * 0.52;
 
     // Sun glow at horizon
-    ctx.globalAlpha = alpha * 0.55;
-    const sunR = 55 + bass * 20;
+    ctx.globalAlpha = alpha * 0.75;
+    const sunR = 65 + bass * 25;
     const sunGrad = ctx.createRadialGradient(W / 2, horizonY, 0, W / 2, horizonY, sunR);
     sunGrad.addColorStop(0, 'rgba(255, 80, 180, 0.9)');
     sunGrad.addColorStop(0.5, 'rgba(255, 40, 100, 0.3)');
@@ -870,7 +870,7 @@
     ctx.fill();
 
     // Horizon glow band
-    ctx.globalAlpha = alpha * 0.3;
+    ctx.globalAlpha = alpha * 0.5;
     const hGlow = ctx.createLinearGradient(0, horizonY - 50, 0, horizonY + 40);
     hGlow.addColorStop(0, 'rgba(255, 0, 100, 0)');
     hGlow.addColorStop(0.45, 'rgba(255, 60, 160, 0.5)');
@@ -887,7 +887,7 @@
     for (let i = 0; i < lineCount; i++) {
       const raw = (i + scrollOff) / lineCount;
       const y = horizonY + (H - horizonY) * (raw * raw);
-      ctx.globalAlpha = alpha * raw * 0.3;
+      ctx.globalAlpha = alpha * raw * 0.5;
       ctx.lineWidth = 0.8 + raw * 1.5;
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -896,7 +896,7 @@
     }
 
     // Vertical converging lines
-    ctx.globalAlpha = alpha * 0.15;
+    ctx.globalAlpha = alpha * 0.3;
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255, 0, 200, 1)';
     for (let i = -10; i <= 10; i++) {
@@ -935,8 +935,8 @@
       ctx.closePath();
 
       const grad = ctx.createLinearGradient(0, baseY - amp, 0, H);
-      grad.addColorStop(0, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.22 * alpha) + ')');
-      grad.addColorStop(0.25, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.08 * alpha) + ')');
+      grad.addColorStop(0, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.40 * alpha) + ')');
+      grad.addColorStop(0.25, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.15 * alpha) + ')');
       grad.addColorStop(1, 'rgba(' + cr + ',' + cg + ',' + cb + ',0)');
       ctx.fillStyle = grad;
       ctx.fill();
@@ -952,8 +952,8 @@
     const seed = (t * 4) | 0;
 
     // Flickering color blocks
-    const blockCount = 5 + Math.floor(bass * 12);
-    ctx.globalAlpha = alpha * 0.14;
+    const blockCount = 8 + Math.floor(bass * 16);
+    ctx.globalAlpha = alpha * 0.28;
     const bColors = ['#ff0050', '#00ff80', '#4488ff', '#ff00ff', '#ffff00', '#00ffff'];
     for (let i = 0; i < blockCount; i++) {
       const h = hash('glb' + seed + '_' + i, 31);
@@ -966,7 +966,7 @@
     // RGB channel tint shift
     ctx.globalCompositeOperation = 'lighter';
     const shift = 2 + treble * 10;
-    ctx.globalAlpha = alpha * 0.03;
+    ctx.globalAlpha = alpha * 0.06;
     ctx.fillStyle = '#ff0000';
     ctx.fillRect(-shift, 0, W, H);
     ctx.fillStyle = '#0000ff';
@@ -974,9 +974,9 @@
 
     // Scanline corruption flashes
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = alpha * 0.08;
+    ctx.globalAlpha = alpha * 0.15;
     ctx.fillStyle = '#fff';
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       const h2 = hash('scan' + seed + '_' + i, 91);
       const y = (h2 % 1000) / 1000 * H;
       ctx.fillRect(0, y, W, 1 + (h2 % 4));
@@ -1000,7 +1000,7 @@
       const raw = (i + expansion) / ringCount;
       const r = raw * maxR;
       const hue = (t * 25 + i * 22) % 360;
-      ctx.strokeStyle = 'hsla(' + hue + ', 90%, 60%, ' + (0.13 * (1 - raw) * alpha) + ')';
+      ctx.strokeStyle = 'hsla(' + hue + ', 90%, 60%, ' + (0.25 * (1 - raw) * alpha) + ')';
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.stroke();
@@ -1010,7 +1010,7 @@
     ctx.lineWidth = 2;
     for (let arm = 0; arm < 3; arm++) {
       const hue = (t * 40 + arm * 120) % 360;
-      ctx.strokeStyle = 'hsla(' + hue + ', 100%, 65%, ' + (0.09 * alpha) + ')';
+      ctx.strokeStyle = 'hsla(' + hue + ', 100%, 65%, ' + (0.18 * alpha) + ')';
       ctx.beginPath();
       for (let a = 0; a < Math.PI * 8; a += 0.15) {
         const r = (a / (Math.PI * 8)) * maxR;
