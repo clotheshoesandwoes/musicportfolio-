@@ -43,6 +43,11 @@
   let pageIndex = 0;
   const isMobile = () => window.innerWidth < 768;
 
+  // b070 — dynamic mood cycling
+  const MOOD_NAMES = ['cosmic', 'synthwave', 'aurora', 'glitch', 'psychedelic'];
+  const MOOD_DURATION = 40;  // seconds per mood
+  const MOOD_FADE = 8;       // crossfade seconds
+
   // Tight hyperpop / Marathon-ish accent palette
   const PALETTE = [
     ['#9cff3a', '#1a8a00'],   // lime
@@ -773,6 +778,248 @@
       for (let y = -128; y < H + 128; y += 128) {
         ctx.drawImage(grainCanvas, x + ox, y + oy);
       }
+    }
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // MOOD LAYER — b070 cycles through 5 visual modes with
+  // crossfade transitions. Drawn additively on top of the
+  // nebula background, under stars/glyphs/creatures.
+  // -------------------------------------------------------
+  function drawMoodLayer(t, bands) {
+    const cycleLen = MOOD_NAMES.length * MOOD_DURATION;
+    const phase = t % cycleLen;
+    const cur = Math.floor(phase / MOOD_DURATION) % MOOD_NAMES.length;
+    const nxt = (cur + 1) % MOOD_NAMES.length;
+    const progress = (phase % MOOD_DURATION) / MOOD_DURATION;
+    const fadeZone = MOOD_FADE / MOOD_DURATION;
+
+    let curA = 1, nxtA = 0;
+    if (progress > 1 - fadeZone) {
+      const fp = (progress - (1 - fadeZone)) / fadeZone;
+      curA = 1 - fp;
+      nxtA = fp;
+    }
+    if (curA > 0.01) drawMood(MOOD_NAMES[cur], t, bands, curA);
+    if (nxtA > 0.01) drawMood(MOOD_NAMES[nxt], t, bands, nxtA);
+  }
+  function drawMood(name, t, bands, alpha) {
+    switch (name) {
+      case 'cosmic':      drawMoodCosmic(t, bands, alpha);      break;
+      case 'synthwave':   drawMoodSynthwave(t, bands, alpha);   break;
+      case 'aurora':      drawMoodAurora(t, bands, alpha);      break;
+      case 'glitch':      drawMoodGlitch(t, bands, alpha);      break;
+      case 'psychedelic': drawMoodPsychedelic(t, bands, alpha);  break;
+    }
+  }
+
+  // COSMIC — galaxy swirl arms + pulsing cluster glow points
+  function drawMoodCosmic(t, bands, alpha) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const cx = W * 0.5, cy = H * 0.5;
+
+    // Slow rotating galaxy arms — 4 radial gradient blobs
+    const swirl = t * 0.06;
+    ctx.globalAlpha = alpha * 0.14;
+    for (let arm = 0; arm < 4; arm++) {
+      const angle = swirl + arm * Math.PI * 0.5;
+      const ax = cx + Math.cos(angle) * 220;
+      const ay = cy + Math.sin(angle) * 180;
+      const grad = ctx.createRadialGradient(ax, ay, 0, ax, ay, 280);
+      grad.addColorStop(0, 'rgba(120, 160, 255, 0.5)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(ax - 280, ay - 280, 560, 560);
+    }
+
+    // Bright pulsing cluster points
+    ctx.globalAlpha = alpha * 0.3;
+    for (let i = 0; i < 10; i++) {
+      const h = hash('clust' + i, 55);
+      const x = (h % 1000) / 1000 * W;
+      const y = ((h >> 7) % 1000) / 1000 * H;
+      const pulse = 0.4 + 0.6 * Math.sin(t * 1.8 + i * 1.4);
+      const r = 2 + pulse * 5;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 7);
+      grad.addColorStop(0, 'rgba(200, 220, 255, ' + (0.6 * pulse) + ')');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - r * 7, y - r * 7, r * 14, r * 14);
+    }
+    ctx.restore();
+  }
+
+  // SYNTHWAVE — perspective grid, horizon glow, neon sun
+  function drawMoodSynthwave(t, bands, alpha) {
+    ctx.save();
+    const bass = bands ? bands.bass : 0;
+    const horizonY = H * 0.52;
+
+    // Sun glow at horizon
+    ctx.globalAlpha = alpha * 0.55;
+    const sunR = 55 + bass * 20;
+    const sunGrad = ctx.createRadialGradient(W / 2, horizonY, 0, W / 2, horizonY, sunR);
+    sunGrad.addColorStop(0, 'rgba(255, 80, 180, 0.9)');
+    sunGrad.addColorStop(0.5, 'rgba(255, 40, 100, 0.3)');
+    sunGrad.addColorStop(1, 'rgba(255, 0, 80, 0)');
+    ctx.fillStyle = sunGrad;
+    ctx.beginPath();
+    ctx.arc(W / 2, horizonY, sunR, Math.PI, 0);
+    ctx.fill();
+
+    // Horizon glow band
+    ctx.globalAlpha = alpha * 0.3;
+    const hGlow = ctx.createLinearGradient(0, horizonY - 50, 0, horizonY + 40);
+    hGlow.addColorStop(0, 'rgba(255, 0, 100, 0)');
+    hGlow.addColorStop(0.45, 'rgba(255, 60, 160, 0.5)');
+    hGlow.addColorStop(0.55, 'rgba(255, 120, 60, 0.4)');
+    hGlow.addColorStop(1, 'rgba(255, 0, 100, 0)');
+    ctx.fillStyle = hGlow;
+    ctx.fillRect(0, horizonY - 50, W, 90);
+
+    // Scrolling horizontal grid lines below horizon
+    ctx.strokeStyle = 'rgba(255, 0, 200, 1)';
+    const scrollSpeed = 0.35 + bass * 0.3;
+    const scrollOff = (t * scrollSpeed) % 1;
+    const lineCount = 22;
+    for (let i = 0; i < lineCount; i++) {
+      const raw = (i + scrollOff) / lineCount;
+      const y = horizonY + (H - horizonY) * (raw * raw);
+      ctx.globalAlpha = alpha * raw * 0.3;
+      ctx.lineWidth = 0.8 + raw * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+
+    // Vertical converging lines
+    ctx.globalAlpha = alpha * 0.15;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 0, 200, 1)';
+    for (let i = -10; i <= 10; i++) {
+      ctx.beginPath();
+      ctx.moveTo(W / 2, horizonY);
+      ctx.lineTo(W / 2 + i * (W / 8), H);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // AURORA — flowing sine-wave ribbons of color
+  function drawMoodAurora(t, bands, alpha) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const mid = bands ? bands.mid : 0;
+    const colors = [
+      [0, 255, 140], [0, 180, 255], [150, 0, 255],
+      [255, 80, 200], [0, 255, 220],
+    ];
+    for (let r = 0; r < 5; r++) {
+      const [cr, cg, cb] = colors[r];
+      const baseY = H * (0.12 + r * 0.16);
+      const speed = 0.2 + r * 0.07;
+      const amp = 55 + r * 18 + mid * 35;
+
+      ctx.beginPath();
+      ctx.moveTo(-10, H);
+      for (let x = -10; x <= W + 10; x += 5) {
+        const y = baseY
+          + Math.sin(x * 0.004 + t * speed + r * 1.8) * amp
+          + Math.sin(x * 0.009 - t * speed * 0.7) * amp * 0.35;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W + 10, H);
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(0, baseY - amp, 0, H);
+      grad.addColorStop(0, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.22 * alpha) + ')');
+      grad.addColorStop(0.25, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (0.08 * alpha) + ')');
+      grad.addColorStop(1, 'rgba(' + cr + ',' + cg + ',' + cb + ',0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // GLITCH — flickering color blocks + scanline noise + RGB split
+  function drawMoodGlitch(t, bands, alpha) {
+    ctx.save();
+    const bass = bands ? bands.bass : 0;
+    const treble = bands ? bands.treble : 0;
+    const seed = (t * 4) | 0;
+
+    // Flickering color blocks
+    const blockCount = 5 + Math.floor(bass * 12);
+    ctx.globalAlpha = alpha * 0.14;
+    const bColors = ['#ff0050', '#00ff80', '#4488ff', '#ff00ff', '#ffff00', '#00ffff'];
+    for (let i = 0; i < blockCount; i++) {
+      const h = hash('glb' + seed + '_' + i, 31);
+      const x = (h % 1000) / 1000 * W;
+      const y = ((h >> 8) % 1000) / 1000 * H;
+      ctx.fillStyle = bColors[h % bColors.length];
+      ctx.fillRect(x, y, 30 + (h % 300), 2 + (h % 18));
+    }
+
+    // RGB channel tint shift
+    ctx.globalCompositeOperation = 'lighter';
+    const shift = 2 + treble * 10;
+    ctx.globalAlpha = alpha * 0.03;
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(-shift, 0, W, H);
+    ctx.fillStyle = '#0000ff';
+    ctx.fillRect(shift, 0, W, H);
+
+    // Scanline corruption flashes
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha * 0.08;
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 3; i++) {
+      const h2 = hash('scan' + seed + '_' + i, 91);
+      const y = (h2 % 1000) / 1000 * H;
+      ctx.fillRect(0, y, W, 1 + (h2 % 4));
+    }
+    ctx.restore();
+  }
+
+  // PSYCHEDELIC — expanding concentric rings + spiral arms, hue cycling
+  function drawMoodPsychedelic(t, bands, alpha) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const cx = W / 2, cy = H / 2;
+    const maxR = Math.max(W, H) * 0.7;
+    const bass = bands ? bands.bass : 0;
+
+    // Expanding concentric rings
+    const ringCount = 16;
+    const expansion = (t * 0.1) % 1;
+    ctx.lineWidth = 2 + bass * 4;
+    for (let i = 0; i < ringCount; i++) {
+      const raw = (i + expansion) / ringCount;
+      const r = raw * maxR;
+      const hue = (t * 25 + i * 22) % 360;
+      ctx.strokeStyle = 'hsla(' + hue + ', 90%, 60%, ' + (0.13 * (1 - raw) * alpha) + ')';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Slow spiral arms
+    ctx.lineWidth = 2;
+    for (let arm = 0; arm < 3; arm++) {
+      const hue = (t * 40 + arm * 120) % 360;
+      ctx.strokeStyle = 'hsla(' + hue + ', 100%, 65%, ' + (0.09 * alpha) + ')';
+      ctx.beginPath();
+      for (let a = 0; a < Math.PI * 8; a += 0.15) {
+        const r = (a / (Math.PI * 8)) * maxR;
+        const angle = a + t * 0.15 + arm * (Math.PI * 2 / 3);
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (a < 0.01) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -5526,6 +5773,7 @@
     ctx.globalCompositeOperation = 'source-over';
 
     drawBackground(t, bands);
+    try { drawMoodLayer(t, bands); } catch (e) { console.warn('drawMoodLayer', e); }
     try { drawStars(t); } catch (e) { console.warn('drawStars', e); }
     try { drawShootingStars(t, dt); } catch (e) { console.warn('drawShootingStars', e); }
     drawGlyphs(t);

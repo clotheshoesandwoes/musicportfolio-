@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## b070 — 2026-04-12 — Dynamic mood cycling: 5 visual modes crossfade in the background
+
+Wall background now cycles through 5 distinct visual moods every ~40 seconds with smooth 8-second crossfades:
+
+- **Cosmic** — slow-rotating galaxy swirl arms (4 radial blobs) + 10 pulsing star cluster glow points
+- **Synthwave** — perspective grid below a neon horizon, scrolling horizontal lines (bass-reactive speed), converging verticals, pink/orange sun semicircle + glow band
+- **Aurora** — 5 flowing sine-wave color ribbons (green, cyan, purple, pink, teal) with mid-frequency reactive amplitude, gradient fill to transparent
+- **Glitch** — flickering color blocks (bass-reactive count, 4 changes/sec via hash), RGB channel tint shift (treble-reactive), scanline corruption flashes
+- **Psychedelic** — 16 expanding concentric hue-cycling rings (bass-reactive thickness), 3 slowly rotating spiral arms with independent hue cycling
+
+All moods draw additively (`lighter` or `source-over`) at controlled alpha on top of the permanent nebula base. Two moods are visible simultaneously during crossfade. Each mood responds to audio frequency bands.
+
+### Files modified
+- [js/wall.js](js/wall.js) — `drawMoodLayer()`, `drawMood()`, 5 mood draw functions, mood constants, draw loop integration
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b069 → b070`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b069 — 2026-04-12 — Background glow-up: starfield, parallax, shooting stars, bass pulse, grain
 
 Wall view background overhaul — five new layers stacked onto the existing nebula system:
