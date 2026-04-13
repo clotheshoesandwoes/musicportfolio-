@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## b081 — 2026-04-13 — Complete scene rewrite: 20 crafted compositions replacing 50 basic ones
+
+Gutted all 50 generic scenes and rewrote from scratch as 20 genuinely crafted visual compositions. Each scene is now a multi-layered environment with detailed silhouettes, atmospheric effects, and real visual storytelling — not just dots and shapes floating around.
+
+**20 new scenes (scenes.js):**
+1. **Tokyo Rain** — neon signs with kanji shapes + glow halos, building silhouettes with antennas + AC units, umbrella silhouettes walking, steam from grates, rain streaks, puddle ripples, power lines, wet street reflections of neon
+2. **Ocean Abyss** — jellyfish with scalloped bell edges + trailing tentacles, whale silhouette with tail fluke, kelp forest with leaf blobs, bioluminescent particles with glow, light rays from surface, marine snow
+3. **Campfire** — 4-layer organic flame shapes, glowing embers rising with light trail, smoke particles with drift, log silhouettes, pine tree silhouettes, stars through canopy, warm light gradient on surroundings
+4. **Northern Lights** — 5 flowing aurora curtain ribbons with triple-sine wave motion, pine tree line silhouette, frozen lake with aurora reflection, snow particles, star field
+5. **Desert Dunes** — layered sand dunes with ridge shadows, massive moon with craters, camel caravan silhouettes on ridge, dust particles, star field, warm sky gradient
+6. **Lightning Storm** — cloud layers, branching lightning bolts (bass-triggered), wind-bent trees with canopy, rain sheets, ground, thunder flash
+7. **Snowy Cabin** — pine trees with snow on branches, detailed cabin with roof/chimney, warm window glow with light pool, chimney smoke puffs, dense snow, stars
+8. **Beach Sunset** — layered waves with foam on crests, atmospheric sun with scattering, cloud streaks, sun reflection on water, sailboat silhouette, wet sand
+9. **Space Nebula** — colored gas cloud nebulas, planet with rings, comet with tail, star field with magnitude variation
+10. **Rainy Window** — bokeh city lights behind glass, glass tint, raindrops with running trails + refraction highlights
+11. **Forest Dawn** — golden light shafts, fog banks, tree trunks with canopy blobs, deer silhouette with antlers, fireflies with glow, stream
+12. **Midnight Drive** — perspective road with scrolling center dashes, passing streetlights with glow, rain on windshield, distant city glow, dashboard ambient
+13. **Synthwave** — chrome gradient sun with stripe cutouts, mountain wireframe, scrolling retro grid floor with perspective, palm tree silhouettes with fronds
+14. **Underwater Reef** — branching coral formations, fish with tails + eyes + stripes, sea turtle with flippers, light shafts, bubbles with highlights
+15. **Volcano** — detailed mountain silhouette with crater, lava flow streaks with glow, rising embers, ash cloud layers, red sky glow
+16. **City Rooftop** — detailed skyline with varied buildings + windows, water tower, traffic glow pools, airplane blink, stars
+17. **Vinyl Session** — spinning record with grooves + light reflection, warm lamp light beam with dust motes, tonearm, label detail
+18. **Aquarium** — glass panel edges, fan coral formations, exotic fish with stripes + tails + eyes, bubbles with highlights, blue ambient light
+19. **Cyberpunk** — 3-layer dense city buildings, neon accent lines, holographic ad with scan line, cables between buildings, flying vehicle lights with trails, rain, wet ground reflection
+20. **Subway Platform** — perspective tunnel walls with tiles, platform edge yellow line, rails, fluorescent lights with flicker, approaching headlight with glow, sparks on rails
+
+Architecture: scenes extracted to [js/scenes.js](js/scenes.js), dimensions.js delegates to SCENE_DEFS module
+
+### Files modified
+- [js/scenes.js](js/scenes.js) — new file, all 20 scene renderers (~800 lines)
+- [js/dimensions.js](js/dimensions.js) — gutted 722 lines of old scene code, now delegates to scenes.js
+- [index.html](index.html) — added scenes.js script tag
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b080 → b081`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b080 — 2026-04-13 — Fix: expanded view crash on click
 
 Fixed crash when clicking into a dimension scene:
