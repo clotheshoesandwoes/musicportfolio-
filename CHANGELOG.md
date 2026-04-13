@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## b086 — 2026-04-13 — Five feel upgrades: mouse trails, ambient glow, swipe nav, entrance, interactive scenes
+
+1. **Mouse trails** — purple/pink particle trail follows cursor across the grid, fades out organically. Spark bursts erupt when hovering tiles. Custom glowing cursor dot replaces default (desktop).
+2. **Audio-reactive background** — subtle nebula glow behind the grid pulses with bass/mid when music plays. Two slowly drifting color blobs (purple + indigo) breathe with the audio.
+3. **Swipe navigation** — in expanded view on mobile, swipe left/right to change tracks. 60px threshold, direction-locked so vertical scrolls don't trigger it.
+4. **Cinematic entrance** — "Kani" logo fades in with blur→sharp→blur animation over 1.5s on first load, then dissolves to reveal the grid. Sets the tone immediately.
+5. **Interactive scene clicks** — click/tap anywhere in the expanded scene and triple expanding rings + 12 burst particles erupt from the click point with gravity. Makes people play with the visuals.
+
+### Files modified
+- [js/dimensions.js](js/dimensions.js) — all 5 features integrated into init/animate/expand flow
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b085 → b086`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b085 — 2026-04-13 — Light/dark mode toggle
 
 Sun/moon button in the header toggles the app between dark and light backgrounds. Only affects the app chrome (header, grid background, player bar, overlays, text colors) — scene visuals inside tiles stay the same. Preference saved to localStorage.

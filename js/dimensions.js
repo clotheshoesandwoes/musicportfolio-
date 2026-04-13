@@ -33,6 +33,18 @@
   let t0 = 0;
   let trackList = [];
 
+  // --- Feature: mouse trails ---
+  let bgCanvas, bgCtx;
+  let mouseTrails = [];
+  let gridMX = -1, gridMY = -1;
+  let sparkBursts = [];
+
+  // --- Feature: interactive scene clicks ---
+  let sceneClickEffects = [];
+
+  // --- Feature: swipe ---
+  let touchStartX = 0, touchStartY = 0;
+
   const SOUNDCLOUD_BASE = 'https://soundcloud.com/kanisongs';
 
   function soundcloudURL(title) {
@@ -75,8 +87,19 @@
     const style = document.createElement('style');
     style.id = 'dimensionsStyle';
     style.textContent = `
+      .dim-bg { position:absolute; inset:0; pointer-events:none; z-index:0; }
       .dim-grid { display:flex; flex-wrap:wrap; gap:${TILE_GAP}px; padding:80px 20px 20px;
-        justify-content:center; align-content:start; overflow-y:auto; height:100%; box-sizing:border-box; }
+        justify-content:center; align-content:start; overflow-y:auto; height:100%; box-sizing:border-box;
+        position:relative; z-index:1; cursor:none; }
+      .dim-grid-cursor { position:fixed; width:8px; height:8px; border-radius:50%;
+        background:rgba(168,85,247,0.6); pointer-events:none; z-index:100;
+        box-shadow:0 0 12px rgba(168,85,247,0.4); transition:transform 0.1s; mix-blend-mode:screen; }
+      .dim-entrance { position:absolute; inset:0; z-index:50; display:flex; align-items:center;
+        justify-content:center; background:#050505; transition:opacity 0.8s; }
+      .dim-entrance.fade { opacity:0; pointer-events:none; }
+      .dim-entrance-logo { font-family:'Syne',sans-serif; font-size:64px; font-weight:700;
+        color:#fff; opacity:0; animation:dim-logo-in 1.5s ease forwards; }
+      @keyframes dim-logo-in { 0%{opacity:0;transform:scale(0.8);filter:blur(10px)} 50%{opacity:1;transform:scale(1.05);filter:blur(0)} 100%{opacity:0;transform:scale(1.1);filter:blur(5px)} }
       .dim-tile { position:relative; width:${tileSize}px; height:${tileSize}px; border-radius:12px;
         overflow:hidden; cursor:pointer; transition:transform .35s cubic-bezier(.22,.68,0,1.2),box-shadow .3s;
         will-change:transform; }
@@ -139,22 +162,81 @@
 
     tileSize = window.innerWidth < 768 ? 140 : 170;
 
+    // --- Cinematic entrance ---
+    const entrance = document.createElement('div');
+    entrance.className = 'dim-entrance';
+    entrance.innerHTML = '<div class="dim-entrance-logo">Kani</div>';
+    container.appendChild(entrance);
+    setTimeout(() => entrance.classList.add('fade'), 1600);
+    setTimeout(() => entrance.remove(), 2500);
+
+    // --- Background canvas (mouse trails + audio-reactive ambient) ---
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.className = 'dim-bg';
+    container.appendChild(bgCanvas);
+
+    // --- Custom cursor (desktop only) ---
+    const cursor = document.createElement('div');
+    cursor.className = 'dim-grid-cursor';
+    cursor.id = 'dimCursor';
+    if (window.innerWidth > 768) container.appendChild(cursor);
+
     gridEl = document.createElement('div');
     gridEl.className = 'dim-grid';
     container.appendChild(gridEl);
 
+    // mouse tracking for trails
+    gridEl.addEventListener('mousemove', (e) => {
+      const r = container.getBoundingClientRect();
+      gridMX = e.clientX - r.left; gridMY = e.clientY - r.top;
+      const cur = document.getElementById('dimCursor');
+      if (cur) { cur.style.left = e.clientX - 4 + 'px'; cur.style.top = e.clientY - 4 + 'px'; }
+      // emit trail particles
+      mouseTrails.push({ x: gridMX, y: gridMY, life: 0, size: 2 + Math.random() * 3, hue: 270 + Math.random() * 60 });
+      if (mouseTrails.length > 80) mouseTrails.shift();
+    });
+    gridEl.addEventListener('mouseleave', () => { gridMX = -1; gridMY = -1; });
+
+    // spark bursts when hovering tiles
+    gridEl.addEventListener('mouseover', (e) => {
+      const tile = e.target.closest('.dim-tile');
+      if (tile) {
+        const r = tile.getBoundingClientRect();
+        const cr = container.getBoundingClientRect();
+        const cx = r.left - cr.left + r.width / 2, cy = r.top - cr.top + r.height / 2;
+        for (let i = 0; i < 8; i++) {
+          const angle = Math.random() * 6.28;
+          sparkBursts.push({ x: cx, y: cy, vx: Math.cos(angle) * (2 + Math.random() * 3), vy: Math.sin(angle) * (2 + Math.random() * 3), life: 0, size: 1.5 + Math.random() * 2 });
+        }
+      }
+    });
+
     buildTiles();
     breathPhase = 0;
     lastMiniDraw = 0;
+    resizeBgCanvas();
+    window.addEventListener('resize', resizeBgCanvas);
     rafId = requestAnimationFrame(animate);
   }
 
   function destroy() {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    window.removeEventListener('resize', resizeBgCanvas);
     const s = document.getElementById('dimensionsStyle'); if (s) s.remove();
     if (overlayEl) { overlayEl.remove(); overlayEl = null; }
     tiles = []; expandedTile = null; container = gridEl = null;
+    bgCanvas = bgCtx = null; mouseTrails = []; sparkBursts = [];
+  }
+
+  function resizeBgCanvas() {
+    if (!bgCanvas || !container) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = container.offsetWidth, h = container.offsetHeight;
+    bgCanvas.width = w * dpr; bgCanvas.height = h * dpr;
+    bgCanvas.style.width = w + 'px'; bgCanvas.style.height = h + 'px';
+    bgCtx = bgCanvas.getContext('2d');
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   /* ============== BUILD TILES ============== */
@@ -271,6 +353,33 @@
       else if (e.code === 'ArrowRight') navigateExpanded(1);
     };
     document.addEventListener('keydown', overlayEl._onKey);
+
+    // --- Swipe navigation (mobile) ---
+    overlayEl.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    overlayEl.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        navigateExpanded(dx < 0 ? 1 : -1);
+      }
+    }, { passive: true });
+
+    // --- Interactive scene clicks ---
+    sceneClickEffects = [];
+    expandedCanvas.addEventListener('click', (e) => {
+      const r = expandedCanvas.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width * expandedTile.w;
+      const y = (e.clientY - r.top) / r.height * expandedTile.h;
+      const particles = [];
+      for (let i = 0; i < 12; i++) {
+        const angle = Math.random() * 6.28;
+        particles.push({ x, y, vx: Math.cos(angle) * (2 + Math.random() * 4), vy: Math.sin(angle) * (2 + Math.random() * 4) - 2, size: 2 + Math.random() * 3, hue: 200 + Math.random() * 120 });
+      }
+      sceneClickEffects.push({ x, y, life: 0, particles });
+    });
   }
 
   function navigateExpanded(dir) {
@@ -333,7 +442,85 @@
       for (let i = 0; i < tiles.length; i++) drawMiniScene(tiles[i], t, bass, mid, treble);
     }
 
-    if (expandedTile && expandedCtx) drawFullScene(t, freq, bass, mid, treble);
+    // --- Background layer: ambient glow + mouse trails + sparks ---
+    if (bgCtx && bgCanvas) {
+      const bw = bgCanvas.width / (Math.min(window.devicePixelRatio || 1, 2) || 1);
+      const bh = bgCanvas.height / (Math.min(window.devicePixelRatio || 1, 2) || 1);
+      bgCtx.clearRect(0, 0, bw, bh);
+
+      // Audio-reactive ambient nebula
+      if (bass > 0.05 || mid > 0.05) {
+        const cx = bw / 2 + Math.sin(t * 0.1) * bw * 0.2;
+        const cy = bh / 2 + Math.cos(t * 0.08) * bh * 0.15;
+        const gr = bw * 0.4 + bass * bw * 0.2;
+        const ng = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, gr);
+        ng.addColorStop(0, `rgba(139,92,246,${0.03 + bass * 0.04})`);
+        ng.addColorStop(0.5, `rgba(236,72,153,${0.015 + mid * 0.02})`);
+        ng.addColorStop(1, 'rgba(0,0,0,0)');
+        bgCtx.fillStyle = ng; bgCtx.fillRect(0, 0, bw, bh);
+        // second nebula blob
+        const cx2 = bw * 0.7 + Math.cos(t * 0.12) * bw * 0.15;
+        const cy2 = bh * 0.3 + Math.sin(t * 0.09) * bh * 0.1;
+        const ng2 = bgCtx.createRadialGradient(cx2, cy2, 0, cx2, cy2, gr * 0.6);
+        ng2.addColorStop(0, `rgba(99,102,241,${0.02 + mid * 0.03})`);
+        ng2.addColorStop(1, 'rgba(0,0,0,0)');
+        bgCtx.fillStyle = ng2; bgCtx.fillRect(0, 0, bw, bh);
+      }
+
+      // Mouse trail particles
+      for (let i = mouseTrails.length - 1; i >= 0; i--) {
+        const p = mouseTrails[i];
+        p.life += 0.025;
+        if (p.life > 1) { mouseTrails.splice(i, 1); continue; }
+        const fade = 1 - p.life;
+        bgCtx.beginPath();
+        bgCtx.arc(p.x, p.y, p.size * fade, 0, 6.28);
+        bgCtx.fillStyle = `hsla(${p.hue},70%,60%,${0.25 * fade})`;
+        bgCtx.fill();
+      }
+
+      // Spark bursts from tile hovers
+      for (let i = sparkBursts.length - 1; i >= 0; i--) {
+        const s = sparkBursts[i];
+        s.x += s.vx; s.y += s.vy;
+        s.vx *= 0.96; s.vy *= 0.96;
+        s.life += 0.03;
+        if (s.life > 1) { sparkBursts.splice(i, 1); continue; }
+        const fade = 1 - s.life;
+        bgCtx.beginPath();
+        bgCtx.arc(s.x, s.y, s.size * fade, 0, 6.28);
+        bgCtx.fillStyle = `rgba(168,85,247,${0.4 * fade})`;
+        bgCtx.fill();
+      }
+    }
+
+    if (expandedTile && expandedCtx) {
+      drawFullScene(t, freq, bass, mid, treble);
+
+      // --- Interactive scene click effects (drawn ON TOP of scene) ---
+      if (sceneClickEffects.length > 0) {
+        const ctx = expandedCtx;
+        for (let i = sceneClickEffects.length - 1; i >= 0; i--) {
+          const e = sceneClickEffects[i];
+          e.life += 0.02;
+          if (e.life > 1) { sceneClickEffects.splice(i, 1); continue; }
+          const fade = 1 - e.life;
+          // expanding rings
+          for (let r = 0; r < 3; r++) {
+            const rr = e.life * (50 + r * 30);
+            ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, 6.28);
+            ctx.strokeStyle = `rgba(255,255,255,${0.15 * fade * (1 - r * 0.3)})`;
+            ctx.lineWidth = (2 - r * 0.5) * fade; ctx.stroke();
+          }
+          // burst particles
+          for (const p of e.particles) {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.vx *= 0.98;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size * fade, 0, 6.28);
+            ctx.fillStyle = `hsla(${p.hue},70%,60%,${0.4 * fade})`; ctx.fill();
+          }
+        }
+      }
+    }
   }
 
   /* ============== SCENE RENDERING (delegated to scenes.js) ============== */
