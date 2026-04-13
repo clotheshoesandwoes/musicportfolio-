@@ -367,18 +367,46 @@
       }
     }, { passive: true });
 
-    // --- Interactive scene clicks ---
+    // --- Interactive scene clicks (scene-specific effects) ---
     sceneClickEffects = [];
     expandedCanvas.addEventListener('click', (e) => {
+      if (!expandedTile) return;
       const r = expandedCanvas.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width * expandedTile.w;
       const y = (e.clientY - r.top) / r.height * expandedTile.h;
+      const type = expandedTile.type;
       const particles = [];
-      for (let i = 0; i < 12; i++) {
-        const angle = Math.random() * 6.28;
-        particles.push({ x, y, vx: Math.cos(angle) * (2 + Math.random() * 4), vy: Math.sin(angle) * (2 + Math.random() * 4) - 2, size: 2 + Math.random() * 3, hue: 200 + Math.random() * 120 });
+      const count = 15;
+
+      if (type === 0) { // Tokyo Rain — splash + rain drops flying
+        for (let i = 0; i < count; i++) { const a = Math.random() * 6.28; particles.push({ x, y, vx: Math.cos(a) * (1 + Math.random() * 2), vy: -Math.random() * 4 - 1, size: 1 + Math.random() * 1.5, color: 'rgba(180,190,220,A)', gravity: 0.1 }); }
+      } else if (type === 1) { // Ocean — ripple rings + bubbles rising
+        for (let i = 0; i < count; i++) { particles.push({ x: x + (Math.random() - 0.5) * 30, y, vx: (Math.random() - 0.5) * 0.5, vy: -1 - Math.random() * 3, size: 2 + Math.random() * 4, color: 'rgba(100,200,255,A)', gravity: -0.02 }); }
+      } else if (type === 2) { // Campfire — embers burst upward
+        for (let i = 0; i < count; i++) { const a = -Math.PI/2 + (Math.random() - 0.5) * 1.5; particles.push({ x, y, vx: Math.cos(a) * (2 + Math.random() * 3), vy: Math.sin(a) * (3 + Math.random() * 4), size: 1.5 + Math.random() * 2, color: `rgba(255,${100+Math.floor(Math.random()*120)},20,A)`, gravity: -0.03 }); }
+      } else if (type === 3) { // Northern Lights — aurora wisps
+        for (let i = 0; i < count; i++) { particles.push({ x: x + (Math.random() - 0.5) * 40, y, vx: (Math.random() - 0.5) * 2, vy: -0.5 - Math.random() * 1.5, size: 3 + Math.random() * 5, color: `hsla(${120 + Math.random() * 160},60%,55%,A)`, gravity: -0.01 }); }
+      } else if (type === 4) { // Desert — sand burst
+        for (let i = 0; i < 20; i++) { const a = Math.random() * 6.28; particles.push({ x, y, vx: Math.cos(a) * (3 + Math.random() * 4), vy: Math.sin(a) * (2 + Math.random() * 3) - 1, size: 1 + Math.random() * 2, color: 'rgba(180,150,100,A)', gravity: 0.08 }); }
+      } else if (type === 5) { // Lightning — electric sparks
+        for (let i = 0; i < count; i++) { const a = Math.random() * 6.28; particles.push({ x, y, vx: Math.cos(a) * (4 + Math.random() * 5), vy: Math.sin(a) * (4 + Math.random() * 5), size: 1 + Math.random() * 1.5, color: 'rgba(200,220,255,A)', gravity: 0 }); }
+      } else if (type === 6) { // Snowy Cabin — snowflake burst
+        for (let i = 0; i < 20; i++) { const a = Math.random() * 6.28; particles.push({ x, y, vx: Math.cos(a) * (1 + Math.random() * 2), vy: Math.sin(a) * (1 + Math.random() * 2), size: 2 + Math.random() * 3, color: 'rgba(255,255,255,A)', gravity: 0.02 }); }
+      } else if (type === 7) { // Beach — water splash
+        for (let i = 0; i < count; i++) { const a = -Math.PI/2 + (Math.random() - 0.5) * 2; particles.push({ x, y, vx: Math.cos(a) * (2 + Math.random() * 3), vy: Math.sin(a) * (3 + Math.random() * 3), size: 2 + Math.random() * 3, color: 'rgba(150,200,255,A)', gravity: 0.1 }); }
+      } else if (type === 8) { // Space — stardust explosion
+        for (let i = 0; i < 20; i++) { const a = Math.random() * 6.28; const sp = 1 + Math.random() * 3; particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, size: 1 + Math.random() * 2, color: `hsla(${Math.random()*60+220},60%,70%,A)`, gravity: 0 }); }
+      } else if (type === 12) { // Synthwave — neon shatter
+        for (let i = 0; i < count; i++) { const a = Math.random() * 6.28; particles.push({ x, y, vx: Math.cos(a) * (3 + Math.random() * 4), vy: Math.sin(a) * (3 + Math.random() * 4), size: 2 + Math.random() * 2, color: `hsla(${Math.random()>0.5?300:180},80%,60%,A)`, gravity: 0 }); }
+      } else if (type === 14) { // Volcano — lava splatter
+        for (let i = 0; i < count; i++) { const a = -Math.PI/2 + (Math.random() - 0.5) * 1.8; particles.push({ x, y, vx: Math.cos(a) * (2 + Math.random() * 4), vy: Math.sin(a) * (4 + Math.random() * 5), size: 2 + Math.random() * 3, color: `rgba(255,${40+Math.floor(Math.random()*60)},0,A)`, gravity: 0.12 }); }
+      } else if (type === 17) { // Aquarium — bubble burst
+        for (let i = 0; i < count; i++) { particles.push({ x: x + (Math.random()-0.5)*20, y, vx: (Math.random()-0.5)*1.5, vy: -1.5 - Math.random()*3, size: 3 + Math.random()*5, color: 'rgba(150,200,255,A)', gravity: -0.02 }); }
+      } else { // Default — colored burst matching scene palette
+        const col = expandedTile.colors;
+        for (let i = 0; i < count; i++) { const a = Math.random() * 6.28; particles.push({ x, y, vx: Math.cos(a) * (2 + Math.random() * 4), vy: Math.sin(a) * (2 + Math.random() * 4) - 1, size: 2 + Math.random() * 3, color: hexToRGBA(col[Math.random() > 0.5 ? 0 : 1], 'A'), gravity: 0.05 }); }
       }
-      sceneClickEffects.push({ x, y, life: 0, particles });
+      sceneClickEffects.push({ x, y, life: 0, type, particles });
     });
   }
 
@@ -497,26 +525,54 @@
     if (expandedTile && expandedCtx) {
       drawFullScene(t, freq, bass, mid, treble);
 
-      // --- Interactive scene click effects (drawn ON TOP of scene) ---
+      // --- Interactive scene click effects (scene-specific, drawn ON TOP) ---
       if (sceneClickEffects.length > 0) {
         const ctx = expandedCtx;
         for (let i = sceneClickEffects.length - 1; i >= 0; i--) {
           const e = sceneClickEffects[i];
-          e.life += 0.02;
+          e.life += 0.018;
           if (e.life > 1) { sceneClickEffects.splice(i, 1); continue; }
           const fade = 1 - e.life;
-          // expanding rings
-          for (let r = 0; r < 3; r++) {
-            const rr = e.life * (50 + r * 30);
+
+          // Scene-specific origin effects
+          if (e.type === 1 || e.type === 17) { // Ocean / Aquarium — ripple rings
+            for (let r = 0; r < 4; r++) {
+              const rr = e.life * (30 + r * 20);
+              ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, 6.28);
+              ctx.strokeStyle = `rgba(100,200,255,${0.12 * fade * (1 - r * 0.2)})`;
+              ctx.lineWidth = 1.5 * fade; ctx.stroke();
+            }
+          } else if (e.type === 2) { // Campfire — warm glow
+            const fg = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, 40 * e.life);
+            fg.addColorStop(0, `rgba(255,150,30,${0.15 * fade})`);
+            fg.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = fg; ctx.fillRect(e.x - 50, e.y - 50, 100, 100);
+          } else if (e.type === 5) { // Lightning — flash
+            if (e.life < 0.1) { ctx.fillStyle = `rgba(200,220,255,${0.08 * (1 - e.life * 10)})`; ctx.fillRect(0, 0, expandedTile.w, expandedTile.h); }
+          } else if (e.type === 4) { // Desert — dust cloud
+            ctx.beginPath(); ctx.arc(e.x, e.y, 20 + e.life * 40, 0, 6.28);
+            ctx.fillStyle = `rgba(180,150,100,${0.04 * fade})`; ctx.fill();
+          } else { // Default — subtle ring
+            const rr = e.life * 50;
             ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, 6.28);
-            ctx.strokeStyle = `rgba(255,255,255,${0.15 * fade * (1 - r * 0.3)})`;
-            ctx.lineWidth = (2 - r * 0.5) * fade; ctx.stroke();
+            ctx.strokeStyle = `rgba(255,255,255,${0.1 * fade})`;
+            ctx.lineWidth = 1.5 * fade; ctx.stroke();
           }
-          // burst particles
+
+          // Particles (use scene-specific colors/gravity)
           for (const p of e.particles) {
-            p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.vx *= 0.98;
+            p.x += p.vx; p.y += p.vy;
+            p.vy += (p.gravity || 0.05);
+            p.vx *= 0.98;
+            const alpha = 0.5 * fade;
             ctx.beginPath(); ctx.arc(p.x, p.y, p.size * fade, 0, 6.28);
-            ctx.fillStyle = `hsla(${p.hue},70%,60%,${0.4 * fade})`; ctx.fill();
+            ctx.fillStyle = p.color.replace('A', alpha.toFixed(2));
+            ctx.fill();
+            // glow for embers/sparks
+            if (e.type === 2 || e.type === 14 || e.type === 5) {
+              ctx.shadowBlur = 4; ctx.shadowColor = p.color.replace('A', '0.5');
+              ctx.fill(); ctx.shadowBlur = 0;
+            }
           }
         }
       }
