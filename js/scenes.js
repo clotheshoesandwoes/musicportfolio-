@@ -946,34 +946,71 @@ window.SCENE_DEFS = (function () {
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx - tailLen, cy + tailLen * 0.3); ctx.lineTo(cx - tailLen * 0.8, cy + tailLen * 0.35);
       ctx.strokeStyle = tg; ctx.lineWidth = full ? 2 : 1; ctx.stroke();
     }),
-    // 9: Rainy Window
-    makeQuickScene('Rainy Window', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
-      // blurred bokeh lights
-      for (let i = 0; i < (full ? 15 : 6); i++) {
-        const b = p.p2[i]; const br = b.size * (full ? 2.5 : 1) + mid * 5;
-        const bg = ctx.createRadialGradient(b.x * w, b.y * h, 0, b.x * w, b.y * h, br);
-        bg.addColorStop(0, `hsla(${b.hue},60%,50%,${0.06 + bass * 0.02})`); bg.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = bg; ctx.fillRect(b.x * w - br, b.y * h - br, br * 2, br * 2);
+    // 9: Stargazer — lone figure on hilltop, massive Milky Way, shooting stars
+    makeQuickScene('Stargazer', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
+      // deep night sky
+      const sky = ctx.createLinearGradient(0, 0, 0, h * 0.7);
+      sky.addColorStop(0, 'rgba(2,2,10,0.8)'); sky.addColorStop(1, 'rgba(8,5,18,0.4)');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+      // Milky Way band (diagonal swath of dense stars + nebula glow)
+      if (full) {
+        ctx.save(); ctx.translate(w * 0.3, 0); ctx.rotate(0.4);
+        for (let i = 0; i < 200; i++) {
+          const mx = (Math.random() - 0.5) * w * 0.25, my = Math.random() * h * 1.2;
+          ctx.beginPath(); ctx.arc(mx, my, 0.3 + Math.random() * 0.8, 0, 6.28);
+          ctx.fillStyle = `rgba(255,255,255,${0.1 + Math.random() * 0.25})`; ctx.fill();
+        }
+        // nebula glow in the band
+        for (let i = 0; i < 5; i++) {
+          const nx = (Math.random() - 0.5) * w * 0.2, ny = Math.random() * h;
+          const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, 40 + Math.random() * 30);
+          ng.addColorStop(0, `hsla(${240 + i * 20},40%,40%,0.03)`); ng.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = ng; ctx.fillRect(nx - 60, ny - 60, 120, 120);
+        }
+        ctx.restore();
       }
-      // glass tint
-      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, w, h);
-      // raindrops
-      for (let i = 0; i < (full ? 30 : 10); i++) {
-        const d = p.p1[i]; d.y += 0.0008 + d.size * 0.00015; d.phase += 0.02;
-        if (d.y > 1.1) { d.y = -0.1; d.x = Math.random(); d.size = 1 + Math.random() * 3; }
-        const dx = d.x * w + Math.sin(d.phase) * 2, dy = d.y * h;
-        // trail
-        const trailLen = full ? 15 : 6;
-        ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(dx + Math.sin(d.phase - 0.5) * 1, dy - trailLen * d.size);
-        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = d.size * (full ? 0.4 : 0.2); ctx.stroke();
-        // drop head
-        const dr = d.size * (full ? 0.7 : 0.4);
-        ctx.beginPath(); ctx.arc(dx, dy, dr, 0, 6.28);
-        ctx.fillStyle = 'rgba(200,220,255,0.1)'; ctx.fill();
-        // refraction highlight
-        ctx.beginPath(); ctx.arc(dx - dr * 0.2, dy - dr * 0.2, dr * 0.25, 0, 6.28);
-        ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
+      // regular stars
+      for (let i = 0; i < (full ? 60 : 20); i++) {
+        const s = p.p1[i]; const tw = 0.3 + 0.7 * Math.sin(t * 1.3 + s.phase);
+        ctx.beginPath(); ctx.arc(s.x * w, s.y * h * 0.65, s.r * (full ? 1 : 0.5), 0, 6.28);
+        ctx.fillStyle = `rgba(255,255,255,${tw * 0.5})`; ctx.fill();
       }
+      // shooting star
+      const ss = p.extra;
+      ss.val -= 0.015; if (ss.val < 0) ss.val = 0;
+      if (Math.random() < 0.005 && ss.val <= 0) { ss.angle = 0.3 + Math.random() * 0.5; ss.trail = [{ x: Math.random() * 0.6 + 0.2, y: Math.random() * 0.2 }]; ss.val = 1; }
+      if (ss.val > 0 && ss.trail.length > 0) {
+        const head = ss.trail[ss.trail.length - 1];
+        const hx = head.x * w + Math.cos(ss.angle) * 3, hy = head.y * h + Math.sin(ss.angle) * 3;
+        ctx.beginPath(); ctx.moveTo(hx - Math.cos(ss.angle) * (full ? 50 : 20), hy - Math.sin(ss.angle) * (full ? 50 : 20));
+        ctx.lineTo(hx, hy);
+        const sg = ctx.createLinearGradient(hx - Math.cos(ss.angle) * 50, hy - Math.sin(ss.angle) * 50, hx, hy);
+        sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(1, `rgba(255,255,255,${ss.val * 0.6})`);
+        ctx.strokeStyle = sg; ctx.lineWidth = full ? 2 : 1; ctx.stroke();
+        head.x += Math.cos(ss.angle) * 0.008; head.y += Math.sin(ss.angle) * 0.005;
+      }
+      // rolling hills silhouette
+      const hillY = h * 0.72;
+      ctx.beginPath(); ctx.moveTo(0, h);
+      for (let x = 0; x <= w; x += 2) {
+        const y = hillY + Math.sin(x / w * 3 + 0.5) * h * 0.06 + Math.sin(x / w * 7 + 2) * h * 0.02;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(w, h); ctx.closePath();
+      ctx.fillStyle = 'rgba(5,5,10,0.7)'; ctx.fill();
+      // figure silhouette on hilltop
+      const figX = w * 0.45, figY = hillY + Math.sin(0.45 * 3 + 0.5) * h * 0.06 + Math.sin(0.45 * 7 + 2) * h * 0.02;
+      ctx.fillStyle = 'rgba(5,5,10,0.8)';
+      // body
+      ctx.fillRect(figX - (full ? 3 : 1.5), figY - (full ? 22 : 10), full ? 6 : 3, full ? 22 : 10);
+      // head
+      ctx.beginPath(); ctx.arc(figX, figY - (full ? 25 : 12), full ? 4 : 2, 0, 6.28); ctx.fill();
+      // legs
+      ctx.beginPath(); ctx.moveTo(figX, figY); ctx.lineTo(figX - (full ? 4 : 2), figY + (full ? 10 : 5));
+      ctx.moveTo(figX, figY); ctx.lineTo(figX + (full ? 4 : 2), figY + (full ? 10 : 5));
+      ctx.strokeStyle = 'rgba(5,5,10,0.8)'; ctx.lineWidth = full ? 2 : 1; ctx.stroke();
+      // grass tufts
+      if (full) for (let i = 0; i < 15; i++) { const gx = Math.random() * w, gy = hillY + Math.sin(gx / w * 3 + 0.5) * h * 0.06; ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + Math.sin(t * 0.3 + i) * 3, gy - 5 - Math.random() * 5); ctx.strokeStyle = 'rgba(20,30,15,0.2)'; ctx.lineWidth = 0.8; ctx.stroke(); }
     }),
     // 10: Forest Dawn
     makeQuickScene('Forest Dawn', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
@@ -1015,37 +1052,73 @@ window.SCENE_DEFS = (function () {
       // stream
       if (full) { ctx.beginPath(); for (let x = 0; x <= w; x += 3) { ctx.lineTo(x, h * 0.78 + Math.sin(x * 0.02 + t * 0.5) * 3); } ctx.strokeStyle = 'rgba(100,150,200,0.06)'; ctx.lineWidth = 8; ctx.stroke(); }
     }),
-    // 11: Midnight Drive
-    makeQuickScene('Midnight Drive', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
-      // road ahead (perspective)
-      const vp = h * 0.38;
-      ctx.beginPath(); ctx.moveTo(w * 0.35, vp); ctx.lineTo(0, h); ctx.lineTo(w, h); ctx.lineTo(w * 0.65, vp); ctx.closePath();
-      ctx.fillStyle = 'rgba(18,16,22,0.5)'; ctx.fill();
-      // center line dashes (scrolling)
-      for (let i = 0; i < 12; i++) {
-        const f = i / 12; const dy = vp + f * f * (h - vp); const dw = 1 + f * 3;
-        const so = (t * 60 + i * 25) % (h * 0.06);
-        ctx.fillStyle = `rgba(255,200,50,${0.15 * f})`; ctx.fillRect(w / 2 - dw / 2, dy + so, dw, 6 * f);
+    // 11: Jazz Club — smoky stage, spotlight, sax player, piano, crowd
+    makeQuickScene('Jazz Club', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
+      // warm dark interior
+      ctx.fillStyle = 'rgba(12,8,5,0.4)'; ctx.fillRect(0, 0, w, h);
+      // stage floor
+      ctx.fillStyle = 'rgba(25,18,10,0.3)'; ctx.fillRect(0, h * 0.65, w, h * 0.35);
+      // spotlight cone from above
+      const spotX = w * 0.45, spotTop = 0, spotW = full ? 80 : 30;
+      ctx.beginPath(); ctx.moveTo(spotX - 5, spotTop); ctx.lineTo(spotX + 5, spotTop);
+      ctx.lineTo(spotX + spotW, h * 0.65); ctx.lineTo(spotX - spotW, h * 0.65); ctx.closePath();
+      const sg = ctx.createLinearGradient(spotX, 0, spotX, h * 0.65);
+      sg.addColorStop(0, 'rgba(255,220,150,0.06)'); sg.addColorStop(0.5, 'rgba(255,200,120,0.03)'); sg.addColorStop(1, 'rgba(255,180,80,0.01)');
+      ctx.fillStyle = sg; ctx.fill();
+      // spotlight circle on floor
+      const floorGlow = ctx.createRadialGradient(spotX, h * 0.67, 0, spotX, h * 0.67, spotW);
+      floorGlow.addColorStop(0, 'rgba(255,200,100,0.08)'); floorGlow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = floorGlow; ctx.fillRect(0, h * 0.5, w, h * 0.3);
+      // saxophone player silhouette
+      const saxX = spotX, saxY = h * 0.65;
+      ctx.fillStyle = 'rgba(15,10,5,0.6)';
+      // body
+      ctx.fillRect(saxX - (full ? 5 : 2), saxY - (full ? 35 : 15), full ? 10 : 4, full ? 35 : 15);
+      // head
+      ctx.beginPath(); ctx.arc(saxX, saxY - (full ? 40 : 18), full ? 6 : 3, 0, 6.28); ctx.fill();
+      // legs
+      ctx.fillRect(saxX - (full ? 6 : 2), saxY, full ? 5 : 2, full ? 15 : 6);
+      ctx.fillRect(saxX + (full ? 1 : 0), saxY, full ? 5 : 2, full ? 15 : 6);
+      // saxophone (curved tube going right and up)
+      ctx.beginPath(); ctx.moveTo(saxX + (full ? 5 : 2), saxY - (full ? 25 : 10));
+      ctx.quadraticCurveTo(saxX + (full ? 20 : 8), saxY - (full ? 30 : 12), saxX + (full ? 22 : 9), saxY - (full ? 15 : 6));
+      ctx.quadraticCurveTo(saxX + (full ? 25 : 10), saxY - (full ? 5 : 2), saxX + (full ? 20 : 8), saxY + (full ? 5 : 2));
+      ctx.strokeStyle = 'rgba(15,10,5,0.5)'; ctx.lineWidth = full ? 3 : 1.5; ctx.stroke();
+      // bell of sax
+      ctx.beginPath(); ctx.arc(saxX + (full ? 20 : 8), saxY + (full ? 5 : 2), full ? 6 : 2.5, 0, 6.28);
+      ctx.fillStyle = 'rgba(15,10,5,0.4)'; ctx.fill();
+      // piano silhouette (right side)
+      if (full) {
+        const pianoX = w * 0.7, pianoY = h * 0.58;
+        ctx.fillStyle = 'rgba(10,8,5,0.45)';
+        ctx.fillRect(pianoX, pianoY, 70, 25); // body
+        ctx.beginPath(); ctx.moveTo(pianoX, pianoY); ctx.lineTo(pianoX + 15, pianoY - 30); ctx.lineTo(pianoX + 70, pianoY - 20); ctx.lineTo(pianoX + 70, pianoY); ctx.closePath(); ctx.fill(); // lid
+        // pianist
+        ctx.fillRect(pianoX + 25, pianoY - 45, 8, 30);
+        ctx.beginPath(); ctx.arc(pianoX + 29, pianoY - 50, 5, 0, 6.28); ctx.fill();
       }
-      // streetlights passing
-      for (let i = 0; i < (full ? 6 : 3); i++) {
-        const sf = ((t * 0.5 + i * 0.4) % 2) / 2; // 0→1 cycle
-        const sx = lerp(w * 0.62, w * 0.85, sf);
-        const sy = lerp(vp + 10, h * 0.6, sf * sf);
-        const sr = lerp(2, 8, sf);
-        const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr * (full ? 8 : 4));
-        sg.addColorStop(0, `rgba(255,200,100,${0.08 * sf})`); sg.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = sg; ctx.fillRect(sx - sr * 8, sy - sr * 8, sr * 16, sr * 16);
-        ctx.beginPath(); ctx.arc(sx, sy, sr * 0.5, 0, 6.28); ctx.fillStyle = `rgba(255,200,100,${0.4 * sf})`; ctx.fill();
+      // ambient crowd (dots at tables in foreground)
+      if (full) for (let i = 0; i < 12; i++) {
+        const cx = w * (0.05 + i * 0.08), cy = h * (0.78 + Math.sin(i * 2.1) * 0.05);
+        ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 6.28);
+        ctx.fillStyle = 'rgba(20,15,10,0.25)'; ctx.fill();
+        // table
+        ctx.fillRect(cx - 6, cy + 3, 12, 2);
+        // candle flicker
+        ctx.beginPath(); ctx.arc(cx, cy + 1, 1.5, 0, 6.28);
+        ctx.fillStyle = `rgba(255,180,50,${0.1 + Math.sin(t * 3 + i * 2) * 0.05})`; ctx.fill();
       }
-      // dashboard glow
-      ctx.fillStyle = rgba(col[0], 0.02); ctx.fillRect(0, h * 0.85, w, h * 0.15);
-      // rain on windshield (full)
-      if (full) { for (let i = 0; i < 20; i++) { const r = p.p1[i]; r.y += 0.004; if (r.y > 1) { r.y = 0; r.x = Math.random(); } ctx.beginPath(); ctx.arc(r.x * w, r.y * h, 1.5, 0, 6.28); ctx.fillStyle = 'rgba(200,220,255,0.06)'; ctx.fill(); } }
-      // distant city glow on horizon
-      const cg = ctx.createRadialGradient(w * 0.5, vp, 0, w * 0.5, vp, full ? 150 : 50);
-      cg.addColorStop(0, rgba(col[0], 0.06)); cg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = cg; ctx.fillRect(0, 0, w, h);
+      // smoke haze
+      for (let i = 0; i < (full ? 6 : 2); i++) {
+        const sx = p.p1[i].x * w, sy = h * (0.3 + i * 0.08) + Math.sin(t * 0.1 + i) * 10;
+        const sr = (full ? 50 : 15) + Math.sin(t * 0.15 + i * 3) * 10;
+        ctx.beginPath(); ctx.arc(sx, sy, sr, 0, 6.28);
+        ctx.fillStyle = 'rgba(150,130,100,0.015)'; ctx.fill();
+      }
+      // warm ambient glow
+      const amb = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.5);
+      amb.addColorStop(0, 'rgba(255,150,50,0.02)'); amb.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = amb; ctx.fillRect(0, 0, w, h);
     }),
     // 12: Synthwave
     makeQuickScene('Synthwave', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
@@ -1443,8 +1516,8 @@ window.SCENE_DEFS = (function () {
   return {
     NAMES: [
       'Tokyo Rain', 'Ocean Abyss', 'Campfire', 'Northern Lights', 'Desert Dunes',
-      'Lightning Storm', 'Snowy Cabin', 'Beach Sunset', 'Space Nebula', 'Rainy Window',
-      'Forest Dawn', 'Midnight Drive', 'Synthwave', 'Underwater Reef', 'Volcano',
+      'Lightning Storm', 'Snowy Cabin', 'Beach Sunset', 'Space Nebula', 'Stargazer',
+      'Forest Dawn', 'Jazz Club', 'Synthwave', 'Underwater Reef', 'Volcano',
       'City Rooftop', 'Vinyl Session', 'Aquarium', 'Cyberpunk', 'Subway Platform',
     ],
     COUNT: 20,

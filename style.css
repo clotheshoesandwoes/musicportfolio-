@@ -142,14 +142,20 @@ input { font-family: var(--font-body); }
   display: none;
   position: fixed;
   top: 14px;
-  right: 16px;
+  left: 8px;
+  right: 8px;
   z-index: 55;
   background: #0a0a0aee;
   backdrop-filter: blur(16px);
   border: 0.5px solid #ffffff08;
   border-radius: 99px;
   padding: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.mobile-view-tabs::-webkit-scrollbar { display: none; }
 
 /* ===========================
    View Container
@@ -800,7 +806,8 @@ input { font-family: var(--font-body); }
   .search-wrap { display: none; }
   .top-right .view-tabs { display: none; }
   .social-btn { display: none; }
-  .mobile-view-tabs { display: flex; gap: 4px; }
+  .mobile-view-tabs { display: flex; gap: 4px; flex-wrap: nowrap; }
+  .mobile-view-tabs .view-tab { flex-shrink: 0; white-space: nowrap; font-size: 10px; padding: 6px 10px; }
 
   .view-container { bottom: var(--player-h); }
 

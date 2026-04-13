@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## b083 — 2026-04-13 — Replace weak scenes + fix mobile tabs
+
+- **Rainy Window → Stargazer** — lone figure silhouette on hilltop, Milky Way band with dense star field + nebula glow, shooting stars, rolling hills, grass tufts
+- **Midnight Drive → Jazz Club** — smoky stage with spotlight cone + floor glow, saxophone player silhouette with detailed sax shape, pianist at piano, ambient crowd at candle-lit tables, smoke haze layers, warm amber tones
+- **Mobile tabs** — now horizontally scrollable with Dimensions visible first, tabs don't shrink, hidden scrollbar, fits all views
+
+### Files modified
+- [js/scenes.js](js/scenes.js) — replaced Rainy Window + Midnight Drive scenes, updated NAMES array
+- [style.css](style.css) — mobile tabs: scrollable, left-aligned, no-shrink buttons
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b082 → b083`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b082 — 2026-04-13 — Scene polish: Synthwave sun fix + Aquarium overhaul
 
 - **Synthwave**: sun is now a proper semicircle sitting on the horizon with warm-to-pink gradient, horizontal stripe cutouts that follow the circle's curvature, and a glow halo
