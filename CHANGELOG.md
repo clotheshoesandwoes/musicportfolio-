@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## b078 — 2026-04-13 — Dimensions: player bar visible + prev/next navigation + better scene distribution
+
+Three fixes to Dimensions view:
+
+1. **Player bar stays visible in expanded view** — overlay sits above content but below the player bar (z-index 55 vs player's 60), so you can pause, seek, adjust volume, skip tracks with the regular controls while inside a dimension
+2. **Prev/next navigation inside expanded view** — left/right arrow buttons on screen + arrow key shortcuts let you flip through songs without closing. Scene regenerates, title updates, track plays automatically
+3. **Better scene type distribution** — replaced simple hash modulo with a seeded Fisher-Yates shuffle. Every block of 20 tracks gets all 20 scene types in a randomized order, guaranteeing even coverage with zero repeats within each block
+
+### Files modified
+- [js/dimensions.js](js/dimensions.js) — overlay z-index fix, nav buttons + arrow key handler, navigateExpanded(), shuffled permutation for sceneType()
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b077 → b078`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b077 — 2026-04-13 — Dimensions: merged Living Wall grid + Tape Spine worlds
 
 New default landing view. A breathing tile grid where each track is a tiny portal into one of 20 living dimensions. Click a tile to dive into the full immersive scene at full viewport with audio reactivity. The existing player bar handles all playback controls.

@@ -31,12 +31,28 @@
   let searchQuery = '';
   let tileSize = 170;
   let t0 = 0;
+  let trackList = [];
 
   /* ----- helpers ----- */
   function hexToRGBA(hex, a) { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `rgba(${r},${g},${b},${a})`; }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function hash(i) { return ((i * 2654435761) >>> 0); }
-  function sceneType(idx) { return hash(idx) % SCENE_TYPES; }
+  // Shuffled permutation so all 20 types get used evenly across tracks.
+  // Every block of 20 tracks gets all 20 types in a seeded-random order.
+  function sceneType(idx) {
+    const block = Math.floor(idx / SCENE_TYPES);
+    const pos = idx % SCENE_TYPES;
+    // Fisher-Yates shuffle seeded by block index
+    const perm = [];
+    for (let i = 0; i < SCENE_TYPES; i++) perm.push(i);
+    let seed = block * 7919 + 1;
+    for (let i = SCENE_TYPES - 1; i > 0; i--) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const j = seed % (i + 1);
+      const tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp;
+    }
+    return perm[pos];
+  }
 
   const SCENE_NAMES = ['Neon Horizon', 'Deep Ocean', 'Digital Void', 'Cosmic Drift', 'Crystal Cave',
     'Electric Storm', 'Organic Growth', 'Geometric Void', 'City Rain', 'Beach Midnight',
@@ -72,11 +88,12 @@
       .dim-tile.entering { opacity:0; transform:scale(0.7) translateY(20px); }
       @keyframes dim-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
 
-      .dim-overlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0); display:flex;
+      .dim-overlay { position:fixed; top:0; left:0; right:0; bottom:var(--player-h,80px);
+        z-index:55; background:rgba(0,0,0,0); display:flex;
         flex-direction:column; transition:background .4s; }
       .dim-overlay.visible { background:rgba(0,0,0,0.96); }
       .dim-overlay canvas { position:absolute; inset:0; width:100%; height:100%; }
-      .dim-overlay-info { position:absolute; bottom:80px; left:0; right:0; text-align:center;
+      .dim-overlay-info { position:absolute; bottom:24px; left:0; right:0; text-align:center;
         z-index:2; pointer-events:none; opacity:0; transition:opacity .5s .2s; }
       .dim-overlay.visible .dim-overlay-info { opacity:1; }
       .dim-overlay-title { font-family:'Syne',sans-serif; font-size:36px; font-weight:700;
@@ -87,10 +104,20 @@
         border:1px solid rgba(255,255,255,0.15); color:#fff; font-family:'DM Sans',sans-serif;
         font-size:12px; padding:8px 18px; border-radius:999px; cursor:pointer; transition:background .2s; }
       .dim-overlay-close:hover { background:rgba(255,255,255,0.15); }
+      .dim-nav-btn { position:absolute; top:50%; z-index:3; transform:translateY(-50%);
+        background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#fff;
+        font-size:20px; width:44px; height:44px; border-radius:50%; cursor:pointer;
+        display:flex; align-items:center; justify-content:center; transition:background .2s;
+        font-family:'DM Sans',sans-serif; }
+      .dim-nav-btn:hover { background:rgba(255,255,255,0.15); }
+      .dim-nav-prev { left:16px; }
+      .dim-nav-next { right:16px; }
 
       @media(max-width:768px) { .dim-grid{padding:70px 10px 10px;gap:6px}
         .dim-tile{width:140px;height:140px} .dim-overlay-title{font-size:24px}
-        .dim-overlay-close{top:12px;right:12px;font-size:11px;padding:6px 14px} }
+        .dim-overlay-close{top:12px;right:12px;font-size:11px;padding:6px 14px}
+        .dim-nav-btn{width:36px;height:36px;font-size:16px}
+        .dim-nav-prev{left:8px} .dim-nav-next{right:8px} }
     `;
     document.head.appendChild(style);
 
@@ -119,7 +146,8 @@
     if (!gridEl) return;
     gridEl.innerHTML = '';
     tiles = [];
-    const filtered = getFilteredTracks();
+    trackList = getFilteredTracks();
+    const filtered = trackList;
     const res = tileSize;
 
     filtered.forEach((track, i) => {
@@ -237,11 +265,16 @@
     return p;
   }
 
-  /* ============== EXPAND / COLLAPSE ============== */
+  /* ============== EXPAND / COLLAPSE / NAVIGATE ============== */
+  let expandedTrackListIndex = -1; // index into trackList (not originalIndex)
+
   function expandTile(trackIndex, type, colors, title) {
     if (typeof playTrack === 'function') playTrack(trackIndex);
 
-    if (overlayEl) overlayEl.remove();
+    // find position in current trackList
+    expandedTrackListIndex = trackList.findIndex(t => t.originalIndex === trackIndex);
+
+    if (overlayEl) { document.removeEventListener('keydown', overlayEl._onKey); overlayEl.remove(); }
     overlayEl = document.createElement('div');
     overlayEl.className = 'dim-overlay';
 
@@ -251,8 +284,9 @@
 
     const info = document.createElement('div');
     info.className = 'dim-overlay-info';
-    info.innerHTML = `<div class="dim-overlay-title">${escapeHtml(title)}</div>
-      <div class="dim-overlay-sub">${SCENE_NAMES[type]}</div>`;
+    info.id = 'dimOverlayInfo';
+    info.innerHTML = `<div class="dim-overlay-title" id="dimExpTitle">${escapeHtml(title)}</div>
+      <div class="dim-overlay-sub" id="dimExpSub">${SCENE_NAMES[type]}  ·  ◂ ▸ to navigate</div>`;
     overlayEl.appendChild(info);
 
     const closeBtn = document.createElement('button');
@@ -261,11 +295,24 @@
     closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeExpanded(); });
     overlayEl.appendChild(closeBtn);
 
+    // prev/next buttons
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'dim-nav-btn dim-nav-prev';
+    prevBtn.textContent = '◂';
+    prevBtn.addEventListener('click', (e) => { e.stopPropagation(); navigateExpanded(-1); });
+    overlayEl.appendChild(prevBtn);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'dim-nav-btn dim-nav-next';
+    nextBtn.textContent = '▸';
+    nextBtn.addEventListener('click', (e) => { e.stopPropagation(); navigateExpanded(1); });
+    overlayEl.appendChild(nextBtn);
+
     document.body.appendChild(overlayEl);
 
     // size the canvas
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const ow = window.innerWidth, oh = window.innerHeight;
+    const ow = window.innerWidth, oh = overlayEl.offsetHeight || window.innerHeight;
     expandedCanvas.width = ow * dpr; expandedCanvas.height = oh * dpr;
     expandedCanvas.style.width = ow + 'px'; expandedCanvas.style.height = oh + 'px';
     expandedCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -275,9 +322,37 @@
 
     requestAnimationFrame(() => overlayEl.classList.add('visible'));
 
-    // ESC to close
-    overlayEl._onKey = (e) => { if (e.code === 'Escape') closeExpanded(); };
+    overlayEl._onKey = (e) => {
+      if (e.code === 'Escape') closeExpanded();
+      else if (e.code === 'ArrowLeft') navigateExpanded(-1);
+      else if (e.code === 'ArrowRight') navigateExpanded(1);
+    };
     document.addEventListener('keydown', overlayEl._onKey);
+  }
+
+  function navigateExpanded(dir) {
+    if (trackList.length === 0) return;
+    expandedTrackListIndex = (expandedTrackListIndex + dir + trackList.length) % trackList.length;
+    const track = trackList[expandedTrackListIndex];
+    const idx = track.originalIndex;
+    const type = sceneType(idx);
+    const colors = getGradientColors(idx);
+
+    if (typeof playTrack === 'function') playTrack(idx);
+
+    // regenerate scene
+    const ow = expandedTile.w, oh = expandedTile.h;
+    expandedParts = createFullParticles(type, ow, oh);
+    expandedTile = { trackIndex: idx, type, colors, title: track.title, w: ow, h: oh };
+
+    // update labels
+    const titleEl = document.getElementById('dimExpTitle');
+    const subEl = document.getElementById('dimExpSub');
+    if (titleEl) titleEl.textContent = track.title;
+    if (subEl) subEl.textContent = SCENE_NAMES[type] + '  ·  ◂ ▸ to navigate';
+
+    // update playing indicator on tiles
+    tiles.forEach(t => t.el.classList.toggle('playing', t.index === idx));
   }
 
   function closeExpanded() {
