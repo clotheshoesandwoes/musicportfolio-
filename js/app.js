@@ -232,6 +232,22 @@ async function loadConfig() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Theme toggle (light/dark)
+  const themeToggle = document.getElementById('themeToggle');
+  if (themeToggle) {
+    // restore saved preference
+    if (localStorage.getItem('theme') === 'light') {
+      document.body.classList.add('light');
+      themeToggle.textContent = '☾';
+    }
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('light');
+      const isLight = document.body.classList.contains('light');
+      themeToggle.textContent = isLight ? '☾' : '☀';
+      localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    });
+  }
+
   // View tab clicks
   document.querySelectorAll('.view-tab').forEach(tab => {
     tab.addEventListener('click', () => switchView(tab.dataset.view));

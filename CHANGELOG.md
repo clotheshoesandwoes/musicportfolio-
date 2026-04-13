@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## b085 — 2026-04-13 — Light/dark mode toggle
+
+Sun/moon button in the header toggles the app between dark and light backgrounds. Only affects the app chrome (header, grid background, player bar, overlays, text colors) — scene visuals inside tiles stay the same. Preference saved to localStorage.
+
+### Files modified
+- [style.css](style.css) — `body.light` CSS variable overrides + component-level light mode styles + `.theme-toggle` button
+- [index.html](index.html) — toggle button in header
+- [js/app.js](js/app.js) — toggle click handler + localStorage persistence
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b084 → b085`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b084 — 2026-04-13 — SoundCloud link on every song card
 
 Each song's expanded view now shows a "Listen on SoundCloud" button that links to that track on soundcloud.com/kanisongs. The link auto-generates a slug from the track title (e.g. "The Fall (Shift Perceptions)" → `/the-fall-shift-perceptions`). When navigating between tracks with the prev/next arrows, the link updates automatically.

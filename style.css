@@ -20,6 +20,56 @@
   --player-h: 80px;
 }
 
+/* Light mode overrides */
+body.light {
+  --bg: #f0f0f0;
+  --surface: #e4e4e4;
+  --elevated: #d8d8d8;
+  --text: #111;
+  --text2: #00000060;
+  --text3: #00000030;
+  --text4: #00000015;
+  --border: 0.5px solid #00000012;
+}
+body.light .top-bar { background: rgba(240,240,240,0.92); }
+body.light .player-bar { background: rgba(235,235,235,0.95); }
+body.light .mobile-view-tabs { background: rgba(240,240,240,0.95); }
+body.light .view-tab { color: #333; }
+body.light .view-tab.active { background: #111; color: #fff; }
+body.light .dim-grid { background: var(--bg); }
+body.light .dim-tile-label { color: #fff; }
+body.light .player-title { color: #111; }
+body.light .player-artist { color: #555; }
+body.light .seek-time { color: #555; }
+body.light .ctrl-btn { color: #333; }
+body.light .ctrl-btn:hover { color: #000; }
+body.light .brand { color: #111; }
+body.light .brand-sub { color: #666; }
+body.light .search-input { color: #111; background: rgba(0,0,0,0.05); }
+body.light .search-input::placeholder { color: #999; }
+body.light .dim-overlay.visible { background: rgba(240,240,240,0.97); }
+body.light .dim-overlay-title { color: #111; text-shadow: none; }
+body.light .dim-overlay-sub { color: rgba(0,0,0,0.4); }
+body.light .dim-overlay-close { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); color: #333; }
+body.light .dim-nav-btn { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); color: #333; }
+body.light .theme-toggle { color: #333; border-color: rgba(0,0,0,0.15); background: rgba(0,0,0,0.04); }
+
+.theme-toggle {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+  font-size: 16px;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+.theme-toggle:hover { background: rgba(255,255,255,0.12); }
+
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html { -webkit-tap-highlight-color: transparent; }
 body {
