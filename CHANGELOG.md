@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## b071 — 2026-04-13 — Add "Time" to track list
+
+- Added `time.mp3` to the tracks array in script.js
+
+### Files modified
+- [script.js](script.js) — new track entry
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b070 → b071`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b070 — 2026-04-12 — Dynamic mood cycling: 5 visual modes crossfade in the background
 
 Wall background now cycles through 5 distinct visual moods every ~40 seconds with smooth 8-second crossfades:

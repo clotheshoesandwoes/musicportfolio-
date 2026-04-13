@@ -108,6 +108,7 @@ const tracks = [
     { title: "Streets", file: "streets.mp3" },
     { title: "Take Me Home", file: "take me home dawg.mp3" },
     { title: "Thunderbird", file: "thunderbird.mp3" },
+    { title: "Time", file: "time.mp3" },
     { title: "Times Away", file: "times away.mp3" },
     { title: "Told That Girl", file: "told that girl.mp3" },
     { title: "Turned Into Taylor Swift", file: "turned into taylor swift.mp3" },
