@@ -68,6 +68,7 @@ function switchView(name) {
     livingwall: `Living Wall / ${tracks.length} tracks`,
     organism: `The Organism / ${tracks.length} cells`,
     freqmap: `Frequency Map / ${tracks.length} stars`,
+    tapespine: `Tape Spine / ${tracks.length} dimensions`,
     wall: `// the wall · ${tracks.length} stickers`,
     terrain: `Sound terrain / ${tracks.length} tracks`,
     deepsea: `Deep dive / ${tracks.length} tracks`,
@@ -290,11 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'Digit1': switchView('livingwall'); break;
       case 'Digit2': switchView('organism'); break;
       case 'Digit3': switchView('freqmap'); break;
-      case 'Digit4': switchView('wall'); break;
-      case 'Digit5': switchView('terrain'); break;
-      case 'Digit6': switchView('deepsea'); break;
-      case 'Digit7': switchView('neural'); break;
-      case 'Digit8': switchView('villa'); break;
+      case 'Digit4': switchView('tapespine'); break;
+      case 'Digit5': switchView('wall'); break;
+      case 'Digit6': switchView('terrain'); break;
+      case 'Digit7': switchView('deepsea'); break;
+      case 'Digit8': switchView('neural'); break;
+      case 'Digit9': switchView('villa'); break;
     }
   });
 

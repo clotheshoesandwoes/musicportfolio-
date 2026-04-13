@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## b075 — 2026-04-13 — Tape Spine: full-viewport vertical scroll through 8 living dimensions
+
+New view — scroll through your entire discography one track at a time, each occupying the full viewport as a living, multi-layered procedural scene. Scrolling crossfades between dimensions with a glowing tear line + glitch strips at the boundary.
+
+**8 dimension types** (each with 3-5 animated layers):
+- **Neon Horizon** — perspective grid floor, neon sun with stripe cutouts, floating wireframe polygons, rising particle trails
+- **Deep Ocean** — surface waves, rising bubbles with highlights, caustic light beams, bioluminescent pulsing particles
+- **Digital Void** — matrix rain (katakana chars), scan lines, glitch blocks, RGB shift, horizontal interference
+- **Cosmic Drift** — galaxy core glow, dual spiral arms, 120 twinkling stars, shooting stars with gradient tails
+- **Crystal Cave** — stalactite/stalagmite formations, rotating reflection beams, floating gem particles with glow
+- **Electric Storm** — 3 cloud layers, 80 rain streaks, procedural branching lightning bolts, thunder flash
+- **Organic Growth** — 6 animated tendrils growing from bottom with tip glow, pulsing cells, floating spores
+- **Geometric Void** — distorting grid tessellation, 3D wireframe shapes (cube/octahedron/dodeca) with rotation + perspective projection, floating geometric particles
+
+**Scroll features:**
+- Dimensional tear line at scroll boundary with color blending + glitch strips
+- Track title + number overlay with fade transitions
+- Playing indicator ring pulses with bass
+- Nav dot strip on right edge for quick jumping
+- Track counter bottom-left
+- Click anywhere to play the visible track
+- Auto-scrolls to track on external play
+- Particle pools cached per page, auto-cleaned
+
+### Files modified
+- [js/tape-spine.js](js/tape-spine.js) — new file, entire view implementation (~700 lines)
+- [index.html](index.html) — added Tape Spine tab (desktop + mobile), script tag
+- [js/app.js](js/app.js) — added `tapespine` subtitle + keyboard shortcut, renumbered shortcuts
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b074 → b075`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b074 — 2026-04-13 — Frequency Map: star constellation view with vibe clustering
 
 New view — your discography as a dark sprawling constellation. Each star is a track, clustered by vibe (rock, indie, rap, feels, space, soul). The map drifts and twinkles. Click a star and it zooms in with an audio-reactive explosion — rings, orbiting particles, radial waveform.
