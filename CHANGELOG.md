@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## b077 — 2026-04-13 — Dimensions: merged Living Wall grid + Tape Spine worlds
+
+New default landing view. A breathing tile grid where each track is a tiny portal into one of 20 living dimensions. Click a tile to dive into the full immersive scene at full viewport with audio reactivity. The existing player bar handles all playback controls.
+
+- **Grid of worlds** — each tile runs a mini version of its assigned scene type (neon horizon, city rain, vinyl groove, etc.) at 10fps for performance
+- **20 scene types** — same as Tape Spine: abstract (cosmic, crystal, geometric, etc.) + real-world (LA sunset, Tokyo neon, subway tunnel, etc.)
+- **Click → full immersion** — tile click plays the track and opens a full-screen overlay with the rich, detailed scene running at 60fps with audio reactivity
+- **Scene label on hover** — each tile shows its title + scene type name (e.g. "Neon Horizon", "Beach Midnight")
+- **Wall breathing** — tiles gently pulse in/out with sine wave + beat pulse
+- **Playing indicator** — green dot + glow on currently playing tile
+- **Staggered entrance** — tiles animate in on load
+- **Close button + ESC** — exit expanded view
+- **Player bar works throughout** — play/pause, seek, volume, next/prev all function normally
+
+### Files modified
+- [js/dimensions.js](js/dimensions.js) — new file, full view implementation
+- [index.html](index.html) — added Dimensions tab (desktop + mobile), script tag
+- [js/app.js](js/app.js) — added `dimensions` subtitle, set as default boot view
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b076 → b077`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b076 — 2026-04-13 — Tape Spine expanded: 20 scene types (abstract + real-world environments)
 
 Expanded from 8 to 20 unique dimension types. Each track now maps to one of 20 scenes, massively reducing repetition across 178 tracks. Added 12 real-world environments alongside the existing abstract ones. All scenes refined for more ambient, organic motion.

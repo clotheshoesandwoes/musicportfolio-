@@ -65,6 +65,7 @@ function switchView(name) {
   }
 
   const subs = {
+    dimensions: `Dimensions / ${tracks.length} worlds`,
     livingwall: `Living Wall / ${tracks.length} tracks`,
     organism: `The Organism / ${tracks.length} cells`,
     freqmap: `Frequency Map / ${tracks.length} stars`,
@@ -319,7 +320,7 @@ window.addEventListener('load', async () => {
   // b054 — ?legacy=villa boots straight into the old default (Villa)
   window.tracks = tracks;
   const params = new URLSearchParams(window.location.search);
-  let bootView = 'livingwall';
+  let bootView = 'dimensions';
   if (params.get('paint') === '1') bootView = 'paint';
   else if (params.get('style') === 'v2') bootView = 'marathon';
   else if (params.get('legacy') === 'villa') bootView = 'villa';
