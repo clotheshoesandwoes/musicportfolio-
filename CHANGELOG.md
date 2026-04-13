@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## b076 — 2026-04-13 — Tape Spine expanded: 20 scene types (abstract + real-world environments)
+
+Expanded from 8 to 20 unique dimension types. Each track now maps to one of 20 scenes, massively reducing repetition across 178 tracks. Added 12 real-world environments alongside the existing abstract ones. All scenes refined for more ambient, organic motion.
+
+**12 new scene types:**
+- **City Rain** (8) — building silhouettes with flickering window lights, streetlamp pools, rain streaks, wet street reflections, puddle ripple rings
+- **Beach Midnight** (9) — moon with halo, twinkling stars, layered ocean waves, moonlight reflection on water, foam particles, lighthouse with rotating beam
+- **LA Sunset** (10) — warm sky gradient, setting sun, haze clouds drifting, palm tree silhouettes with swaying fronds, birds in flight
+- **Tokyo Neon** (11) — building facades with flickering neon signs + glow halos, wet street reflections, pedestrian silhouettes, car light trails
+- **Desert Highway** (12) — distant mountains, vanishing-point road with scrolling center dashes, heat shimmer, dust particles, cactus silhouettes
+- **Underwater Reef** (13) — light shafts, swaying seaweed, coral formations with sway, fish with animated tails
+- **Northern Lights** (14) — 5 layered aurora ribbons (sine-wave + audio-reactive), tree line silhouette, falling snow
+- **Rainy Window** (15) — blurred bokeh city lights, glass tint, raindrops with running trails + refraction highlights
+- **Vinyl Groove** (16) — spinning record with visible grooves + rotating light reflection, label, tonearm with subtle sway, dust motes
+- **Forest Canopy** (17) — layered leaf canopy with sway, tree trunks, light shafts filtering through, fireflies with glow, falling leaves
+- **Rooftop Night** (18) — city skyline with flickering windows, water tower, distant traffic glow, stars, blinking airplane
+- **Subway Tunnel** (19) — perspective tunnel shape, streaking tunnel lights, flickering fluorescents, rail lines, sparks, vanishing point glow
+
+### Files modified
+- [js/tape-spine.js](js/tape-spine.js) — full rewrite, 8 → 20 scene types (~1100 lines)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b075 → b076`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b075 — 2026-04-13 — Tape Spine: full-viewport vertical scroll through 8 living dimensions
 
 New view — scroll through your entire discography one track at a time, each occupying the full viewport as a living, multi-layered procedural scene. Scrolling crossfades between dimensions with a glowing tear line + glitch strips at the boundary.
