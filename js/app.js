@@ -65,6 +65,7 @@ function switchView(name) {
   }
 
   const subs = {
+    livingwall: `Living Wall / ${tracks.length} tracks`,
     wall: `// the wall · ${tracks.length} stickers`,
     terrain: `Sound terrain / ${tracks.length} tracks`,
     deepsea: `Deep dive / ${tracks.length} tracks`,
@@ -284,11 +285,12 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'Escape':
         closeTrackDetail();
         break;
-      case 'Digit1': switchView('wall'); break;
-      case 'Digit2': switchView('terrain'); break;
-      case 'Digit3': switchView('deepsea'); break;
-      case 'Digit4': switchView('neural'); break;
-      case 'Digit5': switchView('villa'); break;
+      case 'Digit1': switchView('livingwall'); break;
+      case 'Digit2': switchView('wall'); break;
+      case 'Digit3': switchView('terrain'); break;
+      case 'Digit4': switchView('deepsea'); break;
+      case 'Digit5': switchView('neural'); break;
+      case 'Digit6': switchView('villa'); break;
     }
   });
 
@@ -311,7 +313,7 @@ window.addEventListener('load', async () => {
   // b054 — ?legacy=villa boots straight into the old default (Villa)
   window.tracks = tracks;
   const params = new URLSearchParams(window.location.search);
-  let bootView = 'wall';
+  let bootView = 'livingwall';
   if (params.get('paint') === '1') bootView = 'paint';
   else if (params.get('style') === 'v2') bootView = 'marathon';
   else if (params.get('legacy') === 'villa') bootView = 'villa';

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## b072 — 2026-04-13 — Living Wall 2.0: reactive tile grid view
+
+New default landing view. Each track is a tile with its own mini living canvas running a procedural visual (6 types: waves, particles, rings, bars, spiral, mesh — deterministic per track). The wall breathes with a slow organic scale oscillation across all tiles. Bass hits trigger a global beat pulse. Hover expands a tile; click opens a full-viewport audio-reactive experience for that track.
+
+- **6 visual types** — each tile gets a unique procedural pattern based on track index hash
+- **Wall breathing** — tiles oscillate scale in a sine wave offset by grid position
+- **Beat pulse** — bass detection drives a global scale burst across all tiles
+- **Hover → expand** — tile scales up with glow, label fades in
+- **Click → takeover** — full-screen overlay with enlarged audio-reactive visual + track info
+- **Search filtering** — tiles hide/show based on search query
+- **Playing indicator** — green dot + glow on the currently playing tile
+- **Staggered entrance** — tiles animate in on view load
+- **Responsive** — 170px tiles desktop, 140px mobile
+
+### Files modified
+- [js/living-wall.js](js/living-wall.js) — new file, entire view implementation
+- [index.html](index.html) — added Living Wall tab (desktop + mobile), script tag
+- [js/app.js](js/app.js) — added `livingwall` subtitle, default boot view, keyboard shortcut
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b071 → b072`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b071 — 2026-04-13 — Add "Time" to track list
 
 - Added `time.mp3` to the tracks array in script.js
