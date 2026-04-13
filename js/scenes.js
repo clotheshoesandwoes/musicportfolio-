@@ -1053,14 +1053,19 @@ window.SCENE_DEFS = (function () {
       const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
       sky.addColorStop(0, 'rgba(10,0,30,0.7)'); sky.addColorStop(0.5, 'rgba(60,0,80,0.3)'); sky.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
-      // chrome sun
-      const sunY = h * 0.45, sunR = full ? 60 : 22;
-      ctx.beginPath(); ctx.arc(w / 2, sunY, sunR, 0, 6.28);
-      const sg = ctx.createRadialGradient(w / 2, sunY, 0, w / 2, sunY, sunR);
-      sg.addColorStop(0, 'rgba(255,100,200,0.5)'); sg.addColorStop(0.5, 'rgba(255,50,100,0.3)'); sg.addColorStop(1, rgba(col[0], 0.15));
+      // chrome sun — semicircle sitting on the horizon
+      const sunY = h * 0.55, sunR = full ? 65 : 24;
+      // sun glow halo
+      const sunGlow = ctx.createRadialGradient(w / 2, sunY, sunR * 0.5, w / 2, sunY, sunR * 3);
+      sunGlow.addColorStop(0, 'rgba(255,80,180,0.15)'); sunGlow.addColorStop(0.5, 'rgba(255,40,100,0.05)'); sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sunGlow; ctx.fillRect(0, sunY - sunR * 3, w, sunR * 4);
+      // sun disk (top half only)
+      ctx.beginPath(); ctx.arc(w / 2, sunY, sunR, Math.PI, 0);
+      const sg = ctx.createLinearGradient(w / 2, sunY - sunR, w / 2, sunY);
+      sg.addColorStop(0, 'rgba(255,220,80,0.7)'); sg.addColorStop(0.4, 'rgba(255,100,150,0.6)'); sg.addColorStop(1, 'rgba(200,50,120,0.5)');
       ctx.fillStyle = sg; ctx.fill();
-      // sun stripe cutouts
-      for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(5,0,15,0.5)'; ctx.fillRect(w / 2 - sunR, sunY - sunR * 0.3 + i * sunR * 0.15, sunR * 2, full ? 3 : 1.5); }
+      // sun stripe cutouts (getting wider toward bottom for that classic synthwave look)
+      for (let i = 0; i < 6; i++) { const sy = sunY - sunR + sunR * 0.35 + i * sunR * 0.12; const sw = Math.sqrt(Math.max(0, sunR * sunR - (sy - sunY) * (sy - sunY))) * 2; ctx.fillStyle = 'rgba(5,0,15,0.6)'; ctx.fillRect(w / 2 - sw / 2, sy, sw, (full ? 2 : 1) + i * (full ? 0.8 : 0.3)); }
       // mountain wireframe
       ctx.beginPath(); ctx.moveTo(0, h * 0.55);
       for (let x = 0; x <= w; x += (full ? 15 : 8)) {
@@ -1224,51 +1229,98 @@ window.SCENE_DEFS = (function () {
       // tonearm
       if (full) { const ax = w * 0.75, ay = h * 0.12; ctx.save(); ctx.translate(ax, ay); ctx.rotate(-0.3 + Math.sin(t * 0.08) * 0.02); ctx.strokeStyle = 'rgba(60,60,60,0.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-w * 0.2, h * 0.3); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 5, 0, 6.28); ctx.fillStyle = 'rgba(50,50,50,0.5)'; ctx.fill(); ctx.restore(); }
     }),
-    // 17: Aquarium
+    // 17: Aquarium — big sharks, detailed reef, schools of fish
     makeQuickScene('Aquarium', function(ctx, w, h, col, t, p, bass, mid, treble, full) {
       // deep blue gradient
       const bg = ctx.createLinearGradient(0, 0, 0, h);
-      bg.addColorStop(0, 'rgba(5,15,40,0.4)'); bg.addColorStop(1, 'rgba(3,8,25,0.6)');
+      bg.addColorStop(0, 'rgba(5,20,50,0.4)'); bg.addColorStop(0.6, 'rgba(3,12,35,0.6)'); bg.addColorStop(1, 'rgba(2,6,20,0.7)');
       ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-      // glass panel edges
-      if (full) { ctx.strokeStyle = 'rgba(100,150,200,0.04)'; ctx.lineWidth = 2; ctx.strokeRect(20, 10, w - 40, h - 20); }
-      // coral at bottom
-      for (let i = 0; i < (full ? 8 : 3); i++) {
-        const cx = w * (0.05 + i * (full ? 0.12 : 0.3)), cy = h * 0.9;
-        // fan coral
-        ctx.beginPath();
-        for (let a = Math.PI; a >= 0; a -= 0.15) { const r = (full ? 20 : 8) + Math.sin(a * 5 + i) * 5; ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.4 - r); }
-        ctx.strokeStyle = `hsla(${320 + i * 15},50%,45%,0.15)`; ctx.lineWidth = full ? 1.5 : 0.8; ctx.stroke();
+      // light shafts from above
+      for (let i = 0; i < (full ? 4 : 2); i++) {
+        const lx = w * (0.2 + i * 0.2) + Math.sin(t * 0.1 + i) * 20;
+        const lg = ctx.createLinearGradient(lx, 0, lx + 40, h * 0.6);
+        lg.addColorStop(0, 'rgba(80,150,255,0.04)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = lg;
+        ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx + 15, 0); ctx.lineTo(lx + 50, h * 0.6); ctx.lineTo(lx - 10, h * 0.6); ctx.closePath(); ctx.fill();
       }
-      // exotic fish
+      // glass panel edge + slight reflection
+      if (full) { ctx.strokeStyle = 'rgba(80,130,200,0.04)'; ctx.lineWidth = 3; ctx.strokeRect(15, 8, w - 30, h - 16); }
+      // sandy bottom with ripple caustics
+      ctx.fillStyle = 'rgba(30,25,15,0.15)'; ctx.fillRect(0, h * 0.88, w, h * 0.12);
+      if (full) for (let x = 0; x < w; x += 20) { const cy = h * 0.88 + Math.sin(x * 0.05 + t * 0.5) * 2; ctx.fillStyle = 'rgba(80,150,255,0.02)'; ctx.fillRect(x, cy, 12, 1); }
+      // coral reef at bottom — varied formations
       for (let i = 0; i < (full ? 10 : 4); i++) {
-        const f = p.p1[i]; f.x += f.vx; if (f.x > 1.1) f.x = -0.1; if (f.x < -0.1) f.x = 1.1;
-        const fx = f.x * w, fy = f.y * h * 0.7 + h * 0.1 + Math.sin(t * 0.3 + f.phase) * (full ? 15 : 5);
-        const dir = f.vx > 0 ? 1 : -1, fs = f.r * (full ? 4 : 2);
+        const cx = w * (0.03 + i * (full ? 0.095 : 0.24)), cy = h * 0.88;
+        const type = i % 4;
+        if (type === 0) { // brain coral
+          ctx.beginPath(); ctx.arc(cx, cy, full ? 15 : 6, Math.PI, 0);
+          ctx.fillStyle = `hsla(${30 + i * 20},50%,35%,0.2)`; ctx.fill();
+          if (full) { for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.arc(cx + (j - 1.5) * 5, cy - 5, 3, 0, 6.28); ctx.strokeStyle = `hsla(${30 + i * 20},40%,40%,0.08)`; ctx.lineWidth = 0.5; ctx.stroke(); } }
+        } else if (type === 1) { // fan coral
+          for (let a = Math.PI; a >= 0.3; a -= 0.12) { const r = (full ? 22 : 8) + Math.sin(a * 4 + i) * 4; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * r, cy - Math.sin(a) * r); ctx.strokeStyle = `hsla(${300 + i * 12},55%,50%,0.1)`; ctx.lineWidth = full ? 1 : 0.5; ctx.stroke(); }
+        } else if (type === 2) { // branching coral
+          for (let b = 0; b < 3; b++) { const ba = -Math.PI/2 + (b-1) * 0.6; let bx = cx, by = cy; ctx.beginPath(); ctx.moveTo(bx, by); for (let s = 0; s < 4; s++) { bx += Math.cos(ba + Math.sin(t * 0.2 + b + s) * 0.1) * (full ? 8 : 3); by += Math.sin(ba) * (full ? 8 : 3); ctx.lineTo(bx, by); } ctx.strokeStyle = `hsla(${340 + i * 10},50%,45%,0.12)`; ctx.lineWidth = full ? 2 : 1; ctx.stroke(); }
+        } else { // anemone
+          for (let tn = 0; tn < 8; tn++) { const ta = (tn / 8) * Math.PI; const len = (full ? 18 : 7) + Math.sin(t * 0.8 + tn) * 3; ctx.beginPath(); ctx.moveTo(cx + Math.cos(ta) * 3, cy); ctx.quadraticCurveTo(cx + Math.cos(ta) * len * 0.6, cy - len * 0.7, cx + Math.cos(ta) * len * 0.3 + Math.sin(t * 0.5 + tn) * 3, cy - len); ctx.strokeStyle = `hsla(${280 + i * 15},60%,55%,0.1)`; ctx.lineWidth = full ? 1.5 : 0.6; ctx.stroke(); }
+        }
+      }
+      // BIG SHARK silhouette — slow, menacing
+      if (full) {
+        const sharkX = ((t * 15) % (w + 300)) - 150, sharkY = h * 0.3 + Math.sin(t * 0.2) * 30;
+        const ss = 1; // scale
+        ctx.fillStyle = 'rgba(15,25,45,0.25)';
+        ctx.beginPath();
         // body
-        ctx.beginPath(); ctx.ellipse(fx, fy, fs, fs * 0.45, 0, 0, 6.28);
-        ctx.fillStyle = `hsla(${f.hue},70%,50%,0.2)`; ctx.fill();
-        // stripes
-        if (full) for (let s = 0; s < 3; s++) { ctx.fillStyle = `hsla(${f.hue + 30},60%,60%,0.08)`; ctx.fillRect(fx - fs * 0.5 + s * fs * 0.3, fy - fs * 0.3, fs * 0.15, fs * 0.6); }
-        // tail
-        ctx.beginPath(); ctx.moveTo(fx - dir * fs, fy); ctx.lineTo(fx - dir * (fs + fs * 0.5), fy - fs * 0.3); ctx.lineTo(fx - dir * (fs + fs * 0.5), fy + fs * 0.3); ctx.closePath();
-        ctx.fillStyle = `hsla(${f.hue},60%,50%,0.15)`; ctx.fill();
+        ctx.moveTo(sharkX + 60 * ss, sharkY);
+        ctx.quadraticCurveTo(sharkX + 30 * ss, sharkY - 15 * ss, sharkX - 20 * ss, sharkY - 5 * ss); // top
+        ctx.quadraticCurveTo(sharkX - 50 * ss, sharkY, sharkX - 65 * ss, sharkY - 12 * ss); // tail top
+        ctx.lineTo(sharkX - 55 * ss, sharkY); // tail notch
+        ctx.lineTo(sharkX - 65 * ss, sharkY + 10 * ss); // tail bottom
+        ctx.quadraticCurveTo(sharkX - 50 * ss, sharkY + 3 * ss, sharkX - 20 * ss, sharkY + 8 * ss); // belly
+        ctx.quadraticCurveTo(sharkX + 20 * ss, sharkY + 12 * ss, sharkX + 60 * ss, sharkY); // nose
+        ctx.fill();
+        // dorsal fin
+        ctx.beginPath(); ctx.moveTo(sharkX - 5, sharkY - 5); ctx.lineTo(sharkX - 12, sharkY - 25); ctx.lineTo(sharkX - 25, sharkY - 2); ctx.closePath(); ctx.fill();
+        // pectoral fin
+        ctx.beginPath(); ctx.moveTo(sharkX + 5, sharkY + 6); ctx.lineTo(sharkX - 5, sharkY + 20); ctx.lineTo(sharkX - 15, sharkY + 8); ctx.closePath(); ctx.fill();
         // eye
-        ctx.beginPath(); ctx.arc(fx + dir * fs * 0.5, fy - fs * 0.1, full ? 1.5 : 0.8, 0, 6.28); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(sharkX + 40, sharkY - 2, 2, 0, 6.28); ctx.fillStyle = 'rgba(200,220,255,0.15)'; ctx.fill();
+        // gill slits
+        for (let g = 0; g < 3; g++) { ctx.beginPath(); ctx.moveTo(sharkX + 25 - g * 5, sharkY - 3); ctx.lineTo(sharkX + 25 - g * 5, sharkY + 4); ctx.strokeStyle = 'rgba(10,20,35,0.15)'; ctx.lineWidth = 0.8; ctx.stroke(); }
+      }
+      // school of small fish (moving together)
+      const schoolCX = (Math.sin(t * 0.15) * 0.3 + 0.5) * w, schoolCY = h * 0.45 + Math.sin(t * 0.25) * h * 0.1;
+      for (let i = 0; i < (full ? 20 : 8); i++) {
+        const f = p.p1[i]; f.x += f.vx;
+        if (f.x > 1.1) { f.x = -0.1; f.vx = Math.abs(f.vx); } if (f.x < -0.1) { f.x = 1.1; f.vx = -Math.abs(f.vx); }
+        // school cohesion: pull toward school center
+        const fx = f.x * w + (schoolCX - f.x * w) * 0.002;
+        const fy = f.y * h * 0.6 + h * 0.15 + (schoolCY - f.y * h * 0.6 - h * 0.15) * 0.002 + Math.sin(t * 0.5 + f.phase) * (full ? 8 : 3);
+        f.x = fx / w;
+        const dir = f.vx > 0 ? 1 : -1, fs = f.r * (full ? 3 : 1.5);
+        ctx.beginPath(); ctx.ellipse(fx, fy, fs, fs * 0.4, 0, 0, 6.28);
+        ctx.fillStyle = `hsla(${f.hue},65%,55%,0.2)`; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(fx - dir * fs, fy); ctx.lineTo(fx - dir * (fs + 3), fy - 2); ctx.lineTo(fx - dir * (fs + 3), fy + 2); ctx.closePath(); ctx.fill();
+      }
+      // jellyfish (full only)
+      if (full) {
+        const jx = w * 0.8 + Math.sin(t * 0.15) * 30, jy = h * 0.25 + Math.sin(t * 0.3) * 20;
+        ctx.beginPath(); ctx.ellipse(jx, jy, 15, 10, 0, Math.PI, 0);
+        ctx.fillStyle = 'rgba(200,150,255,0.08)'; ctx.fill();
+        for (let tn = 0; tn < 5; tn++) { ctx.beginPath(); ctx.moveTo(jx - 10 + tn * 5, jy); let ty = jy; for (let s = 0; s < 4; s++) { ty += 8; ctx.lineTo(jx - 10 + tn * 5 + Math.sin(t * 0.6 + tn + s) * 4, ty); } ctx.strokeStyle = 'rgba(200,150,255,0.05)'; ctx.lineWidth = 0.6; ctx.stroke(); }
       }
       // bubbles
       for (let i = 0; i < (full ? 20 : 6); i++) {
         const b = p.p2[i]; b.y -= 0.0008; b.phase += 0.02; if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); }
         const bx = b.x * w + Math.sin(b.phase) * 5;
-        ctx.beginPath(); ctx.arc(bx, b.y * h, b.size * 0.4, 0, 6.28);
+        ctx.beginPath(); ctx.arc(bx, b.y * h, b.size * 0.5, 0, 6.28);
         ctx.strokeStyle = 'rgba(150,200,255,0.1)'; ctx.lineWidth = 0.5; ctx.stroke();
-        // highlight
-        ctx.beginPath(); ctx.arc(bx - b.size * 0.1, b.y * h - b.size * 0.1, b.size * 0.1, 0, 6.28);
+        ctx.beginPath(); ctx.arc(bx - b.size * 0.12, b.y * h - b.size * 0.12, b.size * 0.12, 0, 6.28);
         ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
       }
-      // ambient blue light from above
-      const al = ctx.createLinearGradient(0, 0, 0, h * 0.3);
-      al.addColorStop(0, 'rgba(50,100,200,0.03)'); al.addColorStop(1, 'rgba(0,0,0,0)');
+      // ambient blue overhead light
+      const al = ctx.createLinearGradient(0, 0, 0, h * 0.25);
+      al.addColorStop(0, 'rgba(40,100,200,0.04)'); al.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = al; ctx.fillRect(0, 0, w, h);
     }),
     // 18: Cyberpunk City

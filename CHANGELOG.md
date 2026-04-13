@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## b082 — 2026-04-13 — Scene polish: Synthwave sun fix + Aquarium overhaul
+
+- **Synthwave**: sun is now a proper semicircle sitting on the horizon with warm-to-pink gradient, horizontal stripe cutouts that follow the circle's curvature, and a glow halo
+- **Aquarium**: complete overhaul — big shark silhouette with dorsal/pectoral fins + gill slits + eye, 4 varied coral types (brain, fan, branching, anemone with swaying tentacles), school of fish with cohesion flocking, jellyfish with tentacles, light shafts, sandy bottom with caustic ripples, glass panel edges
+
+### Files modified
+- [js/scenes.js](js/scenes.js) — Synthwave sun + Aquarium rewrite
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b081 → b082`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b081 — 2026-04-13 — Complete scene rewrite: 20 crafted compositions replacing 50 basic ones
 
 Gutted all 50 generic scenes and rewrote from scratch as 20 genuinely crafted visual compositions. Each scene is now a multi-layered environment with detailed silhouettes, atmospheric effects, and real visual storytelling — not just dots and shapes floating around.
