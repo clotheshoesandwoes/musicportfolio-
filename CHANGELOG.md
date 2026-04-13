@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## b074 — 2026-04-13 — Frequency Map: star constellation view with vibe clustering
+
+New view — your discography as a dark sprawling constellation. Each star is a track, clustered by vibe (rock, indie, rap, feels, space, soul). The map drifts and twinkles. Click a star and it zooms in with an audio-reactive explosion — rings, orbiting particles, radial waveform.
+
+- **Vibe clustering** — tracks auto-classified into 7 clusters by keyword matching, arranged in a circle
+- **Constellation lines** — nearby same-cluster stars connected with faint lines
+- **Twinkling** — each star has independent brightness oscillation
+- **Nebula backgrounds** — soft colored blobs behind clusters
+- **Cross sparkle** — bright stars get a four-point sparkle
+- **Click → zoom explosion** — camera zooms 4x into clicked star, audio-reactive rings + orbiting particles + radial frequency waveform + central glow
+- **Search → beacon** — matching stars glow bright white as beacons
+- **Pan + zoom** — drag to pan, scroll to zoom, ESC to unfocus
+- **Cluster legend** — color-coded vibe labels in corner
+- **Beat pulse** — bass hits pulse all stars simultaneously
+
+### Files modified
+- [js/frequency-map.js](js/frequency-map.js) — new file, entire view implementation
+- [index.html](index.html) — added Freq Map tab (desktop + mobile), script tag
+- [js/app.js](js/app.js) — added `freqmap` subtitle + keyboard shortcut, renumbered shortcuts
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b073 → b074`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b073 — 2026-04-13 — The Organism: living biological discography view
 
 New view — your entire discography as a living biological entity. A pulsing core floats at the center with all 178 tracks arranged in a golden-angle spiral around it, connected by organic tendrils.
