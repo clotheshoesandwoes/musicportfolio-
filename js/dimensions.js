@@ -102,18 +102,20 @@
       .dim-overlay.visible { background:rgba(0,0,0,0.96); }
       .dim-overlay canvas { position:absolute; inset:0; width:100%; height:100%; }
       .dim-overlay-info { position:absolute; bottom:24px; left:0; right:0; text-align:center;
-        z-index:2; pointer-events:none; opacity:0; transition:opacity .5s .2s; }
+        z-index:2; opacity:0; transition:opacity .5s .2s; pointer-events:none; }
+      .dim-overlay.visible .dim-overlay-info { pointer-events:auto; }
       .dim-overlay.visible .dim-overlay-info { opacity:1; }
       .dim-overlay-title { font-family:'Syne',sans-serif; font-size:36px; font-weight:700;
         color:#fff; letter-spacing:-0.02em; text-shadow:0 2px 20px rgba(0,0,0,0.5); }
       .dim-overlay-sub { font-family:'DM Sans',sans-serif; font-size:12px; color:rgba(255,255,255,0.4);
         margin-top:6px; }
-      .dim-sc-link { display:inline-flex; align-items:center; gap:6px; margin-top:12px;
-        padding:8px 18px; border-radius:999px; background:rgba(255,85,0,0.12);
-        border:1px solid rgba(255,85,0,0.25); color:#ff5500; text-decoration:none;
-        font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500;
-        transition:background 0.2s; pointer-events:auto; }
-      .dim-sc-link:hover { background:rgba(255,85,0,0.22); }
+      .dim-sc-link { display:inline-flex; align-items:center; gap:8px; margin-top:14px;
+        padding:10px 22px; border-radius:999px; background:rgba(255,85,0,0.15);
+        border:1px solid rgba(255,85,0,0.3); color:#ff5500; text-decoration:none;
+        font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+        transition:all 0.2s; pointer-events:auto; cursor:pointer;
+        letter-spacing:0.02em; }
+      .dim-sc-link:hover { background:rgba(255,85,0,0.28); box-shadow:0 0 15px rgba(255,85,0,0.2); }
       .dim-overlay-close { position:absolute; top:20px; right:24px; z-index:3; background:rgba(255,255,255,0.08);
         border:1px solid rgba(255,255,255,0.15); color:#fff; font-family:'DM Sans',sans-serif;
         font-size:12px; padding:8px 18px; border-radius:999px; cursor:pointer; transition:background .2s; }
