@@ -186,6 +186,130 @@
   }
 
 
+  /* ============== EXPAND / COLLAPSE / NAVIGATE ============== */
+  let expandedTrackListIndex = -1;
+  let closeTimeout = null;
+
+  function expandTile(trackIndex, type, colors, title) {
+    if (typeof playTrack === 'function') playTrack(trackIndex);
+    expandedTrackListIndex = trackList.findIndex(t => t.originalIndex === trackIndex);
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+    if (overlayEl) { document.removeEventListener('keydown', overlayEl._onKey); overlayEl.remove(); overlayEl = null; }
+    expandedTile = null; expandedCanvas = expandedCtx = expandedParts = null;
+
+    overlayEl = document.createElement('div');
+    overlayEl.className = 'dim-overlay';
+    expandedCanvas = document.createElement('canvas');
+    expandedCtx = expandedCanvas.getContext('2d');
+    overlayEl.appendChild(expandedCanvas);
+
+    const info = document.createElement('div');
+    info.className = 'dim-overlay-info';
+    info.id = 'dimOverlayInfo';
+    info.innerHTML = `<div class="dim-overlay-title" id="dimExpTitle">${escapeHtml(title)}</div>
+      <div class="dim-overlay-sub" id="dimExpSub">${SCENE_NAMES[type] || ''}  ·  ◂ ▸ to navigate</div>`;
+    overlayEl.appendChild(info);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'dim-overlay-close';
+    closeBtn.textContent = '✕ close';
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeExpanded(); });
+    overlayEl.appendChild(closeBtn);
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'dim-nav-btn dim-nav-prev';
+    prevBtn.textContent = '◂';
+    prevBtn.addEventListener('click', (e) => { e.stopPropagation(); navigateExpanded(-1); });
+    overlayEl.appendChild(prevBtn);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'dim-nav-btn dim-nav-next';
+    nextBtn.textContent = '▸';
+    nextBtn.addEventListener('click', (e) => { e.stopPropagation(); navigateExpanded(1); });
+    overlayEl.appendChild(nextBtn);
+
+    document.body.appendChild(overlayEl);
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const ow = window.innerWidth, oh = overlayEl.offsetHeight || window.innerHeight;
+    expandedCanvas.width = ow * dpr; expandedCanvas.height = oh * dpr;
+    expandedCanvas.style.width = ow + 'px'; expandedCanvas.style.height = oh + 'px';
+    expandedCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    expandedParts = createFullParticles(type, ow, oh);
+    expandedTile = { trackIndex, type, colors, title, w: ow, h: oh };
+
+    requestAnimationFrame(() => overlayEl.classList.add('visible'));
+
+    overlayEl._onKey = (e) => {
+      if (e.code === 'Escape') closeExpanded();
+      else if (e.code === 'ArrowLeft') navigateExpanded(-1);
+      else if (e.code === 'ArrowRight') navigateExpanded(1);
+    };
+    document.addEventListener('keydown', overlayEl._onKey);
+  }
+
+  function navigateExpanded(dir) {
+    if (trackList.length === 0) return;
+    expandedTrackListIndex = (expandedTrackListIndex + dir + trackList.length) % trackList.length;
+    const track = trackList[expandedTrackListIndex];
+    const idx = track.originalIndex;
+    const type = sceneType(idx);
+    const colors = getGradientColors(idx);
+    if (typeof playTrack === 'function') playTrack(idx);
+    const ow = expandedTile.w, oh = expandedTile.h;
+    expandedParts = createFullParticles(type, ow, oh);
+    expandedTile = { trackIndex: idx, type, colors, title: track.title, w: ow, h: oh };
+    const titleEl = document.getElementById('dimExpTitle');
+    const subEl = document.getElementById('dimExpSub');
+    if (titleEl) titleEl.textContent = track.title;
+    if (subEl) subEl.textContent = (SCENE_NAMES[type] || '') + '  ·  ◂ ▸ to navigate';
+    tiles.forEach(t => t.el.classList.toggle('playing', t.index === idx));
+  }
+
+  function closeExpanded() {
+    if (!overlayEl) return;
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+    document.removeEventListener('keydown', overlayEl._onKey);
+    overlayEl.classList.remove('visible');
+    closeTimeout = setTimeout(() => {
+      closeTimeout = null;
+      if (overlayEl) { overlayEl.remove(); overlayEl = null; }
+      expandedTile = null; expandedCanvas = expandedCtx = expandedParts = null;
+    }, 400);
+  }
+
+  /* ============== MAIN ANIMATION LOOP ============== */
+  function animate(now) {
+    rafId = requestAnimationFrame(animate);
+    const t = (now - t0) * 0.001;
+    breathPhase = now * BREATH_SPEED;
+
+    const freq = typeof getFrequencyData === 'function' ? getFrequencyData() : null;
+    let bass = 0, mid = 0, treble = 0;
+    if (freq) {
+      for (let i = 0; i < 6; i++) bass += freq[i]; bass /= (6 * 255);
+      for (let i = 6; i < 24; i++) mid += freq[i]; mid /= (18 * 255);
+      for (let i = 24; i < 64; i++) treble += freq[i]; treble /= (40 * 255);
+      if (bass > BEAT_THRESHOLD && now - lastBeatTime > BEAT_COOLDOWN) { beatPulse = 1; lastBeatTime = now; }
+    }
+    beatPulse *= 0.92;
+
+    for (let i = 0; i < tiles.length; i++) {
+      const tile = tiles[i];
+      const bs = 1 + Math.sin(breathPhase + tile.phase) * BREATH_AMP;
+      const pulse = 1 + beatPulse * 0.05;
+      if (!tile.el.matches(':hover')) tile.el.style.transform = `scale(${(bs * pulse).toFixed(4)})`;
+    }
+
+    if (now - lastMiniDraw > MINI_INTERVAL) {
+      lastMiniDraw = now;
+      for (let i = 0; i < tiles.length; i++) drawMiniScene(tiles[i], t, bass, mid, treble);
+    }
+
+    if (expandedTile && expandedCtx) drawFullScene(t, freq, bass, mid, treble);
+  }
+
   /* ============== SCENE RENDERING (delegated to scenes.js) ============== */
   const SD = window.SCENE_DEFS;
 
