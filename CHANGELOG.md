@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## b073 — 2026-04-13 — The Organism: living biological discography view
+
+New view — your entire discography as a living biological entity. A pulsing core floats at the center with all 178 tracks arranged in a golden-angle spiral around it, connected by organic tendrils.
+
+- **Pulsing core** — 3 overlapping blobs orbit each other, wobbling membrane ring, radial glow — all bass-reactive
+- **Golden-angle spiral** — 178 nodes positioned in a sunflower pattern for organic density
+- **Tendrils** — bezier curves from core to each node, wobble with sine waves + audio
+- **Veins** — played nodes grow connections to nearby played nodes (evolution)
+- **Node interaction** — hover pulls nodes toward cursor, nearby nodes push away (organic feel)
+- **Evolution** — each track played adds ambient particles + brightens tendrils + grows vein network
+- **Ambient particles** — 80+ particles orbit the core with gentle drift, count grows as you play
+- **Zoom + rotate** — scroll to zoom, drag to rotate the whole organism
+- **Beat pulse** — bass hits pulse the core and all connected tendrils
+- **Playing indicator** — green ring pulse on active node
+
+### Files modified
+- [js/organism.js](js/organism.js) — new file, entire view implementation
+- [index.html](index.html) — added Organism tab (desktop + mobile), script tag
+- [js/app.js](js/app.js) — added `organism` subtitle + keyboard shortcut
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b072 → b073`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b072 — 2026-04-13 — Living Wall 2.0: reactive tile grid view
 
 New default landing view. Each track is a tile with its own mini living canvas running a procedural visual (6 types: waves, particles, rings, bars, spiral, mesh — deterministic per track). The wall breathes with a slow organic scale oscillation across all tiles. Bass hits trigger a global beat pulse. Hover expands a tile; click opens a full-viewport audio-reactive experience for that track.
