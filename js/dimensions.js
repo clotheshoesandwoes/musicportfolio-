@@ -11,7 +11,7 @@
    ========================================================= */
 
 (function () {
-  const SCENE_TYPES = 20;
+  const SCENE_TYPES = 50;
   const TILE_GAP = 8;
   const MINI_FPS = 10;
   const MINI_INTERVAL = 1000 / MINI_FPS;
@@ -57,7 +57,16 @@
   const SCENE_NAMES = ['Neon Horizon', 'Deep Ocean', 'Digital Void', 'Cosmic Drift', 'Crystal Cave',
     'Electric Storm', 'Organic Growth', 'Geometric Void', 'City Rain', 'Beach Midnight',
     'LA Sunset', 'Tokyo Neon', 'Desert Highway', 'Underwater Reef', 'Northern Lights',
-    'Rainy Window', 'Vinyl Groove', 'Forest Canopy', 'Rooftop Night', 'Subway Tunnel'];
+    'Rainy Window', 'Vinyl Groove', 'Forest Canopy', 'Rooftop Night', 'Subway Tunnel',
+    // 20-29
+    'Rainy Alley', 'Chinatown', 'Freeway Overpass', 'Skatepark', 'Volcano',
+    'Waterfall', 'Snowstorm', 'Meadow', 'Swamp', 'Canyon',
+    // 30-39
+    'Arcade', 'Laundromat', 'Aquarium', 'Recording Studio', 'Elevator',
+    'Lava Lamp', 'Kaleidoscope', 'Circuit Board', 'Pendulum', 'Fractal Tree',
+    // 40-49
+    'Fog', 'Solar Eclipse', 'Meteor Shower', 'Tornado', 'Tidal Pool',
+    'Bioluminescent Bay', 'Stairwell', 'Parking Garage', 'DNA Helix', 'Construction Site'];
 
   /* ============== INIT ============== */
   function init(viewContainer) {
@@ -261,6 +270,119 @@
       case 19: // subway — tunnel lights
         for (let i = 0; i < 10; i++) p.a.push({ z: Math.random(), speed: 0.003 + Math.random() * 0.003, side: Math.random() > 0.5 ? 1 : -1, hue: Math.random() > 0.7 ? 40 : 200 });
         break;
+      case 20: // rainy alley — puddles + dumpster + fire escape
+        for (let i = 0; i < 50; i++) p.a.push({ x: Math.random(), y: Math.random(), vy: 0.006 + Math.random() * 0.008 });
+        for (let i = 0; i < 4; i++) p.b.push({ x: 0.1 + Math.random() * 0.8, h: 0.3 + Math.random() * 0.35, w: 0.06 + Math.random() * 0.08 });
+        break;
+      case 21: // chinatown — lanterns + signs + steam
+        for (let i = 0; i < 8; i++) p.a.push({ x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.25, hue: Math.random() > 0.5 ? 0 : 40, swing: Math.random() * 6.28, size: 5 + Math.random() * 8 });
+        for (let i = 0; i < 15; i++) p.b.push({ x: Math.random(), y: 1, vy: -0.001 - Math.random() * 0.002, size: 3 + Math.random() * 8, a: 0.05 + Math.random() * 0.1 });
+        break;
+      case 22: // freeway overpass — car lights streaking below
+        for (let i = 0; i < 20; i++) p.a.push({ x: Math.random() > 0.5 ? -0.1 : 1.1, y: 0.6 + Math.random() * 0.15, vx: (Math.random() > 0.5 ? 1 : -1) * (0.002 + Math.random() * 0.004), hue: Math.random() > 0.5 ? 40 : 0, tail: 0.03 + Math.random() * 0.05 });
+        break;
+      case 23: // skatepark — ramps + graffiti splatters + lens flare
+        for (let i = 0; i < 12; i++) p.a.push({ x: Math.random(), y: Math.random(), size: 3 + Math.random() * 8, hue: Math.random() * 360, a: 0.1 + Math.random() * 0.2 });
+        for (let i = 0; i < 3; i++) p.b.push({ x1: Math.random() * 0.4, y1: 0.5 + Math.random() * 0.3, x2: 0.3 + Math.random() * 0.4, y2: 0.7 + Math.random() * 0.2 });
+        break;
+      case 24: // volcano — lava + smoke + embers
+        for (let i = 0; i < 30; i++) p.a.push({ x: 0.4 + Math.random() * 0.2, y: 0.3 + Math.random() * 0.2, vx: (Math.random() - 0.5) * 0.003, vy: -0.001 - Math.random() * 0.003, size: 1 + Math.random() * 3, life: Math.random() });
+        for (let i = 0; i < 8; i++) p.b.push({ x: 0.3 + Math.random() * 0.4, y: 0.4, vy: -0.0005 - Math.random() * 0.001, size: 10 + Math.random() * 20, a: 0.03 + Math.random() * 0.04 });
+        break;
+      case 25: // waterfall — flowing lines + mist + pool
+        for (let i = 0; i < 40; i++) p.a.push({ x: 0.35 + Math.random() * 0.3, y: Math.random() * 0.6, vy: 0.003 + Math.random() * 0.006, a: 0.1 + Math.random() * 0.2 });
+        for (let i = 0; i < 20; i++) p.b.push({ x: 0.25 + Math.random() * 0.5, y: 0.6 + Math.random() * 0.1, vx: (Math.random() - 0.5) * 0.001, vy: -0.0003 - Math.random() * 0.001, size: 2 + Math.random() * 4 });
+        break;
+      case 26: // snowstorm — heavy snow + wind + whiteout
+        for (let i = 0; i < 80; i++) p.a.push({ x: Math.random(), y: Math.random(), vx: 0.001 + Math.random() * 0.002, vy: 0.001 + Math.random() * 0.003, size: 1 + Math.random() * 3 });
+        break;
+      case 27: // meadow — grass + flowers + butterflies + sun
+        for (let i = 0; i < 15; i++) p.a.push({ x: Math.random(), phase: Math.random() * 6.28, hue: [40, 60, 300, 330, 280][Math.floor(Math.random() * 5)] });
+        for (let i = 0; i < 4; i++) p.b.push({ x: Math.random(), y: 0.3 + Math.random() * 0.3, vx: (Math.random() - 0.5) * 0.001, wing: Math.random() * 6.28, hue: Math.random() * 360 });
+        break;
+      case 28: // swamp — fog layers + fireflies + gnarled trees
+        for (let i = 0; i < 25; i++) p.a.push({ x: Math.random(), y: Math.random(), pulse: Math.random() * 6.28 });
+        for (let i = 0; i < 5; i++) p.b.push({ x: Math.random(), h: 0.2 + Math.random() * 0.3, branches: 2 + Math.floor(Math.random() * 3) });
+        break;
+      case 29: // canyon — layered rock walls + eagles + dust
+        for (let i = 0; i < 6; i++) p.a.push({ side: i % 2 === 0 ? -1 : 1, y: i * 0.15, w: 0.15 + Math.random() * 0.15, depth: Math.random() });
+        for (let i = 0; i < 20; i++) p.b.push({ x: Math.random(), y: Math.random(), vx: 0.0003 + Math.random() * 0.0005, size: 1 + Math.random() * 2 });
+        break;
+      case 30: // arcade — cabinet glow + pixel rain + scanlines
+        for (let i = 0; i < 6; i++) p.a.push({ x: 0.08 + i * 0.15, hue: Math.random() * 360, flicker: Math.random() * 6.28 });
+        for (let i = 0; i < 30; i++) p.b.push({ x: Math.random(), y: Math.random(), vy: 0.002 + Math.random() * 0.004, char: String.fromCharCode(0x2580 + Math.floor(Math.random() * 16)), hue: Math.random() * 360 });
+        break;
+      case 31: // laundromat — spinning circles + warm light + bubbles
+        for (let i = 0; i < 5; i++) p.a.push({ x: 0.1 + i * 0.18, y: 0.45, r: 12 + Math.random() * 6, speed: 0.02 + Math.random() * 0.02 });
+        for (let i = 0; i < 15; i++) p.b.push({ x: Math.random(), y: Math.random(), vy: -0.0005 - Math.random() * 0.001, r: 1.5 + Math.random() * 3, wb: Math.random() * 6.28 });
+        break;
+      case 32: // aquarium — glass panels + tropical fish + blue light
+        for (let i = 0; i < 10; i++) p.a.push({ x: Math.random(), y: 0.2 + Math.random() * 0.6, vx: (Math.random() - 0.5) * 0.001, size: 3 + Math.random() * 5, hue: Math.random() * 60 + 180, tail: Math.random() * 6.28 });
+        for (let i = 0; i < 20; i++) p.b.push({ x: Math.random(), y: Math.random(), vy: -0.0003 - Math.random() * 0.0008, r: 1 + Math.random() * 2 });
+        break;
+      case 33: // recording studio — EQ bars + VU meters + waveform
+        for (let i = 0; i < 24; i++) p.a.push({ x: i, h: 0.1 + Math.random() * 0.3, target: 0.1 + Math.random() * 0.3 });
+        p.b.push({ needle: 0, target: 0.3 });
+        break;
+      case 34: // elevator — floor counter + doors + ambient hum lines
+        p.a.push({ floor: 1, target: 1, doorOpen: 0 });
+        for (let i = 0; i < 15; i++) p.b.push({ y: Math.random(), a: 0.02 + Math.random() * 0.04, speed: 0.5 + Math.random() * 1 });
+        break;
+      case 35: // lava lamp — floating blobs + warm glow
+        for (let i = 0; i < 6; i++) p.a.push({ x: 0.3 + Math.random() * 0.4, y: Math.random(), vy: (Math.random() - 0.5) * 0.001, size: 15 + Math.random() * 25, hue: Math.random() * 40 + 10 });
+        break;
+      case 36: // kaleidoscope — rotating mirrored segments
+        p.a.push({ angle: 0, segments: 6 + Math.floor(Math.random() * 6), innerR: 0.1, outerR: 0.4 });
+        for (let i = 0; i < 20; i++) p.b.push({ r: 0.1 + Math.random() * 0.3, angle: Math.random() * 6.28, size: 2 + Math.random() * 5, hue: Math.random() * 360 });
+        break;
+      case 37: // circuit board — traces + nodes + data pulses
+        for (let i = 0; i < 20; i++) p.a.push({ x: Math.random(), y: Math.random(), connections: Math.floor(Math.random() * 3) });
+        for (let i = 0; i < 8; i++) p.b.push({ from: Math.floor(Math.random() * 20), to: Math.floor(Math.random() * 20), progress: Math.random(), speed: 0.005 + Math.random() * 0.01 });
+        break;
+      case 38: // pendulum — swinging weight + trail + tick marks
+        p.a.push({ angle: 0, vel: 0, length: 0.35, trail: [] });
+        break;
+      case 39: // fractal tree — recursive branches + leaves
+        p.a.push({ depth: 8, angle: Math.PI / 6, wind: 0 });
+        for (let i = 0; i < 30; i++) p.b.push({ x: Math.random(), y: Math.random(), vy: 0.0002 + Math.random() * 0.0005, rot: Math.random() * 6.28 });
+        break;
+      case 40: // fog — layered fog banks + silhouettes
+        for (let i = 0; i < 5; i++) p.a.push({ y: 0.3 + i * 0.12, speed: 0.1 + Math.random() * 0.2, offset: Math.random() * 100, a: 0.04 + Math.random() * 0.04 });
+        for (let i = 0; i < 3; i++) p.b.push({ x: Math.random(), h: 0.1 + Math.random() * 0.15, w: 0.01 + Math.random() * 0.02 });
+        break;
+      case 41: // solar eclipse — corona + dark disk + flares
+        p.a.push({ phase: 0 });
+        for (let i = 0; i < 6; i++) p.b.push({ angle: Math.random() * 6.28, length: 20 + Math.random() * 40, width: 2 + Math.random() * 3, speed: (Math.random() - 0.5) * 0.005 });
+        break;
+      case 42: // meteor shower — streaks + radiant point + dust
+        for (let i = 0; i < 8; i++) p.a.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, cd: Math.random() * 30 });
+        for (let i = 0; i < 100; i++) p.b.push({ x: Math.random(), y: Math.random(), tw: Math.random() * 6.28 });
+        break;
+      case 43: // tornado — funnel + debris + dark sky
+        for (let i = 0; i < 30; i++) p.a.push({ angle: Math.random() * 6.28, r: Math.random(), vy: -0.001 - Math.random() * 0.002, size: 1 + Math.random() * 3 });
+        break;
+      case 44: // tidal pool — ripples + starfish + anemones + shallow water
+        for (let i = 0; i < 6; i++) p.a.push({ x: Math.random(), y: Math.random(), phase: Math.random() * 6.28, maxR: 10 + Math.random() * 20 });
+        for (let i = 0; i < 8; i++) p.b.push({ x: Math.random(), y: Math.random(), type: Math.floor(Math.random() * 3), size: 3 + Math.random() * 5, hue: Math.random() * 60 + 280 });
+        break;
+      case 45: // bioluminescent bay — glowing water + ripples + kayak trail
+        for (let i = 0; i < 60; i++) p.a.push({ x: Math.random(), y: 0.4 + Math.random() * 0.5, pulse: Math.random() * 6.28, size: 1 + Math.random() * 3 });
+        p.b.push({ x: 0.2, y: 0.6, vx: 0.0005, trail: [] });
+        break;
+      case 46: // stairwell — perspective stairs + fluorescent + echo lines
+        for (let i = 0; i < 15; i++) p.a.push({ step: i, flicker: Math.random() * 6.28 });
+        break;
+      case 47: // parking garage — concrete + fluorescent strips + car silhouettes
+        for (let i = 0; i < 6; i++) p.a.push({ x: 0.05 + Math.random() * 0.9, w: 0.08 + Math.random() * 0.06, hue: [0, 210, 40, 120, 280, 0][i] });
+        for (let i = 0; i < 4; i++) p.b.push({ y: 0.2 + i * 0.18, flicker: Math.random() * 6.28, br: 0.3 + Math.random() * 0.4 });
+        break;
+      case 48: // DNA helix — rotating double helix + base pair connections
+        for (let i = 0; i < 20; i++) p.a.push({ y: i / 20, phase: i * 0.3 });
+        break;
+      case 49: // construction site — crane + sparks + framework
+        for (let i = 0; i < 15; i++) p.a.push({ x: Math.random(), y: Math.random(), vx: (Math.random() - 0.5) * 0.003, vy: 0.001 + Math.random() * 0.003, life: Math.random(), size: 1 + Math.random() * 2 });
+        p.b.push({ angle: 0, speed: 0.002 });
+        break;
     }
     return p;
   }
@@ -386,6 +508,16 @@
       case 17: for (let i = 0; i < 50; i++) p.a.push({ x: Math.random(), y: Math.random(), pulse: Math.random() * 6.28, a: 0.3 + Math.random() * 0.5 }); for (let i = 0; i < 5; i++) p.b.push({ x: Math.random(), y: 0.3 + Math.random() * 0.3, angle: Math.random() * 6.28, sp: 0.001 + Math.random() * 0.002 }); break;
       case 18: for (let i = 0; i < 12; i++) p.a.push({ x: 0.02 + Math.random() * 0.96, h: 0.1 + Math.random() * 0.35, w: 0.02 + Math.random() * 0.06, wins: 2 + Math.floor(Math.random() * 5) }); for (let i = 0; i < 100; i++) p.b.push({ x: Math.random(), y: Math.random() * 0.4, tw: Math.random() * 6.28 }); break;
       case 19: for (let i = 0; i < 20; i++) p.a.push({ z: Math.random(), speed: 0.003 + Math.random() * 0.004, side: Math.random() > 0.5 ? 1 : -1, hue: Math.random() > 0.7 ? 40 : 200 }); for (let i = 0; i < 6; i++) p.b.push({ z: Math.random(), fl: Math.random() * 6.28, br: 0.3 + Math.random() * 0.5 }); break;
+      // For scenes 20-49, full particles mirror their mini particles but with more density
+      default: {
+        // Reuse the mini particle factory with larger counts for full screen
+        const miniP = createMiniParticles(type, Math.max(w, 900));
+        // Scale up particle counts by duplicating
+        p.a = miniP.a;
+        for (let i = 0; i < miniP.a.length; i++) p.a.push(Object.assign({}, miniP.a[i], { x: Math.random(), y: Math.random() }));
+        p.b = miniP.b;
+        if (miniP.c) p.c = miniP.c;
+      } break;
     }
     return p;
   }
@@ -544,6 +676,150 @@
         for (const lt of parts.a) { lt.z += lt.speed * (1 + bass); if (lt.z > 1) lt.z = Math.random() * 0.1; const f = lt.z; const px = lerp(iw, ow, f) * lt.side; const ly = lerp(cy, lt.side > 0 ? h * 0.3 : h * 0.7, f); ctx.beginPath(); ctx.arc(cx + px, ly, 1.5 + f * 3, 0, 6.28); ctx.fillStyle = `hsla(${lt.hue},60%,60%,${(1 - f) * 0.3})`; ctx.fill(); }
         const vg = ctx.createRadialGradient(cx, cy, 0, cx, cy, iw * 2); vg.addColorStop(0, hexToRGBA(col[0], 0.06)); vg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = vg; ctx.fillRect(cx - iw * 2, cy - ih * 2, iw * 4, ih * 4);
       } break;
+      // === SCENES 20-49: mini renderers ===
+      // Each draws a simplified version capturing the scene's visual identity
+      default: {
+        // Generic renderer for scenes 20-49 — each has its own visual
+        const sc = type;
+        if (sc === 20) { // rainy alley
+          for (const b of parts.b) { ctx.fillStyle = 'rgba(15,12,20,0.8)'; ctx.fillRect(b.x * w, h - b.h * h, b.w * w, b.h * h); }
+          ctx.strokeStyle = hexToRGBA(col[0], 0.08); ctx.lineWidth = 0.4;
+          for (const r of parts.a) { r.y += r.vy * (1 + bass * 0.5); if (r.y > 1.05) { r.y = -0.05; r.x = Math.random(); } ctx.beginPath(); ctx.moveTo(r.x * w, r.y * h); ctx.lineTo(r.x * w, r.y * h + 5); ctx.stroke(); }
+          ctx.fillStyle = hexToRGBA(col[0], 0.03); ctx.fillRect(0, h * 0.8, w, h * 0.2);
+        } else if (sc === 21) { // chinatown
+          ctx.fillStyle = 'rgba(15,8,8,0.3)'; ctx.fillRect(0, 0, w, h);
+          for (const l of parts.a) { l.swing += 0.01; const lx = l.x * w + Math.sin(l.swing) * 3, ly = l.y * h; ctx.beginPath(); ctx.arc(lx, ly, l.size, 0, 6.28); ctx.fillStyle = `hsla(${l.hue},80%,50%,0.3)`; ctx.fill(); ctx.shadowBlur = 8; ctx.shadowColor = `hsl(${l.hue},80%,50%)`; ctx.beginPath(); ctx.arc(lx, ly, l.size * 0.6, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0; }
+          for (const s of parts.b) { s.y += s.vy; if (s.y < -0.1) { s.y = 1.1; s.x = Math.random(); } ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.size, 0, 6.28); ctx.fillStyle = `rgba(200,200,200,${s.a})`; ctx.fill(); }
+        } else if (sc === 22) { // freeway overpass
+          ctx.fillStyle = 'rgba(20,18,25,0.4)'; ctx.fillRect(0, h * 0.5, w, h * 0.25);
+          for (const c of parts.a) { c.x += c.vx; if (c.x > 1.2) c.x = -0.2; if (c.x < -0.2) c.x = 1.2; ctx.beginPath(); ctx.moveTo(c.x * w, c.y * h); ctx.lineTo((c.x - c.tail * Math.sign(c.vx)) * w, c.y * h); ctx.strokeStyle = `hsla(${c.hue},70%,60%,0.2)`; ctx.lineWidth = 1.5; ctx.stroke(); }
+          ctx.fillStyle = 'rgba(10,10,15,0.5)'; ctx.fillRect(0, h * 0.45, w, 6);
+        } else if (sc === 23) { // skatepark
+          ctx.fillStyle = 'rgba(15,15,20,0.3)'; ctx.fillRect(0, h * 0.65, w, h * 0.35);
+          for (const b of parts.b) { ctx.beginPath(); ctx.moveTo(b.x1 * w, b.y1 * h); ctx.quadraticCurveTo((b.x1 + b.x2) / 2 * w, (b.y1 - 0.1) * h, b.x2 * w, b.y2 * h); ctx.strokeStyle = hexToRGBA(col[0], 0.15); ctx.lineWidth = 1; ctx.stroke(); }
+          for (const s of parts.a) { ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.size, 0, 6.28); ctx.fillStyle = `hsla(${s.hue},70%,60%,${s.a})`; ctx.fill(); }
+        } else if (sc === 24) { // volcano
+          ctx.beginPath(); ctx.moveTo(w * 0.2, h); ctx.lineTo(w * 0.45, h * 0.35); ctx.lineTo(w * 0.55, h * 0.35); ctx.lineTo(w * 0.8, h); ctx.closePath(); ctx.fillStyle = 'rgba(30,15,10,0.6)'; ctx.fill();
+          const lg = ctx.createRadialGradient(w / 2, h * 0.3, 0, w / 2, h * 0.3, 30); lg.addColorStop(0, hexToRGBA(col[0], 0.3 + bass * 0.2)); lg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = lg; ctx.fillRect(0, 0, w, h);
+          for (const e of parts.a) { e.x += e.vx; e.y += e.vy; e.life += 0.01; if (e.life > 1) { e.x = 0.4 + Math.random() * 0.2; e.y = 0.3; e.life = 0; } ctx.beginPath(); ctx.arc(e.x * w, e.y * h, e.size * (1 - e.life), 0, 6.28); ctx.fillStyle = `rgba(255,${100 + Math.floor(e.life * 100)},0,${0.4 * (1 - e.life)})`; ctx.fill(); }
+        } else if (sc === 25) { // waterfall
+          ctx.fillStyle = hexToRGBA(col[0], 0.04); ctx.fillRect(w * 0.3, 0, w * 0.4, h * 0.65);
+          for (const d of parts.a) { d.y += d.vy; if (d.y > 0.65) { d.y = Math.random() * 0.1; } ctx.beginPath(); ctx.moveTo(d.x * w, d.y * h); ctx.lineTo(d.x * w, d.y * h + 8); ctx.strokeStyle = hexToRGBA(col[0], d.a); ctx.lineWidth = 0.6; ctx.stroke(); }
+          ctx.fillStyle = hexToRGBA(col[0], 0.06); ctx.fillRect(w * 0.2, h * 0.65, w * 0.6, h * 0.35);
+          for (const m of parts.b) { m.y += m.vy; m.x += m.vx; if (m.y < 0.4) { m.y = 0.65; m.x = 0.35 + Math.random() * 0.3; } ctx.beginPath(); ctx.arc(m.x * w, m.y * h, m.size, 0, 6.28); ctx.fillStyle = 'rgba(200,220,255,0.08)'; ctx.fill(); }
+        } else if (sc === 26) { // snowstorm
+          for (const s of parts.a) { s.x += s.vx; s.y += s.vy; if (s.y > 1.05) { s.y = -0.05; s.x = Math.random(); } if (s.x > 1.05) s.x = -0.05; ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.size, 0, 6.28); ctx.fillStyle = `rgba(255,255,255,${0.2 + Math.random() * 0.2})`; ctx.fill(); }
+          ctx.fillStyle = 'rgba(200,210,220,0.02)'; ctx.fillRect(0, 0, w, h);
+        } else if (sc === 27) { // meadow
+          const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55); sky.addColorStop(0, 'rgba(100,180,255,0.08)'); sky.addColorStop(1, 'rgba(200,230,200,0.05)'); ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = 'rgba(40,80,20,0.15)'; ctx.fillRect(0, h * 0.55, w, h * 0.45);
+          for (const f of parts.a) { const fx = f.x * w, fy = h * 0.55 - 3 + Math.sin(t * 0.5 + f.phase) * 2; ctx.beginPath(); ctx.arc(fx, fy, 2, 0, 6.28); ctx.fillStyle = `hsla(${f.hue},70%,60%,0.4)`; ctx.fill(); }
+          for (const b of parts.b) { b.x += b.vx; b.wing += 0.05; if (b.x > 1.1) b.x = -0.1; const bx = b.x * w, by = b.y * h + Math.sin(t * 0.8 + b.x * 5) * 5; ctx.beginPath(); ctx.moveTo(bx - 3, by); ctx.quadraticCurveTo(bx, by - 3 * Math.sin(b.wing), bx + 3, by); ctx.strokeStyle = `hsla(${b.hue},70%,60%,0.4)`; ctx.lineWidth = 0.8; ctx.stroke(); }
+        } else if (sc === 28) { // swamp
+          ctx.fillStyle = 'rgba(5,15,5,0.2)'; ctx.fillRect(0, 0, w, h);
+          for (const tr of parts.b) { const tx = tr.x * w; ctx.fillStyle = 'rgba(20,12,8,0.3)'; ctx.fillRect(tx - 2, h * (0.4 - tr.h), 4, tr.h * h + h * 0.6); for (let b = 0; b < tr.branches; b++) { const by = h * (0.4 - tr.h) + b * 15; ctx.beginPath(); ctx.moveTo(tx, by); ctx.lineTo(tx + (b % 2 === 0 ? 1 : -1) * 12, by - 8); ctx.strokeStyle = 'rgba(20,12,8,0.3)'; ctx.lineWidth = 1.5; ctx.stroke(); } }
+          for (const ff of parts.a) { ff.pulse += 0.015; const glow = 0.5 + 0.5 * Math.sin(ff.pulse); ctx.beginPath(); ctx.arc(ff.x * w, ff.y * h, 1.5, 0, 6.28); ctx.fillStyle = `rgba(100,255,50,${0.3 * glow})`; ctx.fill(); }
+          ctx.fillStyle = 'rgba(5,15,5,0.04)'; for (let i = 0; i < 3; i++) { const fy = h * (0.6 + i * 0.1) + Math.sin(t * 0.2 + i) * 5; ctx.fillRect(0, fy, w, 15); }
+        } else if (sc === 29) { // canyon
+          for (const wall of parts.a) { const wx = wall.side > 0 ? w - wall.w * w : 0; ctx.fillStyle = hexToRGBA(col[1], 0.08 + wall.depth * 0.05); ctx.fillRect(wx, wall.y * h, wall.w * w, h); }
+          ctx.fillStyle = hexToRGBA(col[0], 0.04); const cg = ctx.createLinearGradient(0, 0, 0, h * 0.3); cg.addColorStop(0, hexToRGBA(col[0], 0.06)); cg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = cg; ctx.fillRect(0, 0, w, h * 0.3);
+          for (const d of parts.b) { d.x += d.vx; if (d.x > 1.1) d.x = -0.1; ctx.beginPath(); ctx.arc(d.x * w, d.y * h, d.size, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.15); ctx.fill(); }
+        } else if (sc === 30) { // arcade
+          for (let y = 0; y < h; y += 3) { ctx.fillStyle = `rgba(0,0,0,${0.04 + Math.sin(y * 0.2 + t * 3) * 0.02})`; ctx.fillRect(0, y, w, 1); }
+          for (const cab of parts.a) { const cx = cab.x * w; ctx.fillStyle = 'rgba(10,10,15,0.7)'; ctx.fillRect(cx, h * 0.3, w * 0.1, h * 0.5); const flk = Math.sin(t * 2 + cab.flicker) > 0 ? 1 : 0.3; ctx.fillStyle = `hsla(${cab.hue},80%,50%,${0.15 * flk})`; ctx.fillRect(cx + 2, h * 0.32, w * 0.1 - 4, h * 0.15); }
+          for (const px of parts.b) { px.y += px.vy; if (px.y > 1.05) { px.y = -0.05; px.x = Math.random(); } ctx.font = '7px monospace'; ctx.fillStyle = `hsla(${px.hue},80%,60%,0.3)`; ctx.fillText(px.char, px.x * w, px.y * h); }
+        } else if (sc === 31) { // laundromat
+          ctx.fillStyle = 'rgba(20,18,15,0.15)'; ctx.fillRect(0, 0, w, h);
+          for (const m of parts.a) { ctx.beginPath(); ctx.arc(m.x * w, m.y * h, m.r, 0, 6.28); ctx.strokeStyle = 'rgba(100,100,110,0.2)'; ctx.lineWidth = 1.5; ctx.stroke(); const ia = t * m.speed; for (let s = 0; s < 4; s++) { const a = ia + s * 1.57; ctx.beginPath(); ctx.arc(m.x * w + Math.cos(a) * m.r * 0.5, m.y * h + Math.sin(a) * m.r * 0.5, 2, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.2); ctx.fill(); } }
+          for (const b of parts.b) { b.y += b.vy; b.wb += 0.02; if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); } ctx.beginPath(); ctx.arc(b.x * w + Math.sin(b.wb) * 3, b.y * h, b.r, 0, 6.28); ctx.strokeStyle = 'rgba(200,220,255,0.1)'; ctx.lineWidth = 0.4; ctx.stroke(); }
+        } else if (sc === 32) { // aquarium
+          ctx.fillStyle = hexToRGBA('#061830', 0.2); ctx.fillRect(0, 0, w, h);
+          for (const f of parts.a) { f.x += f.vx; f.tail += 0.06; if (f.x > 1.1) f.x = -0.1; if (f.x < -0.1) f.x = 1.1; const fx = f.x * w, fy = f.y * h + Math.sin(t * 0.4 + f.x * 5) * 8; ctx.beginPath(); ctx.ellipse(fx, fy, f.size, f.size * 0.4, 0, 0, 6.28); ctx.fillStyle = `hsla(${f.hue},60%,50%,0.25)`; ctx.fill(); }
+          for (const b of parts.b) { b.y += b.vy; if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); } ctx.beginPath(); ctx.arc(b.x * w, b.y * h, b.r, 0, 6.28); ctx.strokeStyle = 'rgba(150,200,255,0.1)'; ctx.lineWidth = 0.4; ctx.stroke(); }
+        } else if (sc === 33) { // recording studio
+          for (let i = 0; i < parts.a.length; i++) { const bar = parts.a[i]; bar.h = lerp(bar.h, bar.target, 0.05); if (Math.random() < 0.02) bar.target = 0.05 + Math.random() * 0.5 + mid * 0.3; const bx = (i / parts.a.length) * w + 2, bw = w / parts.a.length - 3; ctx.fillStyle = hexToRGBA(col[0], 0.3 + bar.h * 0.3); ctx.fillRect(bx, h - bar.h * h * 0.6, bw, bar.h * h * 0.6); }
+        } else if (sc === 34) { // elevator
+          const el = parts.a[0]; el.floor = lerp(el.floor, el.target, 0.01); if (Math.random() < 0.005) el.target = 1 + Math.floor(Math.random() * 20);
+          ctx.fillStyle = 'rgba(20,20,25,0.3)'; ctx.fillRect(w * 0.2, h * 0.1, w * 0.6, h * 0.8);
+          ctx.font = "bold 24px 'JetBrains Mono',monospace"; ctx.textAlign = 'center'; ctx.fillStyle = hexToRGBA(col[0], 0.4); ctx.fillText(Math.floor(el.floor).toString(), w / 2, h * 0.4);
+          for (const l of parts.b) { const ly = l.y * h; ctx.strokeStyle = hexToRGBA(col[0], l.a + Math.sin(t * l.speed + l.y * 10) * 0.01); ctx.lineWidth = 0.3; ctx.beginPath(); ctx.moveTo(w * 0.25, ly); ctx.lineTo(w * 0.75, ly); ctx.stroke(); }
+        } else if (sc === 35) { // lava lamp
+          for (const blob of parts.a) { blob.y += blob.vy; if (blob.y < 0.1 || blob.y > 0.9) blob.vy *= -1; blob.vy += (Math.random() - 0.5) * 0.0001; const bx = blob.x * w + Math.sin(t * 0.5 + blob.y * 5) * 10; const g = ctx.createRadialGradient(bx, blob.y * h, 0, bx, blob.y * h, blob.size); g.addColorStop(0, `hsla(${blob.hue},80%,50%,0.3)`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(bx - blob.size, blob.y * h - blob.size, blob.size * 2, blob.size * 2); }
+        } else if (sc === 36) { // kaleidoscope
+          const k = parts.a[0]; k.angle += 0.003; const cx = w / 2, cy = h / 2;
+          for (let s = 0; s < k.segments; s++) { ctx.save(); ctx.translate(cx, cy); ctx.rotate(k.angle + s * (6.28 / k.segments));
+            for (const dot of parts.b) { const dx = Math.cos(dot.angle + t * 0.3) * dot.r * w * 0.4, dy = Math.sin(dot.angle + t * 0.3) * dot.r * h * 0.4; ctx.beginPath(); ctx.arc(dx, dy, dot.size, 0, 6.28); ctx.fillStyle = `hsla(${(dot.hue + t * 20) % 360},70%,55%,0.15)`; ctx.fill(); }
+          ctx.restore(); }
+        } else if (sc === 37) { // circuit board
+          ctx.strokeStyle = hexToRGBA(col[0], 0.08); ctx.lineWidth = 0.5;
+          for (let i = 0; i < parts.a.length; i++) { const n = parts.a[i]; ctx.beginPath(); ctx.arc(n.x * w, n.y * h, 2, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.2); ctx.fill(); for (let j = i + 1; j < Math.min(i + 3, parts.a.length); j++) { const m = parts.a[j]; if (Math.abs(n.x - m.x) + Math.abs(n.y - m.y) < 0.4) { ctx.beginPath(); ctx.moveTo(n.x * w, n.y * h); ctx.lineTo(n.x * w, m.y * h); ctx.lineTo(m.x * w, m.y * h); ctx.stroke(); } } }
+          for (const p of parts.b) { p.progress += p.speed; if (p.progress > 1) { p.progress = 0; p.from = Math.floor(Math.random() * parts.a.length); p.to = Math.floor(Math.random() * parts.a.length); } const f = parts.a[p.from] || parts.a[0], tt = parts.a[p.to] || parts.a[1]; const px = lerp(f.x, tt.x, p.progress) * w, py = lerp(f.y, tt.y, p.progress) * h; ctx.beginPath(); ctx.arc(px, py, 1.5, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.5); ctx.fill(); }
+        } else if (sc === 38) { // pendulum
+          const pd = parts.a[0]; pd.vel += -Math.sin(pd.angle) * 0.0008; pd.vel *= 0.998; pd.angle += pd.vel;
+          const cx = w / 2, cy = h * 0.1, bx = cx + Math.sin(pd.angle) * pd.length * h, by = cy + Math.cos(pd.angle) * pd.length * h;
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(bx, by); ctx.strokeStyle = hexToRGBA(col[0], 0.3); ctx.lineWidth = 1; ctx.stroke();
+          ctx.beginPath(); ctx.arc(bx, by, 6, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.4); ctx.fill();
+          pd.trail.push({ x: bx, y: by }); if (pd.trail.length > 30) pd.trail.shift();
+          ctx.beginPath(); for (let i = 0; i < pd.trail.length; i++) { i === 0 ? ctx.moveTo(pd.trail[i].x, pd.trail[i].y) : ctx.lineTo(pd.trail[i].x, pd.trail[i].y); } ctx.strokeStyle = hexToRGBA(col[0], 0.08); ctx.lineWidth = 0.5; ctx.stroke();
+        } else if (sc === 39) { // fractal tree
+          const ft = parts.a[0]; ft.wind = Math.sin(t * 0.3) * 0.05;
+          function drawBranch(x, y, len, angle, depth) { if (depth <= 0 || len < 2) return; const ex = x + Math.cos(angle) * len, ey = y + Math.sin(angle) * len; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.strokeStyle = hexToRGBA(col[0], 0.1 + (ft.depth - depth) * 0.02); ctx.lineWidth = depth * 0.3; ctx.stroke(); drawBranch(ex, ey, len * 0.7, angle - ft.angle + ft.wind, depth - 1); drawBranch(ex, ey, len * 0.7, angle + ft.angle + ft.wind, depth - 1); }
+          drawBranch(w / 2, h * 0.9, h * 0.18, -Math.PI / 2, Math.min(ft.depth, 7));
+          for (const l of parts.b) { l.y += l.vy; l.rot += 0.01; if (l.y > 1.05) { l.y = -0.05; l.x = Math.random(); } ctx.save(); ctx.translate(l.x * w, l.y * h); ctx.rotate(l.rot); ctx.beginPath(); ctx.ellipse(0, 0, 2, 1, 0, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.15); ctx.fill(); ctx.restore(); }
+        } else if (sc === 40) { // fog
+          for (const f of parts.a) { ctx.beginPath(); for (let x = 0; x <= w; x += 4) { const y = f.y * h + Math.sin(x * 0.01 + t * f.speed + f.offset) * 15 + Math.sin(x * 0.025 + t * f.speed * 0.7) * 8; x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fillStyle = `rgba(180,190,200,${f.a})`; ctx.fill(); }
+          for (const s of parts.b) { ctx.fillStyle = 'rgba(15,15,20,0.3)'; ctx.fillRect(s.x * w - s.w * w, h * (0.5 - s.h), s.w * w * 2, s.h * h); }
+        } else if (sc === 41) { // solar eclipse
+          const cx = w / 2, cy = h * 0.4;
+          const cg = ctx.createRadialGradient(cx, cy, 15, cx, cy, 50); cg.addColorStop(0, 'rgba(0,0,0,0)'); cg.addColorStop(0.3, hexToRGBA(col[0], 0.15)); cg.addColorStop(0.6, hexToRGBA(col[0], 0.05)); cg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = cg; ctx.fillRect(0, 0, w, h);
+          ctx.beginPath(); ctx.arc(cx, cy, 12, 0, 6.28); ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fill();
+          for (const f of parts.b) { f.angle += f.speed; const fx = cx + Math.cos(f.angle) * (15 + f.length * 0.3), fy = cy + Math.sin(f.angle) * (15 + f.length * 0.3); ctx.beginPath(); ctx.moveTo(cx + Math.cos(f.angle) * 14, cy + Math.sin(f.angle) * 14); ctx.lineTo(fx, fy); ctx.strokeStyle = hexToRGBA(col[0], 0.15); ctx.lineWidth = f.width * 0.3; ctx.stroke(); }
+        } else if (sc === 42) { // meteor shower
+          for (const s of parts.b) { const tw = 0.3 + 0.7 * Math.sin(t * 1.3 + s.tw); ctx.beginPath(); ctx.arc(s.x * w, s.y * h, 0.8, 0, 6.28); ctx.fillStyle = `rgba(255,255,255,${tw * 0.4})`; ctx.fill(); }
+          for (const m of parts.a) { m.cd--; if (!m.active && m.cd <= 0) { m.active = true; m.x = 0.2 + Math.random() * 0.6; m.y = Math.random() * 0.3; m.vx = 0.003 + Math.random() * 0.003; m.vy = 0.002 + Math.random() * 0.004; m.life = 0; m.cd = 20 + Math.random() * 60; }
+            if (m.active) { m.life += 0.02; m.x += m.vx; m.y += m.vy; const fade = m.life < 0.1 ? m.life * 10 : Math.max(0, 1 - m.life); ctx.beginPath(); ctx.moveTo(m.x * w, m.y * h); ctx.lineTo((m.x - m.vx * 15) * w, (m.y - m.vy * 15) * h); ctx.strokeStyle = `rgba(255,255,255,${fade * 0.5})`; ctx.lineWidth = 1.5; ctx.stroke(); if (m.life > 0.8) m.active = false; } }
+        } else if (sc === 43) { // tornado
+          const cx = w / 2, topY = h * 0.15, botY = h * 0.85;
+          for (const d of parts.a) { d.angle += 0.04 + d.r * 0.02; d.r = Math.min(1, d.r + 0.001); const frac = d.r; const rr = frac * 30 + 3; const py = lerp(topY, botY, frac); const px = cx + Math.cos(d.angle) * rr; ctx.beginPath(); ctx.arc(px, py, d.size, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.2 * (1 - frac * 0.5)); ctx.fill(); if (d.r >= 1) { d.r = 0; d.angle = Math.random() * 6.28; } }
+          ctx.fillStyle = 'rgba(20,15,10,0.03)'; ctx.fillRect(0, 0, w, h);
+        } else if (sc === 44) { // tidal pool
+          ctx.fillStyle = hexToRGBA(col[0], 0.03); ctx.fillRect(0, 0, w, h);
+          for (const r of parts.a) { r.phase += 0.015; const ring = (Math.sin(r.phase) * 0.5 + 0.5) * r.maxR; ctx.beginPath(); ctx.arc(r.x * w, r.y * h, ring, 0, 6.28); ctx.strokeStyle = hexToRGBA(col[0], 0.08 * (1 - ring / r.maxR)); ctx.lineWidth = 0.5; ctx.stroke(); }
+          for (const c of parts.b) { ctx.beginPath(); if (c.type === 0) { for (let a = 0; a < 5; a++) { const ax = c.x * w + Math.cos(a * 1.26) * c.size, ay = c.y * h + Math.sin(a * 1.26) * c.size; ctx.moveTo(c.x * w, c.y * h); ctx.lineTo(ax, ay); } ctx.strokeStyle = `hsla(${c.hue},60%,50%,0.2)`; ctx.lineWidth = 1; ctx.stroke(); } else { ctx.arc(c.x * w, c.y * h, c.size, 0, 6.28); ctx.fillStyle = `hsla(${c.hue},60%,50%,0.15)`; ctx.fill(); } }
+        } else if (sc === 45) { // bioluminescent bay
+          ctx.fillStyle = hexToRGBA('#051525', 0.15); ctx.fillRect(0, 0, w, h);
+          for (const g of parts.a) { g.pulse += 0.012; const glow = 0.3 + 0.7 * Math.sin(g.pulse); ctx.beginPath(); ctx.arc(g.x * w, g.y * h, g.size, 0, 6.28); ctx.shadowBlur = 5; ctx.shadowColor = '#00ffaa'; ctx.fillStyle = `rgba(0,255,170,${0.15 * glow})`; ctx.fill(); } ctx.shadowBlur = 0;
+          const k = parts.b[0]; k.x += k.vx; if (k.x > 1) k.x = 0; k.trail.push({ x: k.x, y: k.y }); if (k.trail.length > 30) k.trail.shift();
+          ctx.beginPath(); for (let i = 0; i < k.trail.length; i++) { i === 0 ? ctx.moveTo(k.trail[i].x * w, k.trail[i].y * h) : ctx.lineTo(k.trail[i].x * w, k.trail[i].y * h); } ctx.strokeStyle = 'rgba(0,255,170,0.08)'; ctx.lineWidth = 2; ctx.stroke();
+        } else if (sc === 46) { // stairwell
+          const cx = w / 2;
+          for (const st of parts.a) { const sy = h * (0.1 + st.step * 0.055); const sw = w * (0.6 - st.step * 0.02); ctx.fillStyle = `rgba(25,25,30,${0.2 + st.step * 0.03})`; ctx.fillRect(cx - sw / 2, sy, sw, 6); ctx.fillStyle = `rgba(25,25,30,${0.15 + st.step * 0.02})`; ctx.fillRect(cx - sw / 2, sy + 6, sw, h * 0.055 - 6);
+            if (st.step % 3 === 0) { const fl = Math.sin(t * 2 + st.flicker) > 0.8 ? 0.2 : 1; ctx.fillStyle = `rgba(200,220,255,${0.03 * fl})`; ctx.fillRect(cx - sw * 0.3, sy - 2, sw * 0.6, 2); } }
+        } else if (sc === 47) { // parking garage
+          ctx.fillStyle = 'rgba(20,20,22,0.3)'; ctx.fillRect(0, 0, w, h);
+          for (const fl of parts.b) { const flk = Math.sin(t * 1.5 + fl.flicker) > 0.9 ? 0.1 : 1; ctx.fillStyle = `rgba(200,220,255,${0.04 * fl.br * flk})`; ctx.fillRect(w * 0.1, fl.y * h, w * 0.8, 2); }
+          for (const car of parts.a) { ctx.fillStyle = `hsla(${car.hue},50%,30%,0.15)`; ctx.fillRect(car.x * w, h * 0.65, car.w * w, h * 0.1); ctx.fillRect(car.x * w + car.w * w * 0.15, h * 0.58, car.w * w * 0.7, h * 0.07); }
+          // concrete pillars
+          for (let i = 0; i < 4; i++) { ctx.fillStyle = 'rgba(30,30,32,0.3)'; ctx.fillRect(w * (0.15 + i * 0.22), 0, 5, h); }
+        } else if (sc === 48) { // DNA helix
+          const cx = w / 2;
+          for (const bp of parts.a) { const py = bp.y * h + (t * 20) % h; const y = ((py % h) + h) % h; const phase = bp.phase + t * 0.5; const x1 = cx + Math.sin(phase) * w * 0.2, x2 = cx + Math.sin(phase + Math.PI) * w * 0.2;
+            ctx.beginPath(); ctx.arc(x1, y, 2, 0, 6.28); ctx.fillStyle = hexToRGBA(col[0], 0.35); ctx.fill();
+            ctx.beginPath(); ctx.arc(x2, y, 2, 0, 6.28); ctx.fillStyle = hexToRGBA(col[1], 0.35); ctx.fill();
+            if (Math.sin(phase * 2) > 0.5) { ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.strokeStyle = hexToRGBA(col[0], 0.1); ctx.lineWidth = 0.5; ctx.stroke(); } }
+        } else if (sc === 49) { // construction site
+          // crane
+          const cr = parts.b[0]; cr.angle += cr.speed * 0.002;
+          ctx.strokeStyle = 'rgba(60,60,50,0.3)'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(w * 0.3, h); ctx.lineTo(w * 0.3, h * 0.1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(w * 0.3, h * 0.12); ctx.lineTo(w * 0.3 + Math.cos(cr.angle) * w * 0.35, h * 0.12); ctx.stroke();
+          // framework
+          for (let i = 0; i < 4; i++) { ctx.strokeStyle = 'rgba(50,50,45,0.15)'; ctx.lineWidth = 0.5; ctx.strokeRect(w * (0.45 + i * 0.1), h * 0.4, w * 0.08, h * 0.5); }
+          // sparks
+          for (const s of parts.a) { s.x += s.vx; s.y += s.vy; s.life += 0.01; if (s.life > 1) { s.x = 0.5 + Math.random() * 0.2; s.y = 0.4 + Math.random() * 0.2; s.vx = (Math.random() - 0.5) * 0.003; s.vy = 0.001 + Math.random() * 0.003; s.life = 0; }
+            ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.size * (1 - s.life), 0, 6.28); ctx.fillStyle = `rgba(255,200,50,${0.4 * (1 - s.life)})`; ctx.fill(); }
+        }
+      } break;
     }
   }
 
@@ -592,6 +868,10 @@
       case 17: drawFullForestCanopy(ctx, W, H, col, t, bass, mid, p); break;
       case 18: drawFullRooftopNight(ctx, W, H, col, t, bass, mid, p); break;
       case 19: drawFullSubwayTunnel(ctx, W, H, col, t, bass, mid, p); break;
+      default: {
+        // Scenes 20-49: reuse mini renderer at full viewport resolution
+        drawMiniScene({ ctx, canvas: { width: W, height: H }, type, colors: col, parts: p, phase: 0 }, t, bass, mid, treble);
+      } break;
     }
   }
 

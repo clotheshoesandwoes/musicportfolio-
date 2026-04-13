@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## b079 — 2026-04-13 — Dimensions expanded: 50 scene types (was 20)
+
+Expanded from 20 to 50 unique scene types. With 178 tracks, each scene now only repeats ~3-4 times instead of ~9. Added 30 new scenes across multiple categories:
+
+**Cityscapes (20-23):** Rainy Alley, Chinatown, Freeway Overpass, Skatepark
+**Nature (24-29):** Volcano, Waterfall, Snowstorm, Meadow, Swamp, Canyon
+**Indoor (30-34):** Arcade, Laundromat, Aquarium, Recording Studio, Elevator
+**Abstract (35-39):** Lava Lamp, Kaleidoscope, Circuit Board, Pendulum, Fractal Tree
+**Atmospheric (40-45):** Fog, Solar Eclipse, Meteor Shower, Tornado, Tidal Pool, Bioluminescent Bay
+**Urban (46-49):** Stairwell, Parking Garage, DNA Helix, Construction Site
+
+### Files modified
+- [js/dimensions.js](js/dimensions.js) — 30 new scene types (mini + full renderers), SCENE_TYPES 20→50
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b078 → b079`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b078 — 2026-04-13 — Dimensions: player bar visible + prev/next navigation + better scene distribution
 
 Three fixes to Dimensions view:
