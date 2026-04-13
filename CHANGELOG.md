@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## b080 — 2026-04-13 — Fix: expanded view crash on click
+
+Fixed crash when clicking into a dimension scene:
+- Race condition: previous `closeExpanded` timeout could null out `expandedTile` while new expansion was running — now properly cancels pending timeouts before opening new overlay
+- Null guards in `drawFullScene` prevent draw calls when state is being torn down
+- Fixed `createFullParticles` default case that was duplicating particles with malformed properties
+- Try-catch wrapper on scenes 20-49 full renderer prevents individual scene errors from killing the whole view
+
+### Files modified
+- [js/dimensions.js](js/dimensions.js) — timeout cleanup, null guards, particle factory fix, error boundary
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b079 → b080`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b079 — 2026-04-13 — Dimensions expanded: 50 scene types (was 20)
 
 Expanded from 20 to 50 unique scene types. With 178 tracks, each scene now only repeats ~3-4 times instead of ~9. Added 30 new scenes across multiple categories:

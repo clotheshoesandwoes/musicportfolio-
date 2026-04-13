@@ -388,15 +388,18 @@
   }
 
   /* ============== EXPAND / COLLAPSE / NAVIGATE ============== */
-  let expandedTrackListIndex = -1; // index into trackList (not originalIndex)
+  let expandedTrackListIndex = -1;
+  let closeTimeout = null;
 
   function expandTile(trackIndex, type, colors, title) {
     if (typeof playTrack === 'function') playTrack(trackIndex);
 
-    // find position in current trackList
     expandedTrackListIndex = trackList.findIndex(t => t.originalIndex === trackIndex);
 
-    if (overlayEl) { document.removeEventListener('keydown', overlayEl._onKey); overlayEl.remove(); }
+    // clean up any previous overlay fully
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+    if (overlayEl) { document.removeEventListener('keydown', overlayEl._onKey); overlayEl.remove(); overlayEl = null; }
+    expandedTile = null; expandedCanvas = expandedCtx = expandedParts = null;
     overlayEl = document.createElement('div');
     overlayEl.className = 'dim-overlay';
 
@@ -479,9 +482,14 @@
 
   function closeExpanded() {
     if (!overlayEl) return;
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     document.removeEventListener('keydown', overlayEl._onKey);
     overlayEl.classList.remove('visible');
-    setTimeout(() => { if (overlayEl) { overlayEl.remove(); overlayEl = null; } expandedTile = null; expandedCanvas = expandedCtx = expandedParts = null; }, 400);
+    closeTimeout = setTimeout(() => {
+      closeTimeout = null;
+      if (overlayEl) { overlayEl.remove(); overlayEl = null; }
+      expandedTile = null; expandedCanvas = expandedCtx = expandedParts = null;
+    }, 400);
   }
 
   /* ============== FULL PARTICLE FACTORY ============== */
@@ -508,15 +516,12 @@
       case 17: for (let i = 0; i < 50; i++) p.a.push({ x: Math.random(), y: Math.random(), pulse: Math.random() * 6.28, a: 0.3 + Math.random() * 0.5 }); for (let i = 0; i < 5; i++) p.b.push({ x: Math.random(), y: 0.3 + Math.random() * 0.3, angle: Math.random() * 6.28, sp: 0.001 + Math.random() * 0.002 }); break;
       case 18: for (let i = 0; i < 12; i++) p.a.push({ x: 0.02 + Math.random() * 0.96, h: 0.1 + Math.random() * 0.35, w: 0.02 + Math.random() * 0.06, wins: 2 + Math.floor(Math.random() * 5) }); for (let i = 0; i < 100; i++) p.b.push({ x: Math.random(), y: Math.random() * 0.4, tw: Math.random() * 6.28 }); break;
       case 19: for (let i = 0; i < 20; i++) p.a.push({ z: Math.random(), speed: 0.003 + Math.random() * 0.004, side: Math.random() > 0.5 ? 1 : -1, hue: Math.random() > 0.7 ? 40 : 200 }); for (let i = 0; i < 6; i++) p.b.push({ z: Math.random(), fl: Math.random() * 6.28, br: 0.3 + Math.random() * 0.5 }); break;
-      // For scenes 20-49, full particles mirror their mini particles but with more density
+      // For scenes 20-49, reuse mini particles directly (they use normalized coords)
       default: {
-        // Reuse the mini particle factory with larger counts for full screen
         const miniP = createMiniParticles(type, Math.max(w, 900));
-        // Scale up particle counts by duplicating
         p.a = miniP.a;
-        for (let i = 0; i < miniP.a.length; i++) p.a.push(Object.assign({}, miniP.a[i], { x: Math.random(), y: Math.random() }));
         p.b = miniP.b;
-        if (miniP.c) p.c = miniP.c;
+        p.c = miniP.c;
       } break;
     }
     return p;
@@ -830,13 +835,10 @@
 
   /* ============== FULL SCENE RENDERER (expanded) ============== */
   function drawFullScene(t, freq, bass, mid, treble) {
-    // delegate to tape-spine's scene renderers via the shared view
-    // For the expanded view, we reuse the full tape-spine drawScene logic
-    // by calling into the tapespine view's registered scene functions.
-    // Since tapespine.js is an IIFE, we recreate the full renderers inline here.
-    // This is the expanded version — same as tape-spine's full renderers.
+    if (!expandedTile || !expandedCtx || !expandedParts) return;
     const ctx = expandedCtx;
     const W = expandedTile.w, H = expandedTile.h;
+    if (!W || !H) return;
     const col = expandedTile.colors;
     const type = expandedTile.type;
     const p = expandedParts;
@@ -870,7 +872,9 @@
       case 19: drawFullSubwayTunnel(ctx, W, H, col, t, bass, mid, p); break;
       default: {
         // Scenes 20-49: reuse mini renderer at full viewport resolution
-        drawMiniScene({ ctx, canvas: { width: W, height: H }, type, colors: col, parts: p, phase: 0 }, t, bass, mid, treble);
+        try {
+          drawMiniScene({ ctx, canvas: { width: W, height: H }, type, colors: col, parts: p, phase: 0 }, t, bass, mid, treble);
+        } catch(e) { /* prevent scene crash from killing the whole view */ }
       } break;
     }
   }
