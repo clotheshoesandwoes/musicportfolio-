@@ -148,40 +148,41 @@
     const res = tileSize;
 
     filtered.forEach((track, i) => {
-      const idx = track.originalIndex;
-      const type = sceneType(idx);
-      const colors = getGradientColors(idx);
+      try {
+        const idx = track.originalIndex;
+        const type = sceneType(idx);
+        const colors = getGradientColors(idx);
 
-      const el = document.createElement('div');
-      el.className = 'dim-tile entering';
+        const el = document.createElement('div');
+        el.className = 'dim-tile entering';
 
-      const cvs = document.createElement('canvas');
-      cvs.width = res; cvs.height = res;
-      el.appendChild(cvs);
+        const cvs = document.createElement('canvas');
+        cvs.width = res; cvs.height = res;
+        el.appendChild(cvs);
 
-      const label = document.createElement('div');
-      label.className = 'dim-tile-label';
-      label.textContent = track.title;
-      el.appendChild(label);
+        const label = document.createElement('div');
+        label.className = 'dim-tile-label';
+        label.textContent = track.title;
+        el.appendChild(label);
 
-      const sceneLbl = document.createElement('div');
-      sceneLbl.className = 'dim-tile-scene';
-      sceneLbl.textContent = SCENE_NAMES[type];
-      el.appendChild(sceneLbl);
+        const sceneLbl = document.createElement('div');
+        sceneLbl.className = 'dim-tile-scene';
+        sceneLbl.textContent = (SCENE_NAMES && SCENE_NAMES[type]) || '';
+        el.appendChild(sceneLbl);
 
-      if (state.currentTrack === idx) el.classList.add('playing');
+        if (state.currentTrack === idx) el.classList.add('playing');
 
-      el.addEventListener('click', () => expandTile(idx, type, colors, track.title));
+        el.addEventListener('click', () => expandTile(idx, type, colors, track.title));
 
-      gridEl.appendChild(el);
+        gridEl.appendChild(el);
 
-      // persistent state for mini scene
-      const parts = createMiniParticles(type, res);
+        const parts = createMiniParticles(type, res);
 
-      tiles.push({ el, canvas: cvs, ctx: cvs.getContext('2d'), index: idx,
-        type, colors, parts, phase: (i % 10) * 0.5 + Math.floor(i / 10) * 0.3 });
+        tiles.push({ el, canvas: cvs, ctx: cvs.getContext('2d'), index: idx,
+          type, colors, parts, phase: (i % 10) * 0.5 + Math.floor(i / 10) * 0.3 });
 
-      setTimeout(() => el.classList.remove('entering'), 25 + i * 15);
+        setTimeout(() => el.classList.remove('entering'), 25 + i * 15);
+      } catch(e) { console.error('Tile build error at track', i, e); }
     });
   }
 
@@ -314,7 +315,8 @@
   const SD = window.SCENE_DEFS;
 
   function createMiniParticles(type, res) {
-    return SD ? SD.create(type, res, res) : { a: [], b: [], c: [] };
+    try { return SD ? SD.create(type, res, res) : { a: [], b: [], c: [] }; }
+    catch(e) { return { a: [], b: [], c: [], p1: [], p2: [], extra: { angle: 0, val: 0, trail: [] } }; }
   }
 
   function createFullParticles(type, w, h) {
@@ -327,7 +329,15 @@
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = '#0a0a10';
     ctx.fillRect(0, 0, w, h);
-    if (SD) { try { SD.drawMini(type, ctx, w, h, colors, t, parts, bass, mid); } catch(e) {} }
+    if (SD) {
+      try { SD.drawMini(type, ctx, w, h, colors, t, parts, bass, mid); }
+      catch(e) {
+        // fallback: draw something visible so tile isn't just black
+        const g = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w*0.4);
+        g.addColorStop(0, hexToRGBA(colors[0], 0.15)); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      }
+    }
   }
 
   function drawFullScene(t, freq, bass, mid, treble) {
