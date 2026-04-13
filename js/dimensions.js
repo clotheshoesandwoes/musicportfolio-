@@ -33,6 +33,17 @@
   let t0 = 0;
   let trackList = [];
 
+  const SOUNDCLOUD_BASE = 'https://soundcloud.com/kanisongs';
+
+  function soundcloudURL(title) {
+    // slugify title → SoundCloud URL format
+    const slug = title.toLowerCase()
+      .replace(/['']/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return SOUNDCLOUD_BASE + '/' + slug;
+  }
+
   /* ----- helpers ----- */
   function hexToRGBA(hex, a) { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `rgba(${r},${g},${b},${a})`; }
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -97,6 +108,12 @@
         color:#fff; letter-spacing:-0.02em; text-shadow:0 2px 20px rgba(0,0,0,0.5); }
       .dim-overlay-sub { font-family:'DM Sans',sans-serif; font-size:12px; color:rgba(255,255,255,0.4);
         margin-top:6px; }
+      .dim-sc-link { display:inline-flex; align-items:center; gap:6px; margin-top:12px;
+        padding:8px 18px; border-radius:999px; background:rgba(255,85,0,0.12);
+        border:1px solid rgba(255,85,0,0.25); color:#ff5500; text-decoration:none;
+        font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500;
+        transition:background 0.2s; pointer-events:auto; }
+      .dim-sc-link:hover { background:rgba(255,85,0,0.22); }
       .dim-overlay-close { position:absolute; top:20px; right:24px; z-index:3; background:rgba(255,255,255,0.08);
         border:1px solid rgba(255,255,255,0.15); color:#fff; font-family:'DM Sans',sans-serif;
         font-size:12px; padding:8px 18px; border-radius:999px; cursor:pointer; transition:background .2s; }
@@ -208,7 +225,11 @@
     info.className = 'dim-overlay-info';
     info.id = 'dimOverlayInfo';
     info.innerHTML = `<div class="dim-overlay-title" id="dimExpTitle">${escapeHtml(title)}</div>
-      <div class="dim-overlay-sub" id="dimExpSub">${SCENE_NAMES[type] || ''}  ·  ◂ ▸ to navigate</div>`;
+      <div class="dim-overlay-sub" id="dimExpSub">${SCENE_NAMES[type] || ''}  ·  ◂ ▸ to navigate</div>
+      <a href="${soundcloudURL(title)}" target="_blank" rel="noopener" class="dim-sc-link" id="dimExpSC">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11.56 8.87V17h8.76c1.85 0 2.68-1.4 2.68-2.82 0-1.42-.83-2.82-2.68-2.82-.37 0-.73.07-1.06.2-.13-2.34-2.04-4.19-4.42-4.19-1.2 0-2.28.46-3.08 1.2-.1.09-.16.2-.2.3zM10.5 9.25V17h-.75V9.6c.24-.14.49-.26.75-.35zM8.75 10.5V17H8v-6.12c.24-.15.49-.28.75-.38zM7 11.69V17h-.75v-4.76c.23-.2.48-.38.75-.55zM5.25 13.14V17h-.75v-3.28c.22-.22.47-.4.75-.58zM3.5 14.81V17h-.75v-1.63c.18-.23.44-.4.75-.56zM1.75 16.07V17H1v-.58c.2-.15.46-.26.75-.35z"/></svg>
+        Listen on SoundCloud
+      </a>`;
     overlayEl.appendChild(info);
 
     const closeBtn = document.createElement('button');
@@ -265,6 +286,8 @@
     const subEl = document.getElementById('dimExpSub');
     if (titleEl) titleEl.textContent = track.title;
     if (subEl) subEl.textContent = (SCENE_NAMES[type] || '') + '  ·  ◂ ▸ to navigate';
+    const scLink = document.getElementById('dimExpSC');
+    if (scLink) scLink.href = soundcloudURL(track.title);
     tiles.forEach(t => t.el.classList.toggle('playing', t.index === idx));
   }
 

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## b084 — 2026-04-13 — SoundCloud link on every song card
+
+Each song's expanded view now shows a "Listen on SoundCloud" button that links to that track on soundcloud.com/kanisongs. The link auto-generates a slug from the track title (e.g. "The Fall (Shift Perceptions)" → `/the-fall-shift-perceptions`). When navigating between tracks with the prev/next arrows, the link updates automatically.
+
+### Files modified
+- [js/dimensions.js](js/dimensions.js) — `soundcloudURL()` helper, SoundCloud button in overlay info + CSS, link updates on navigate
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b083 → b084`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — build bump
+
 ## b083 — 2026-04-13 — Replace weak scenes + fix mobile tabs
 
 - **Rainy Window → Stargazer** — lone figure silhouette on hilltop, Milky Way band with dense star field + nebula glow, shooting stars, rolling hills, grass tufts
