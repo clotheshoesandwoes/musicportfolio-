@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## b087 — 2026-04-19 — SoundCloud-style Tracks page with shareable clean URLs
+
+Standalone Tracks browser at `/tracks` — grid of all 117 songs with unique procedural artwork per track, one hero spotlight at top, uniform squares below. Clean shareable URLs: `/t/<slug>` for a track, `/p/<slug>` for playlists, `/a/<slug>` and `/ep/<slug>` reserved for future albums/EPs. User can build playlists in-browser (localStorage + URL-encoded share links) and jump to the SoundCloud page for any song. Neutral black/white aesthetic distinct from the scene views, Space Grotesk display font, SVG grain overlay, real audio wired to the R2 `audioBase`. Existing scene views (Dimensions/Villa/etc.) untouched; new **Tracks** link in the top bar.
+
+Cover art support: drop `covers/<slug>.jpg|png|webp` files and they replace the procedural gradient automatically. No code change required per track.
+
+### Files modified / added
+- [tracks.html](tracks.html) **(NEW)** — full tracks-browser SPA: grid/list views, procedural art, cover-art pipeline, path routing via History API, real audio via `new Audio()`, playlist draft + share URLs, SC deep link per track
+- [_redirects](_redirects) **(NEW)** — Cloudflare rewrites: `/t/*`, `/p/*`, `/a/*`, `/ep/*`, `/tracks`, `/tracks/*` → `tracks.html`
+- [covers/](covers/) **(NEW)** — cover-art folder with README explaining slug naming convention
+- [index.html](index.html) — **Tracks** link added to top bar (between view tabs and theme toggle)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b086 → b087`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — new files documented, build bump
+
 ## b086 — 2026-04-13 — Five feel upgrades: mouse trails, ambient glow, swipe nav, entrance, interactive scenes
 
 1. **Mouse trails** — purple/pink particle trail follows cursor across the grid, fades out organically. Spark bursts erupt when hovering tiles. Custom glowing cursor dot replaces default (desktop).

@@ -1,7 +1,7 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b086
-**Updated:** 2026-04-13
+**Build:** b087
+**Updated:** 2026-04-19
 
 ## Design references
 - [VISION.md](VISION.md) — design bible: project vision, Drake's-site reference, art direction, palette table, click→card system design, scene density priorities, what's in/out of scope. **Read before any "luxury" or scenery feature work.**
@@ -20,12 +20,17 @@ Vanilla JS, no build step. Multi-view single-page site.
 ## Files
 
 ### Root
-- [index.html](index.html) (~115 lines) — shell, top bar, view-tabs (desktop + mobile), `<main class="view-container">`, player bar, script tags
+- [index.html](index.html) (~115 lines) — shell, top bar, view-tabs (desktop + mobile), `<main class="view-container">`, player bar, script tags. **b087:** added "Tracks" link pointing to `/tracks`.
+- [tracks.html](tracks.html) **(NEW b087)** — standalone SoundCloud-style tracks browser. Reads `config.json`, lays out all tracks as a uniform grid (one 2×2 hero at top, rest 1×1), per-track deep pages, playlist builder with URL-encoded share links, cover-art pipeline (`covers/<slug>.{jpg,png,webp}`), SoundCloud deep link per song, real audio via `new Audio()` against `audioBase`. Path-based routing via History API — intercepts internal `<a>` clicks and calls `pushState`. Routes: `/tracks`, `/tracks/new`, `/tracks/featured`, `/tracks/playlists`, `/t/<slug>`, `/p/<slug>`, `/a/<slug>`, `/ep/<slug>`. Neutral black/white aesthetic with Space Grotesk display font + SVG grain overlay, distinct from the scene views.
+- [_redirects](_redirects) **(NEW b087)** — Cloudflare static-asset rewrites so clean URLs serve `tracks.html`: `/t/*`, `/p/*`, `/a/*`, `/ep/*`, `/tracks`, `/tracks/*` all 200-rewrite to `/tracks.html`. Client-side JS reads `location.pathname` to decide which view to render.
 - [style.css](style.css) (~830 lines) — variables, top bar, view container, player bar, shared panels, per-view styles, villa loader, responsive
 - [config.json](config.json) — site config + tracks list (artist, theme, socials, tracks[])
 - [admin.html](admin.html) — admin/upload UI (not surveyed)
 - [script.js](script.js) — admin script (not surveyed)
 - [wrangler.jsonc](wrangler.jsonc) — Cloudflare Workers config
+
+### covers/ **(NEW b087)**
+Cover art drop zone. Filename = track slug (lowercase, punctuation stripped, spaces → hyphens). `tracks.html` tries `.jpg`, `.jpeg`, `.png`, `.webp` in order; falls back to procedural gradient when no file matches. See [covers/README.md](covers/README.md).
 
 ### js/
 - [js/helpers.js](js/helpers.js) **(NEW b001)** — `window.BUILD_NUMBER`
