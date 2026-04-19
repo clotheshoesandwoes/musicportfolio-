@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## b094 — 2026-04-19 — Fix relative-URL fetches + mobile layout thrash
+
+Direct visits to any non-root URL (e.g. `/t/rolla`) were silently failing because `fetch('config.json')` used a **relative** path — the browser resolved it to `/t/config.json`, which 404'd with an HTML error page, then `.json()` threw `SyntaxError: Unexpected token '<'`. Same bug with `covers/<slug>...`. Both now use absolute paths.
+
+Cover loader also scaled down from 4 extensions × 11 featured tracks = 44 network requests to **just `.jpg`** per slug. Cuts console noise by 75%; drop files as `.jpg` (convert anything else first). Failures cached silently.
+
+Mobile layout rebuilt:
+- **Topbar** flows as two rows on phones: [brand+TRACKS, search] then [scrollable nav, Explore pill]. Brand no longer overlaps TRACKS (removed the -16px margin hack, using a `.brand-wrap` flex container with proper gap).
+- **Page head** stacks vertically so "N tracks" + Grid/List toggle don't clip.
+- **Track detail** hero column collapses cleanly (art becomes full-width, title scales, buttons wrap), no floating misaligned elements.
+- **Main padding** tightened on phones.
+- **Media-query ordering** fixed: tablet rules (900px) now come before mobile rules (720px) in source so mobile actually wins at narrow viewports.
+
+### Files modified
+- [index.html](index.html) — `/config.json` + `/covers/` absolute paths; simplified cover loader to `.jpg` only; `.brand-wrap` markup + CSS; rewritten 720px media query; reordered 900px and 720px blocks
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b093 → b094`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b093 — 2026-04-19 — Real miniplayer with seek + time, removed fake plays / HOT pill, mobile polish
 
 Fake play counts (hash-derived "476 plays" etc.) removed everywhere: cards, list rows, list-head "Plays" column, track detail meta, track detail stats panel. The HOT pill (which was keyed off those fake numbers) is gone too. FEATURED and NEW pills remain — those are real.
