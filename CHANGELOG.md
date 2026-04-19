@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## b092 — 2026-04-19 — Fix missing audioBase (the actual playback bug)
+
+b091 surfaced the real problem via the new error logging: `state.audioBase` was never populated from `config.json`, so the code fell back to the relative path `audio-mp3/`, which on `/t/rolla` resolved to `https://cantmute.me/t/audio-mp3/rolla.mp3` — a 404. Audio now correctly hits the R2 CDN URL from `config.audioBase`.
+
+Also: fallback path is now `/audio-mp3/` (absolute) instead of `audio-mp3/` so it resolves from site root on any route. Added the modern `mobile-web-app-capable` meta and an inline-SVG favicon to silence console warnings.
+
+### Files modified
+- [index.html](index.html) — config loader sets `state.audioBase = cfg.audioBase`; absolute fallback path; mobile-web-app-capable meta + favicon
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b091 → b092`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b091 — 2026-04-19 — Fix playback on Tracks page
 
 Audio wasn't playing when clicking Play on the Tracks page or individual track pages. Mirrored the pattern from [js/player.js](js/player.js) (the scene app's working audio engine): `audio.crossOrigin = 'anonymous'` must be set **before** any `src` assignment for R2 audio, and set `volume = 0.8`. Added an `error` event listener with a decoded error code (aborted / network / decode / not-supported) and console logging of the exact URL being loaded, so future failures are diagnosable from devtools.

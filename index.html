@@ -10,7 +10,9 @@
 <meta name="description" content="Kani's music portfolio. Stream tracks, build playlists, discover new releases.">
 <meta name="theme-color" content="#0a0a0a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -487,7 +489,7 @@ audio.addEventListener('error', ()=>{
 
 function trackAudioUrl(t){
   // audioBase like 'https://pub-....r2.dev/'; filenames may have spaces
-  const base = state.audioBase || 'audio-mp3/';
+  const base = state.audioBase || '/audio-mp3/';
   return base + encodeURIComponent(t.file || '');
 }
 function playIndex(i){
@@ -969,6 +971,7 @@ fetch('config.json')
   .then(r=>r.json())
   .then(cfg=>{
     state.tracks = cfg.tracks || [];
+    state.audioBase = cfg.audioBase || '/audio-mp3/';
     // Accept either numeric indices OR slug/title strings in featured / newReleases
     const resolveRef = (ref)=>{
       if(typeof ref === 'number') return state.tracks[ref] || null;
