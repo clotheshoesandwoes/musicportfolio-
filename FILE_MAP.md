@@ -1,6 +1,6 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b089
+**Build:** b090
 **Updated:** 2026-04-19
 
 ## Routes
@@ -41,8 +41,8 @@ Vanilla JS, no build step. Multi-view single-page site.
 
 ### Root
 - [index.html](index.html) **(MAIN, renamed from `tracks.html` in b089)** — standalone SoundCloud-style tracks browser, **served at `/`**. Reads `config.json`, lays out all tracks as a uniform grid (one 2×2 hero at top on Featured view, rest 1×1), per-track deep pages, playlist builder with URL-encoded share links, cover-art pipeline (`covers/<slug>.{jpg,png,webp}`), SoundCloud deep link per song, real audio via `new Audio()` against `audioBase`. Path-based routing via History API — intercepts internal `<a>` clicks whose target matches a tracks route (`/`, `/tracks`, `/tracks/*`, `/t/*`, `/p/*`, `/a/*`, `/ep/*`) and calls `pushState`; other links (e.g. `/scenes`) fall through to the browser. Neutral black/white aesthetic with Space Grotesk display font + SVG grain overlay, distinct from the scene views.
-- [scenes.html](scenes.html) **(renamed from `index.html` in b089)** — 3D scene app (Dimensions / Living Wall / Villa / Neural / etc.), **served at `/scenes`**. Includes `<base href="/">` so relative asset refs (`style.css`, `js/app.js`, etc.) still resolve correctly from any sub-path.
-- [_redirects](_redirects) — Cloudflare static-asset rewrites. **No root rewrite** (CF serves `index.html` for `/` natively — can't redirect-loop). Rewrites only for clean sub-paths: `/tracks`, `/tracks/*`, `/t/*`, `/p/*`, `/a/*`, `/ep/*` → `/index.html`; `/scenes`, `/scenes/*` → `/scenes.html`. All 200-status so URLs stay clean.
+- [scenes/index.html](scenes/index.html) **(relocated from `scenes.html` in b090)** — 3D scene app (Dimensions / Living Wall / Villa / Neural / etc.), **served at `/scenes`** via CF's native directory-index resolution (no rewrite rule). Includes `<base href="/">` so relative asset refs (`style.css`, `js/app.js`, etc.) still resolve from the site root.
+- [_redirects](_redirects) — Cloudflare static-asset rewrites. Every rewrite targets `/` (not `/index.html`) to avoid CF's `_redirects` validator rejecting `.html` destinations (error 10021). Rules: `/tracks`, `/tracks/*`, `/t/*`, `/p/*`, `/a/*`, `/ep/*` → `/`. CF serves the root's `index.html` for that rewrite; the client-side router reads `location.pathname` (still showing the original URL because 200-status rewrites don't change the address bar) and renders the correct view.
 - [style.css](style.css) (~830 lines) — variables, top bar, view container, player bar, shared panels, per-view styles, villa loader, responsive
 - [config.json](config.json) — site config + tracks list (artist, theme, socials, tracks[])
 - [admin.html](admin.html) — admin/upload UI (not surveyed)

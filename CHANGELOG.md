@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## b090 — 2026-04-19 — Actually fix the deploy: move scenes into a folder, point rewrites at `/`
+
+b088 and b089 both failed to deploy to Cloudflare Workers with error 10021 — CF's `_redirects` validator rejects **any rule whose destination is a `.html` file** (it auto-strips `.html` and `/index` on its own and considers this a potential loop). The site was never updating because the deploy itself was being rejected.
+
+**Fix:**
+1. Moved `scenes.html` → `scenes/index.html`. Now `/scenes` serves that folder's index natively. No rewrite rule needed — CF's directory-index behavior handles it.
+2. Rewrote `_redirects` so every target is `/` instead of `/index.html`. Same end result (CF serves root's index.html), but no `.html` in the destination, so the validator is happy.
+
+### Files modified / renamed
+- `scenes/index.html` **(renamed from `scenes.html`)** — no content changes, just relocated into a folder so CF serves it natively at `/scenes`
+- [_redirects](_redirects) — all tracks-route rewrites now point at `/` (was `/index.html`); `/scenes` + `/scenes/*` rules removed entirely (directory index handles it)
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b089 → b090`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — file layout updated
+
 ## b089 — 2026-04-19 — Fix redirect loop: rename files so filesystem serves root, no `_redirects` magic for `/`
 
 b088 caused `ERR_TOO_MANY_REDIRECTS` on prod because Cloudflare Workers with `assets.directory` config doesn't handle the `/ → /tracks.html` rewrite the same way Cloudflare Pages would — it was issuing real browser redirects instead of internal rewrites, which then looped.
