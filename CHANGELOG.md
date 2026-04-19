@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## b091 — 2026-04-19 — Fix playback on Tracks page
+
+Audio wasn't playing when clicking Play on the Tracks page or individual track pages. Mirrored the pattern from [js/player.js](js/player.js) (the scene app's working audio engine): `audio.crossOrigin = 'anonymous'` must be set **before** any `src` assignment for R2 audio, and set `volume = 0.8`. Added an `error` event listener with a decoded error code (aborted / network / decode / not-supported) and console logging of the exact URL being loaded, so future failures are diagnosable from devtools.
+
+Also: tapping play on the miniplayer with nothing loaded now starts the first track instead of doing nothing.
+
+### Files modified
+- [index.html](index.html) — `crossOrigin='anonymous'` before `src`; added `error` listener; console-logs the audio URL on load; toast shows the error kind; `togglePlay` from empty state starts track 0
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b090 → b091`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b090 — 2026-04-19 — Actually fix the deploy: move scenes into a folder, point rewrites at `/`
 
 b088 and b089 both failed to deploy to Cloudflare Workers with error 10021 — CF's `_redirects` validator rejects **any rule whose destination is a `.html` file** (it auto-strips `.html` and `/index` on its own and considers this a potential loop). The site was never updating because the deploy itself was being rejected.

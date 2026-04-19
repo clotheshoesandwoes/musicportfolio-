@@ -469,30 +469,44 @@ document.addEventListener('click', e=>{
 // ====================================================================
 const audio = new Audio();
 audio.preload = 'none';
+audio.volume = 0.8;
+// crossOrigin must be set BEFORE src — required for R2 audio to work with
+// future Web Audio API hookups, and some R2 CORS configurations require it
+// even for plain <audio> playback.
+audio.crossOrigin = 'anonymous';
 audio.addEventListener('ended', ()=>playNext());
 audio.addEventListener('play',  ()=>{state.playing=true; renderMiniplayer(); renderPlayingState();});
 audio.addEventListener('pause', ()=>{state.playing=false; renderMiniplayer(); renderPlayingState();});
+audio.addEventListener('error', ()=>{
+  const err = audio.error;
+  const codeMap = {1:'aborted',2:'network',3:'decode',4:'not-supported'};
+  const kind = err ? (codeMap[err.code]||'unknown') : 'unknown';
+  console.error('[audio] error:', kind, 'src:', audio.src, err);
+  toast(`Playback failed (${kind})`);
+});
 
 function trackAudioUrl(t){
-  // audioBase like 'https://pub-....r2.dev/'; filename may have spaces
+  // audioBase like 'https://pub-....r2.dev/'; filenames may have spaces
   const base = state.audioBase || 'audio-mp3/';
-  return base + encodeURIComponent(t.file || '').replace(/%2F/g,'/');
+  return base + encodeURIComponent(t.file || '');
 }
 function playIndex(i){
   if(i<0||i>=state.tracks.length)return;
   const t = state.tracks[i];
   if(state.current !== i){
     state.current = i;
-    audio.src = trackAudioUrl(t);
+    const url = trackAudioUrl(t);
+    console.log('[audio] loading:', url);
+    audio.src = url;
   }
   audio.play().catch(err=>{
-    console.warn('playback failed:', err);
-    toast('Playback failed');
+    console.error('[audio] play() rejected:', err.name, err.message, 'src:', audio.src);
+    toast(`Playback failed: ${err.name}`);
   });
 }
 function togglePlay(){
-  if(state.current < 0) return;
-  if(audio.paused) audio.play().catch(()=>{});
+  if(state.current < 0){ playIndex(0); return; }
+  if(audio.paused) audio.play().catch(err=>console.error('[audio] toggle play failed:', err));
   else audio.pause();
 }
 function playNext(){playIndex((state.current+1)%state.tracks.length);}
