@@ -1,6 +1,9 @@
-/t/*        /tracks.html   200
-/p/*        /tracks.html   200
-/a/*        /tracks.html   200
-/ep/*       /tracks.html   200
-/tracks     /tracks.html   200
-/tracks/*   /tracks.html   200
+/               /tracks.html   200
+/tracks         /tracks.html   200
+/tracks/*       /tracks.html   200
+/t/*            /tracks.html   200
+/p/*            /tracks.html   200
+/a/*            /tracks.html   200
+/ep/*           /tracks.html   200
+/scenes         /index.html    200
+/scenes/*       /index.html    200

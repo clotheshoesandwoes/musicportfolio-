@@ -1,7 +1,27 @@
 # FILE MAP — cantmute.me (Kani music portfolio)
 
-**Build:** b087
+**Build:** b088
 **Updated:** 2026-04-19
+
+## Routes
+- `/` → **Featured** (main landing — curated hero + featured grid, served from `tracks.html`)
+- `/tracks` → **All tracks** (full grid/list of every song)
+- `/tracks/new` → tracks flagged `isNew` / listed in `config.newReleases`
+- `/tracks/playlists` → saved + shared playlists
+- `/t/<slug>` → individual track page
+- `/p/<slug>` → playlist (optional `?t=<slugs>&n=<name>` for shareable ad-hoc playlists)
+- `/a/<slug>`, `/ep/<slug>` → album / EP placeholders (coming soon)
+- `/scenes` → **3D scene app** (Dimensions / Living Wall / Villa / Neural / etc., served from `index.html`)
+
+Rewrites are declared in `_redirects` (Cloudflare static-asset redirects). All rewrites use status 200 so the URL stays clean.
+
+## Featured / New curation
+Edit `config.json`:
+```json
+"featured": ["rolla", "odst", "wallet"],     // slugs OR title strings OR numeric indices
+"newReleases": ["rolla", "follow-you"]        // same — any mix allowed
+```
+`tracks.html` resolves each entry: number → `tracks[N]`, string → slugified title match. Track-level `"isNew": true` / `"isFeatured": true` still works too (scene views use those per-track flags).
 
 ## Design references
 - [VISION.md](VISION.md) — design bible: project vision, Drake's-site reference, art direction, palette table, click→card system design, scene density priorities, what's in/out of scope. **Read before any "luxury" or scenery feature work.**

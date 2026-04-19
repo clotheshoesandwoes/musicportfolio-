@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## b088 — 2026-04-19 — Tracks is the main landing; Featured is the default view; 3D scenes moved to /scenes
+
+Swapped the site's primary surface: `cantmute.me` (root) now serves the Tracks browser, landing on the **Featured** view (curated hero + grid). The 3D scene app (Dimensions / Living Wall / Villa / Neural / etc.) moved to `cantmute.me/scenes` — same code, new URL. Tracks top bar gets a prominent **Explore** pill that jumps to `/scenes`; scene app gets a **← Tracks** back link. Added `<base href="/">` to `index.html` so relative asset URLs still resolve correctly when served at `/scenes`.
+
+Restructured the Tracks nav: **Featured** (the new home, `/`) · **All tracks** (`/tracks`) · **New** (`/tracks/new`) · **Playlists** (`/tracks/playlists`). Featured view has a "View all tracks →" button at the bottom.
+
+Also made the featured list self-documenting: `config.json` → `featured` can now be either numeric indices (legacy) or slug/title strings (readable, survives reordering). Same for `newReleases`. Landing page shows a helpful empty-state if `featured` is empty, pointing at the exact config field to edit.
+
+Fixed a bug from b087 where clicking `/scenes` on the Tracks page was swallowed by the internal router and re-rendered home. The click interceptor now only intercepts routes actually handled by `tracks.html`; everything else (e.g. `/scenes`) falls through to the browser so Cloudflare's `_redirects` can serve the right file.
+
+### Files modified
+- [_redirects](_redirects) — `/` rewrites to `/tracks.html`; `/scenes` and `/scenes/*` rewrite to `/index.html`
+- [tracks.html](tracks.html) — `/` now renders Featured (hero + grid + "View all →"); `/tracks` renders All; nav reordered; Explore pill link to `/scenes`; OG/social meta + `<title>` updated for main landing; click interceptor scoped to tracks routes only; `config.featured`/`newReleases` now accept slugs or indices
+- [index.html](index.html) — `<base href="/">`; Tracks link → prominent "← Tracks" back link; `<title>` → "Kani — Scenes"
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b087 → b088`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — route map + featured schema notes
+
 ## b087 — 2026-04-19 — SoundCloud-style Tracks page with shareable clean URLs
 
 Standalone Tracks browser at `/tracks` — grid of all 117 songs with unique procedural artwork per track, one hero spotlight at top, uniform squares below. Clean shareable URLs: `/t/<slug>` for a track, `/p/<slug>` for playlists, `/a/<slug>` and `/ep/<slug>` reserved for future albums/EPs. User can build playlists in-browser (localStorage + URL-encoded share links) and jump to the SoundCloud page for any song. Neutral black/white aesthetic distinct from the scene views, Space Grotesk display font, SVG grain overlay, real audio wired to the R2 `audioBase`. Existing scene views (Dimensions/Villa/etc.) untouched; new **Tracks** link in the top bar.

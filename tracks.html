@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Kani — Tracks (prototype)</title>
+<title>Kani | cantmute.me</title>
+<meta property="og:title" content="Kani | cantmute.me">
+<meta property="og:description" content="can't mute me. listen now.">
+<meta property="og:type" content="website">
+<meta name="description" content="Kani's music portfolio. Stream tracks, build playlists, discover new releases.">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -57,7 +64,15 @@
   nav.top-links a{padding:8px 0;border-bottom:1px solid transparent;transition:color .15s,border-color .15s}
   nav.top-links a:hover{color:var(--text)}
   nav.top-links a.active{color:var(--text);border-color:var(--text)}
-  .search{margin-left:auto;position:relative}
+  .explore-btn{
+    margin-left:auto;display:inline-flex;align-items:center;
+    padding:9px 18px;border-radius:999px;font-size:13px;font-weight:600;
+    background:linear-gradient(135deg,#1e1e28,#0f0f14);
+    color:var(--text);border:1px solid var(--border-strong);
+    transition:all .18s ease;letter-spacing:.02em;
+  }
+  .explore-btn:hover{transform:translateY(-1px);border-color:#555;background:linear-gradient(135deg,#252530,#14141a);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  .search{position:relative}
   .search input{
     background:var(--bg-elev);border:1px solid var(--border);
     padding:10px 14px 10px 36px;border-radius:8px;color:var(--text);
@@ -294,11 +309,14 @@
     <div class="brand">Kani</div>
     <div class="brand-sub">TRACKS</div>
     <nav class="top-links">
-      <a href="/tracks" class="nav-link" data-route="home">All</a>
+      <a href="/" class="nav-link" data-route="home">Featured</a>
+      <a href="/tracks" class="nav-link" data-route="all">All tracks</a>
       <a href="/tracks/new" class="nav-link" data-route="new">New</a>
-      <a href="/tracks/featured" class="nav-link" data-route="featured">Featured</a>
       <a href="/tracks/playlists" class="nav-link" data-route="playlists">Playlists</a>
-      <a href="/" class="nav-link" style="color:var(--muted);margin-left:auto">← back to site</a>
+      <a href="/scenes" class="explore-btn" title="3D scenes, villa, living wall">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Explore
+      </a>
     </nav>
     <div class="search">
       <input id="search" type="text" placeholder="Search tracks…" />
@@ -410,9 +428,10 @@ function sizeClass(t, i, isHero=false){ return isHero ? 'hero' : ''; }
 // ====================================================================
 function currentRoute(){
   const p = location.pathname.replace(/\/+$/, '') || '/';
-  if(p==='/'||p==='/tracks'||p==='/tracks.html') return {name:'home'};
+  if(p==='/' || p==='/tracks.html') return {name:'home'};          // Featured landing
+  if(p==='/tracks') return {name:'all'};                           // All tracks
   if(p==='/tracks/new') return {name:'new'};
-  if(p==='/tracks/featured') return {name:'featured'};
+  if(p==='/tracks/featured') return {name:'home'};                 // alias
   if(p==='/tracks/playlists') return {name:'playlists'};
   let m;
   if(m = p.match(/^\/t\/(.+)$/))  return {name:'track', slug:decodeURIComponent(m[1])};
@@ -430,13 +449,17 @@ function go(path){
     location.href = path; // external
   }
 }
-// Intercept internal anchor clicks so pushState handles them
+// Only intercept anchor clicks whose target is a tracks.html-handled route.
+// Everything else (e.g. /scenes) falls through so the browser navigates
+// normally and Cloudflare's _redirects serve the right file.
+const TRACKS_ROUTES = /^\/(?:$|tracks(?:\/|$)|t\/|p\/|a\/|ep\/)/;
 document.addEventListener('click', e=>{
   const a = e.target.closest('a[href]');
   if(!a) return;
   const href = a.getAttribute('href');
   if(!href || href.startsWith('http') || a.target==='_blank' || a.hasAttribute('download')) return;
   if(!href.startsWith('/')) return;
+  if(!TRACKS_ROUTES.test(href)) return; // let browser handle /scenes, /admin, etc.
   e.preventDefault();
   go(href);
 });
@@ -574,10 +597,23 @@ function draftBarHtml(){
       <button class="btn primary" id="js-save-draft" style="padding:8px 16px">Save playlist →</button>
     </div>`;
 }
-function viewHome(filterFn, {title='All tracks', heroable=true}={}){
+function viewHome(filterFn, {title='All tracks', heroable=true, footerLink=null}={}){
   let list = state.tracks.map((t,i)=>({t,i}));
   if(filterFn) list = list.filter(({t})=>filterFn(t));
   if(state.query) list = list.filter(({t})=>t.title.toLowerCase().includes(state.query));
+
+  const emptyMsg = (title==='Featured')
+    ? `<div class="center" style="grid-column:1/-1">
+        <div style="color:var(--muted);max-width:460px;margin:0 auto;line-height:1.7">
+          No featured tracks yet. Edit <code style="background:var(--bg-elev);padding:2px 6px;border-radius:4px;color:var(--accent2);font-size:12px">config.json</code> → <code style="background:var(--bg-elev);padding:2px 6px;border-radius:4px;color:var(--accent2);font-size:12px">featured</code> array to curate the landing page.
+        </div>
+        <div style="margin-top:18px"><a href="/tracks" class="btn primary">Browse all tracks →</a></div>
+      </div>`
+    : '<div class="center" style="grid-column:1/-1">No matches.</div>';
+
+  const footerHtml = footerLink && list.length
+    ? `<div style="text-align:center;margin:48px 0 16px"><a href="${footerLink.href}" class="btn">${footerLink.label}</a></div>`
+    : '';
 
   if(state.view==='grid'){
     const heroItem = heroable && !state.query && list.length ? list[0] : null;
@@ -591,12 +627,13 @@ function viewHome(filterFn, {title='All tracks', heroable=true}={}){
           <h1>${title}</h1>
         </div>
         <div style="display:flex;gap:14px;align-items:center">
-          <div class="count">${list.length} tracks</div>
+          <div class="count">${list.length} track${list.length===1?'':'s'}</div>
           ${viewToggleHtml()}
         </div>
       </div>
       ${draftBarHtml()}
-      <div class="grid">${hero}${cards || (list.length?'':'<div class="center" style="grid-column:1/-1">No matches.</div>')}</div>`;
+      <div class="grid">${hero}${cards || (list.length?'':emptyMsg)}</div>
+      ${footerHtml}`;
   }
   const rows = list.map(({t,i})=>listRow(t,i)).join('');
   return `
@@ -606,7 +643,7 @@ function viewHome(filterFn, {title='All tracks', heroable=true}={}){
         <h1>${title}</h1>
       </div>
       <div style="display:flex;gap:14px;align-items:center">
-        <div class="count">${list.length} tracks</div>
+        <div class="count">${list.length} track${list.length===1?'':'s'}</div>
         ${viewToggleHtml()}
       </div>
     </div>
@@ -615,13 +652,14 @@ function viewHome(filterFn, {title='All tracks', heroable=true}={}){
       <div class="list-head">
         <div></div><div>Track</div><div>Date</div><div class="align-r">Plays</div><div class="align-r">Actions</div>
       </div>
-      ${rows || '<div class="center">No matches.</div>'}
-    </div>`;
+      ${rows || (list.length?'':emptyMsg)}
+    </div>
+    ${footerHtml}`;
 }
 
 function viewTrack(slug){
   const i = findTrackBySlug(slug);
-  if(i<0) return `<div class="center">No track called "${slug}".<br><br><a class="back-link" href="/tracks">← back</a></div>`;
+  if(i<0) return `<div class="center">No track called "${slug}".<br><br><a class="back-link" href="/">← back</a></div>`;
   const t = state.tracks[i];
   const plays = fakePlays(t.title);
   const shareUrl = `${location.origin}/t/${slug}`;
@@ -635,7 +673,7 @@ function viewTrack(slug){
 
   return `
     <div class="detail-wrap">
-      <a class="back-link" href="/tracks">← back</a>
+      <a class="back-link" href="/">← back</a>
       <div class="detail-hero">
         <div class="detail-art" data-slug="${slug}" style="${artStyle(t.title)}">
           <img class="art-img" alt="" />
@@ -759,7 +797,7 @@ function viewPlaylist(slug){
 
 function viewComingSoon(kind, slug){
   return `
-    <a class="back-link" href="/tracks">← back</a>
+    <a class="back-link" href="/">← back</a>
     <div class="page-head" style="margin-top:20px">
       <div>
         <div class="kicker">${kind}</div>
@@ -826,9 +864,9 @@ function render(){
   document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active', a.dataset.route===r.name));
   const app = document.getElementById('app');
   let html='';
-  if(r.name==='home')           html = viewHome(null);
+  if(r.name==='home')           html = viewHome(t=>t.isFeatured,{title:'Featured',heroable:true,footerLink:{href:'/tracks',label:'View all tracks →'}});
+  else if(r.name==='all')       html = viewHome(null,{title:'All tracks'});
   else if(r.name==='new')       html = viewHome(t=>t.isNew,{title:'New',heroable:false});
-  else if(r.name==='featured')  html = viewHome(t=>t.isFeatured,{title:'Featured',heroable:false});
   else if(r.name==='playlists') html = viewPlaylists();
   else if(r.name==='playlist')  html = viewPlaylist(r.slug);
   else if(r.name==='track')     html = viewTrack(r.slug);
@@ -907,7 +945,7 @@ document.getElementById('mp-prev').onclick = playPrev;
 
 document.getElementById('search').addEventListener('input', e=>{
   state.query = e.target.value.toLowerCase().trim();
-  if(currentRoute().name !== 'home') go('/tracks');
+  if(currentRoute().name !== 'home') go('/');
   else render();
 });
 
@@ -917,8 +955,20 @@ fetch('config.json')
   .then(r=>r.json())
   .then(cfg=>{
     state.tracks = cfg.tracks || [];
-    (cfg.featured||[]).forEach(i=>{if(state.tracks[i]) state.tracks[i].isFeatured=true;});
-    (cfg.newReleases||[]).forEach(i=>{if(state.tracks[i]) state.tracks[i].isNew=true;});
+    // Accept either numeric indices OR slug/title strings in featured / newReleases
+    const resolveRef = (ref)=>{
+      if(typeof ref === 'number') return state.tracks[ref] || null;
+      if(typeof ref === 'string'){
+        const s = slugify(ref);
+        const idx = state.tracks.findIndex(t => slugify(t.title) === s);
+        return idx >= 0 ? state.tracks[idx] : null;
+      }
+      return null;
+    };
+    (cfg.featured||[]).forEach(ref=>{const t=resolveRef(ref); if(t) t.isFeatured=true;});
+    (cfg.newReleases||[]).forEach(ref=>{const t=resolveRef(ref); if(t) t.isNew=true;});
+    // Also respect per-track flags already in config.json
+    state.tracks.forEach(t=>{ if(t.isNew===true) t.isNew = true; });
     render();
   })
   .catch(err=>{
