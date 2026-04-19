@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## b093 — 2026-04-19 — Real miniplayer with seek + time, removed fake plays / HOT pill, mobile polish
+
+Fake play counts (hash-derived "476 plays" etc.) removed everywhere: cards, list rows, list-head "Plays" column, track detail meta, track detail stats panel. The HOT pill (which was keyed off those fake numbers) is gone too. FEATURED and NEW pills remain — those are real.
+
+Miniplayer got a real upgrade:
+- **Clickable seek bar** across the top — hover to grow, click to scrub
+- **Time display** (current / total) in the subtitle line, live-updating
+- **SVG icons** for prev / play / pause / next (was text characters)
+- **Bigger circular touch targets** (42px standard, 38px on mobile)
+- **Safe-area-inset-bottom** padding so iOS home-bar doesn't clip controls
+- Play icon swaps to pause icon when playing (was just changing text)
+
+Mobile topbar also reflowed: nav links wrap to their own row and scroll horizontally; search takes full width; Explore pill scales down. Kept the grid responsive as before.
+
+### Files modified
+- [index.html](index.html) — removed `fakePlays`, `plays.toLocaleString()` references, HOT pill; new miniplayer markup + CSS + seek/time JS; mobile topbar media query
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b092 → b093`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+
 ## b092 — 2026-04-19 — Fix missing audioBase (the actual playback bug)
 
 b091 surfaced the real problem via the new error logging: `state.audioBase` was never populated from `config.json`, so the code fell back to the relative path `audio-mp3/`, which on `/t/rolla` resolved to `https://cantmute.me/t/audio-mp3/rolla.mp3` — a 404. Audio now correctly hits the R2 CDN URL from `config.audioBase`.

@@ -171,12 +171,12 @@
   /* ---------- List view ---------- */
   .list{border-top:1px solid var(--border)}
   .list-head{
-    display:grid;grid-template-columns:56px 1fr 140px 120px 150px;
+    display:grid;grid-template-columns:56px 1fr 140px 150px;
     gap:16px;padding:14px 18px;border-bottom:1px solid var(--border);
     color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.22em;font-weight:600;
   }
   .track-row{
-    display:grid;grid-template-columns:56px 1fr 140px 120px 150px;
+    display:grid;grid-template-columns:56px 1fr 140px 150px;
     gap:16px;padding:12px 18px;align-items:center;
     border-bottom:1px solid #15151c;
     transition:background .12s;cursor:pointer;position:relative;
@@ -276,19 +276,52 @@
   /* Mini player */
   .miniplayer{
     position:fixed;bottom:0;left:0;right:0;
-    background:rgba(10,10,14,.92);backdrop-filter:blur(20px);
+    background:rgba(10,10,14,.94);backdrop-filter:blur(20px);
     border-top:1px solid var(--border);
-    padding:12px 32px;display:flex;align-items:center;gap:18px;z-index:20;
+    display:flex;flex-direction:column;z-index:20;
+    padding-bottom:env(safe-area-inset-bottom);
   }
+  .mp-progress{
+    height:3px;background:rgba(255,255,255,.08);cursor:pointer;position:relative;
+    transition:height .15s;
+  }
+  .mp-progress:hover{height:5px}
+  .mp-fill{height:100%;background:#fff;width:0%;pointer-events:none}
+  .mp-row{display:flex;align-items:center;gap:16px;padding:10px 24px}
   .miniplayer .art{width:48px;height:48px;border-radius:8px;flex-shrink:0;overflow:hidden;position:relative}
   .miniplayer .now{flex:1;min-width:0}
   .miniplayer .now .title{font-family:var(--display);font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .miniplayer .now .artist{font-size:12px;color:var(--muted)}
-  .miniplayer .controls{display:flex;gap:10px;align-items:center}
+  .miniplayer .now .artist{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .miniplayer .controls{display:flex;gap:6px;align-items:center}
+  .miniplayer .mini-btn{
+    width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--muted);background:transparent;border:none;padding:0;
+    transition:color .15s,background .15s;
+  }
+  .miniplayer .mini-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
   .play-btn{
     width:44px;height:44px;border-radius:50%;
     background:#fff;color:#000;
-    font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700;padding-left:2px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .play-btn:hover{transform:scale(1.06)}
+  @media (max-width:720px){
+    .mp-row{padding:9px 14px;gap:12px}
+    .miniplayer .art{width:42px;height:42px}
+    .miniplayer .now .title{font-size:13px}
+    .miniplayer .now .artist{font-size:11px}
+    .miniplayer .mini-btn{width:38px;height:38px}
+    .play-btn{width:42px;height:42px}
+    /* add extra bottom padding to main so miniplayer doesn't cover content */
+    body{padding-bottom:140px}
+    /* Topbar layout on mobile — wrap nav onto its own row below brand + search */
+    header.topbar{flex-wrap:wrap;gap:12px;padding:12px 16px}
+    nav.top-links{order:3;width:100%;gap:16px;font-size:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+    nav.top-links a{white-space:nowrap}
+    .explore-btn{padding:7px 14px;font-size:12px}
+    .search input{width:100%}
+    .search{flex:1}
   }
 
   .center{padding:100px 0;text-align:center;color:var(--muted)}
@@ -328,15 +361,25 @@
   <main id="app"><div class="center">Loading tracks…</div></main>
 
   <div id="miniplayer" class="miniplayer" style="display:none">
-    <div class="art" id="mp-art"></div>
-    <div class="now">
-      <div class="title">Select a track</div>
-      <div class="artist">Kani</div>
-    </div>
-    <div class="controls">
-      <button class="mini-btn" id="mp-prev">◀◀</button>
-      <button class="play-btn" id="mp-play">▶</button>
-      <button class="mini-btn" id="mp-next">▶▶</button>
+    <div class="mp-progress" id="mp-progress"><div class="mp-fill" id="mp-fill"></div></div>
+    <div class="mp-row">
+      <div class="art" id="mp-art"></div>
+      <div class="now">
+        <div class="title" id="mp-title">Select a track</div>
+        <div class="artist"><span>Kani</span> · <span id="mp-time">0:00 / 0:00</span></div>
+      </div>
+      <div class="controls">
+        <button class="mini-btn" id="mp-prev" aria-label="Previous">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20L9 12l10-8v16z"/><path d="M5 4v16"/></svg>
+        </button>
+        <button class="play-btn" id="mp-play" aria-label="Play/Pause">
+          <svg id="mp-play-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+          <svg id="mp-pause-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+        </button>
+        <button class="mini-btn" id="mp-next" aria-label="Next">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8V4z"/><path d="M19 4v16"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -366,7 +409,6 @@ function slugify(s){return s.toLowerCase().replace(/[^\w\s-]/g,'').trim().replac
 function findTrackBySlug(slug){return state.tracks.findIndex(t => slugify(t.title) === slug);}
 function fmtDate(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}
 function hash(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h;}
-function fakePlays(title){return (hash(title)%4800)+120;}
 function scUrl(title){return `https://soundcloud.com/kanisongs/${slugify(title)}`;}
 function toast(msg){
   const el=document.getElementById('toast');
@@ -513,19 +555,42 @@ function togglePlay(){
 }
 function playNext(){playIndex((state.current+1)%state.tracks.length);}
 function playPrev(){playIndex((state.current-1+state.tracks.length)%state.tracks.length);}
+function fmtTime(sec){
+  if(!isFinite(sec)) return '0:00';
+  const m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return `${m}:${s<10?'0':''}${s}`;
+}
 function renderMiniplayer(){
   const mp=document.getElementById('miniplayer');
   if(state.current<0){mp.style.display='none';return;}
   mp.style.display='flex';
   const t=state.tracks[state.current];
   const slug = slugify(t.title);
-  mp.querySelector('.now .title').textContent=t.title;
-  mp.querySelector('#mp-play').textContent=state.playing?'❚❚':'▶';
+  document.getElementById('mp-title').textContent = t.title;
+  document.getElementById('mp-play-icon').style.display  = state.playing ? 'none'  : 'block';
+  document.getElementById('mp-pause-icon').style.display = state.playing ? 'block' : 'none';
   const art = document.getElementById('mp-art');
   art.setAttribute('style',artStyle(t.title));
   art.innerHTML = `<img class="art-img" alt="" />`;
   hydrateCover(art, slug);
+  updateMpTime();
 }
+function updateMpTime(){
+  const cur = audio.currentTime || 0;
+  const dur = audio.duration || 0;
+  document.getElementById('mp-time').textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
+  document.getElementById('mp-fill').style.width = dur ? `${(cur/dur)*100}%` : '0%';
+}
+audio.addEventListener('timeupdate', updateMpTime);
+audio.addEventListener('loadedmetadata', updateMpTime);
+// Click progress bar to seek
+document.addEventListener('click', e=>{
+  const prog = e.target.closest('#mp-progress');
+  if(!prog || !audio.duration) return;
+  const r = prog.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  audio.currentTime = pct * audio.duration;
+});
 function renderPlayingState(){
   document.querySelectorAll('.card,.track-row').forEach(el=>{
     const isPlaying = Number(el.dataset.i) === state.current;
@@ -546,16 +611,13 @@ function renderPlayingState(){
 // Card / row rendering
 // ====================================================================
 function pillsFor(t){
-  const plays = fakePlays(t.title);
   const pills = [];
   if(t.isFeatured) pills.push('<span class="pill feat">FEATURED</span>');
   if(t.isNew) pills.push('<span class="pill new">NEW</span>');
-  if(plays>3000) pills.push('<span class="pill hot">HOT</span>');
   return pills.join('');
 }
 function cardHtml(t, i, opts={}){
   const slug = slugify(t.title);
-  const plays = fakePlays(t.title);
   const cls = opts.hero ? 'hero' : (opts.size ?? sizeClass(t, i));
   const playing = i === state.current ? 'playing' : '';
   return `
@@ -568,14 +630,13 @@ function cardHtml(t, i, opts={}){
       <div class="top">${pillsFor(t)}</div>
       <div class="bottom">
         <h3>${t.title}</h3>
-        <div class="sub"><span>${fmtDate(t.date)}</span><span>·</span><span>${plays.toLocaleString()} plays</span></div>
+        <div class="sub"><span>${fmtDate(t.date)}</span></div>
       </div>
       <button class="play-fab" data-play="${i}" title="Play">▶</button>
     </div>`;
 }
 function listRow(t, i){
   const slug = slugify(t.title);
-  const plays = fakePlays(t.title);
   const playing = i === state.current ? 'playing' : '';
   return `
     <div class="track-row ${playing}" data-slug="${slug}" data-i="${i}">
@@ -585,7 +646,6 @@ function listRow(t, i){
         <div style="color:var(--muted);font-size:12px;margin-top:3px">Kani</div>
       </div>
       <div class="mono">${fmtDate(t.date)}</div>
-      <div class="mono align-r">${plays.toLocaleString()} plays</div>
       <div class="row-actions">
         <button class="mini-btn" data-add="${i}">＋</button>
         <button class="mini-btn" data-play="${i}">▶</button>
@@ -666,7 +726,7 @@ function viewHome(filterFn, {title='All tracks', heroable=true, footerLink=null}
     ${draftBarHtml()}
     <div class="list">
       <div class="list-head">
-        <div></div><div>Track</div><div>Date</div><div class="align-r">Plays</div><div class="align-r">Actions</div>
+        <div></div><div>Track</div><div>Date</div><div class="align-r">Actions</div>
       </div>
       ${rows || (list.length?'':emptyMsg)}
     </div>
@@ -677,7 +737,6 @@ function viewTrack(slug){
   const i = findTrackBySlug(slug);
   if(i<0) return `<div class="center">No track called "${slug}".<br><br><a class="back-link" href="/">← back</a></div>`;
   const t = state.tracks[i];
-  const plays = fakePlays(t.title);
   const shareUrl = `${location.origin}/t/${slug}`;
   const sc = scUrl(t.title);
 
@@ -700,8 +759,6 @@ function viewTrack(slug){
           <div class="detail-meta">
             ${pillsFor(t)}
             <span>${fmtDate(t.date)}</span>
-            <span>·</span>
-            <span>${plays.toLocaleString()} plays</span>
           </div>
           <div class="detail-actions">
             <button class="btn primary" data-play="${i}">▶ Play</button>
@@ -725,7 +782,6 @@ function viewTrack(slug){
           <div class="panel">
             <h4>Track info</h4>
             <div class="stat"><span>Released</span><span class="v">${fmtDate(t.date) || '—'}</span></div>
-            <div class="stat"><span>Plays</span><span class="v">${plays.toLocaleString()}</span></div>
             <div class="stat"><span>File</span><span class="v" style="font-size:11px;color:var(--muted)">${t.file||'—'}</span></div>
             <div class="stat"><span>Status</span><span class="v">${t.isNew?'New release':'Archive'}</span></div>
           </div>
@@ -791,7 +847,7 @@ function viewPlaylist(slug){
   const shareUrl = buildShareUrl(p.name, indices);
   const body = (state.view==='grid')
     ? `<div class="grid">${indices.map(i=>cardHtml(state.tracks[i],i)).join('')}</div>`
-    : `<div class="list"><div class="list-head"><div></div><div>Track</div><div>Date</div><div class="align-r">Plays</div><div class="align-r">Actions</div></div>${indices.map(i=>listRow(state.tracks[i],i)).join('')}</div>`;
+    : `<div class="list"><div class="list-head"><div></div><div>Track</div><div>Date</div><div class="align-r">Actions</div></div>${indices.map(i=>listRow(state.tracks[i],i)).join('')}</div>`;
   return `
     <a class="back-link" href="/tracks/playlists">← playlists</a>
     <div class="page-head" style="margin-top:18px">
