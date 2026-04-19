@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## b089 — 2026-04-19 — Fix redirect loop: rename files so filesystem serves root, no `_redirects` magic for `/`
+
+b088 caused `ERR_TOO_MANY_REDIRECTS` on prod because Cloudflare Workers with `assets.directory` config doesn't handle the `/ → /tracks.html` rewrite the same way Cloudflare Pages would — it was issuing real browser redirects instead of internal rewrites, which then looped.
+
+**Fix:** let the filesystem do the work. Renamed files so `/` serves the Tracks page natively with no rewrite rule at all:
+
+- Old `index.html` (3D scene app) → `scenes.html`
+- Old `tracks.html` (music browser) → `index.html`
+
+Now Cloudflare serves `/` as `index.html` by default (standard static-site behavior, no rewrite involved — can't loop). Simplified `_redirects` to only rewrite the clean sub-paths and `/scenes`.
+
+### Files modified / renamed
+- `index.html` **(renamed from `tracks.html`)** — now the main landing; route check also recognises `/index.html` as home
+- `scenes.html` **(renamed from `index.html`)** — 3D scene app, served at `/scenes`. Unchanged behavior thanks to `<base href="/">` from b088
+- [_redirects](_redirects) — dropped `/ → /tracks.html` rule entirely; renamed all targets from `/tracks.html` to `/index.html`, from `/index.html` to `/scenes.html`
+- [js/helpers.js](js/helpers.js) — `BUILD_NUMBER` `b088 → b089`
+- [CHANGELOG.md](CHANGELOG.md) — this entry
+- [FILE_MAP.md](FILE_MAP.md) — file layout updated
+
 ## b088 — 2026-04-19 — Tracks is the main landing; Featured is the default view; 3D scenes moved to /scenes
 
 Swapped the site's primary surface: `cantmute.me` (root) now serves the Tracks browser, landing on the **Featured** view (curated hero + grid). The 3D scene app (Dimensions / Living Wall / Villa / Neural / etc.) moved to `cantmute.me/scenes` — same code, new URL. Tracks top bar gets a prominent **Explore** pill that jumps to `/scenes`; scene app gets a **← Tracks** back link. Added `<base href="/">` to `index.html` so relative asset URLs still resolve correctly when served at `/scenes`.
