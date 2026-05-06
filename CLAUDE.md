@@ -1,101 +1,55 @@
+# CLAUDE.md
 
+## Mode
 
-## ⛔ MANDATORY WORKFLOW — NO EXCEPTIONS
+I'm in auto mode 90% of the time. **Execute, don't ceremony.** No "here's the diff, want me to proceed?" — read the files, do the work, report what changed. Ask one question only if the request is genuinely ambiguous (and even then, propose a default and tell me you'll proceed unless I object).
 
-### Before writing ANY code:
-1. **STATE** what you think I'm asking for (in your own words)
-2. **LIST** every file you would modify
-3. **PROCEED** unless the change is destructive, touches >5 files, or the request is ambiguous — then ask first
+When I say "yes" / "do it" / "push" / "go" — execute, don't repeat the plan back at me.
 
-### You are FORBIDDEN from:
-- Adding features I didn't explicitly request
-- "Improving" or "cleaning up" code while making other changes
-- Interpreting vague requests — ask for clarification instead
-- Making multiple unrelated changes in one response
+## Don't touch what I didn't ask about
 
-### If my request is ambiguous:
-ASK. Do not guess. Do not "be helpful."
+- No "improving" unrelated code while you're in there.
+- No refactoring on the side.
+- No features I didn't ask for.
+- If you spot something broken outside scope, mention it at the END of your message — don't fix it.
+- One ask = one focused change. Don't bundle.
 
----
+## Always do these (every code change, no exceptions)
 
-## ⛔ ABSOLUTE RULES — NEVER VIOLATE
+1. Bump `window.BUILD_NUMBER` in `js/helpers.js` (format `b###`).
+2. Update the `**Build:**` and `**Updated:**` lines at the top of `FILE_MAP.md`.
+3. Add a CHANGELOG entry at the **top** of `CHANGELOG.md` (newest first), formatted like recent entries — quote the user's request, explain what changed and why, list files touched.
+4. Read `FILE_MAP.md`, the most recent few `CHANGELOG.md` entries, and the actual file before editing.
 
-### 1. NEVER modify files without explicit approval
-- Show me the diff FIRST, wait for my "yes"
-- Do NOT "fix" things I didn't ask about
-- Do NOT refactor "while you're in there"
+If a hook or another session has already bumped the build, bump again to the next number rather than overwriting.
 
-### 2. ASK which files you need BEFORE writing code
-```
-To make this change, I'll need to see:
-- src/views/JournalView.tsx (for X)
-- src/core/editor.ts (for Y)
+## Code quality
 
-Want me to proceed after reviewing these?
-```
+- **Verify before reporting done.** Run `npx tsc --noEmit` and `npx eslint . --quiet` if configured. Fix all resulting errors. If no checker exists, say so explicitly — don't pretend.
+- Write what three experienced devs would all write the same way. No robotic comment blocks, no corporate prose, no decorative section headers.
+- One source of truth. Never duplicate state to paper over a display bug — find the one source and read from it everywhere.
+- Don't over-engineer. Simple and correct beats elaborate and speculative.
 
-### 3. ALWAYS update these files with EVERY code change
-- `CHANGELOG.md` — Add entry at TOP (newest first)
-- `FILE_MAP.md` — Update build number, line counts, any structural changes
+## When stuck
 
-### 4. ALWAYS increment the build number
-- Format: `b286` → `b287`
-- Update in: `FILE_MAP.md` header, `CHANGELOG.md` entry, `src/core/helpers.ts` (`BUILD_NUMBER`)
+- Two failed attempts → stop. Re-read the relevant section top-down. Tell me where your mental model was wrong before trying again.
+- "Step back" or "we're going in circles" → drop everything, rethink from scratch.
 
-### 5. READ before you write
-1. Read `FILE_MAP.md` to understand current architecture
-2. Read `CHANGELOG.md` recent entries for context
-3. Read the actual file you're about to modify
+## My shorthand
 
----
+- A pasted reference (link, screenshot, code block) is the spec. Match it. My English description is a hint; the reference is the source of truth.
+- "Paste the console output" — when I report a bug with no output, I'll grab logs. Trace the actual error from the raw data, don't pattern-match on my description.
+- Screenshots = ground truth for visuals. If I show you a layout problem, the pixels in the screenshot beat any description I wrote.
 
-## 🔧 Code Quality
+## Project layout pointers
 
-### Forced Verification
-Never report a task complete until you have:
-- Run `npx tsc --noEmit`
-- Run `npx eslint . --quiet` (if configured)
-- Fixed ALL resulting errors
+- `FILE_MAP.md` — architecture, every file's purpose, current build number. Read this first when joining fresh.
+- `STYLEGUIDE.md` — current Text Galaxy aesthetic (palette, typography, components). Source of truth for theming.
+- `VISION.md` — design bible: project vision, art direction, scope.
+- `CHANGELOG.md` — what changed and why, newest at top. Skim recent entries before touching unfamiliar code.
+- `THEME.md` — historical Beta Decay reference, **not** current direction.
+- `HANDOFF.md` — fresh-chat catch-up.
 
-If no type-checker exists, say so explicitly.
+## Local dev
 
-### Write Human Code
-No robotic comment blocks, no excessive section headers, no corporate descriptions of obvious things. If three experienced devs would all write it the same way, that's the way.
-
-### Don't Over-Engineer
-Don't build for imaginary scenarios. Simple and correct beats elaborate and speculative.
-
-### One Source of Truth
-Never fix a display problem by duplicating state. One source, everything reads from it.
-
----
-
-## 🔄 Workflow
-
-1. **YOU ASK:** "Which files do I need to see?"
-2. **I PROVIDE:** The specific files
-3. **YOU READ:** The files thoroughly
-4. **YOU PROPOSE:** Show me exactly what you'll change (diff format preferred)
-5. **I APPROVE:** "Yes, apply it" or "No, change X"
-6. **YOU APPLY:** Make the changes
-7. **YOU UPDATE:** CHANGELOG.md + FILE_MAP.md + bump build number
-8. **YOU DELIVER:** All modified files together
-
-### One-Word Mode
-When I say "yes," "do it," or "push" — execute. Don't repeat the plan.
-
-### Follow References, Not Descriptions
-When I point to existing code as a reference, match its patterns exactly. My working code is a better spec than my English description.
-
-### Work From Raw Data
-When I paste error logs, trace the actual error. If a bug report has no output, ask: "paste the console output."
-
----
-
-## 🔁 Failure Recovery
-
-If a fix doesn't work after two attempts, stop. Read the entire relevant section top-down. Figure out where your mental model was wrong and say so.
-
-If I say "step back" or "we're going in circles," drop everything. Rethink from scratch.
-
----
+`python serve.py` (port 8000) — handles SPA route rewrites that `python -m http.server` 404s on. Don't push to Vercel during iteration unless I explicitly ask.

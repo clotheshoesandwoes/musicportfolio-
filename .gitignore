@@ -6,3 +6,6 @@ audio-mp3/
 
 # Wrangler local cache
 .wrangler/
+
+# Visual reference materials (rotoscope/Active Theory clips, frames) — local only
+ref-gifs/
