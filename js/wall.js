@@ -85,15 +85,13 @@
     { match: 'rolla',            type: 'supercar'   },  // Rolla → yellow Lambo
     { match: 'silk pillowcase',  type: 'pillowcase' },  // Silk Pillowcase → silk pillow
     // b061 — additional hero icons for signature tracks
-    { match: 'space star',       type: 'spaceship'  },  // Space Star Galactica → spaceship
     { match: 'hotel california', type: 'hotelsign'  },  // Hotel California → neon hotel sign
     { match: 'coffee',           type: 'coffeecup'  },  // Coffee (Back in the Day) → cup
     { match: 'robot',            type: 'robotbody'  },  // Robot Song → robot
     { match: "stayin",           type: 'discoball'  },  // Stayin' Alive → disco ball
     { match: 'mario',            type: 'mariostar'  },  // Mario Island → Mario star
     { match: 'chains',           type: 'chainlink'  },  // Chains (Grunge) → chain links
-    { match: 'nirvana',          type: 'wonkysmile' },  // Nirvana / Nirvana (Alt) → smiley
-    { match: 'arkham',           type: 'villainmask'},  // Arkham Villain → villain mask
+    { match: 'nirvana',          type: 'wonkysmile' },  // Nirvana → smiley
     // b063 — 12 more hero icons
     { match: 'thunderbird',      type: 'thunderbird'},  // Thunderbird → lightning bird
     { match: 'best day ever',    type: 'sun'         }, // Best Day Ever (Clarity) → sun
@@ -113,8 +111,6 @@
     { match: 'spotlight',        type: 'spotlight'   },
     { match: 'final chapter',    type: 'book'        },
     { match: 'wired',            type: 'lightbolt'   },
-    { match: 'stop light',       type: 'trafficlight'},
-    { match: 'wind blows',       type: 'windmill'    },
     { match: 'i will survive',   type: 'fist'        },
     { match: 'shroomy',          type: 'shroom'      },
     { match: 'runaway',          type: 'sneaker'     },
@@ -130,7 +126,6 @@
     { match: 'akira world',      type: 'akira'       },
     { match: 'chicago seven',    type: 'riotshield'  },
     { match: 'chilly nites',     type: 'snowflake'   },
-    { match: 'may flowers',      type: 'raincloud'   },
     { match: 'soul',             type: 'soulfire'    },
     { match: 'backyardian',      type: 'treehouse'   },
     { match: 'follow you',       type: 'compass'     },

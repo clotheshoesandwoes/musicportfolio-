@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Kani · Halo Recon | cantmute.me</title>
+<meta name="theme-color" content="#9ec3e0">
+<meta name="description" content="Kani's music portfolio — Halo-themed interactive recon. Drive the Warthog, find the tracks.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;background:#000;color:#f2f2f2;font-family:'Inter',system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;}
+  #app{position:fixed;inset:0;}
+  .hg-canvas{display:block;width:100%;height:100%;cursor:default;}
+
+  .hg-hud{position:fixed;inset:0;pointer-events:none;font-family:'Inter',system-ui,sans-serif;color:#e6f0ff;}
+  .hg-hud > *{pointer-events:auto}
+
+  /* Health/shield bars (Halo CE-style: shield top, health below) */
+  .hg-shield-wrap{position:absolute;top:18px;left:50%;transform:translateX(-50%);width:340px;display:flex;flex-direction:column;gap:5px}
+  .hg-bar{height:10px;border:1px solid rgba(120,180,255,.5);background:rgba(0,0,0,.45);border-radius:2px;overflow:hidden}
+  .hg-shield{box-shadow:0 0 12px rgba(80,160,255,.3) inset}
+  .hg-bar-fill{height:100%;width:100%;transition:width .12s ease}
+  .hg-shield .hg-bar-fill{background:linear-gradient(90deg,#5fa0ff,#a8d0ff)}
+  .hg-health .hg-bar-fill{background:linear-gradient(90deg,#ff5840,#ffa84a)}
+
+  /* Aim cursor — follows the mouse instead of a center reticle */
+  .hg-aim-cursor{position:absolute;top:0;left:0;width:30px;height:30px;transform:translate(-50%,-50%);pointer-events:none;mix-blend-mode:screen}
+  .hg-aim-cursor::before, .hg-aim-cursor::after{content:"";position:absolute;background:rgba(140,220,255,.95);box-shadow:0 0 10px rgba(80,160,255,.85)}
+  .hg-aim-cursor::before{left:50%;top:0;width:1.5px;height:30px;transform:translateX(-50%)}
+  .hg-aim-cursor::after{top:50%;left:0;height:1.5px;width:30px;transform:translateY(-50%)}
+
+  /* Speedometer (only shown on Mongoose) */
+  .hg-speedo{position:absolute;bottom:24px;right:28px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:32px;letter-spacing:.04em;color:#cfe5ff;text-shadow:0 0 10px rgba(60,120,200,.55)}
+
+  /* Mission counter */
+  .hg-tr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .hg-mission{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;letter-spacing:.12em;color:#cfe5ff;background:rgba(10,20,40,.55);border:1px solid rgba(140,200,255,.3);padding:6px 12px;border-radius:3px;text-shadow:0 0 8px rgba(80,160,255,.4)}
+
+  /* Prompt */
+  .hg-prompt{position:absolute;bottom:18%;left:50%;transform:translateX(-50%);background:rgba(10,18,30,.65);border:1px solid rgba(140,200,255,.35);padding:8px 14px;border-radius:4px;font-size:12px;letter-spacing:.05em;color:#cfe5ff;display:none;font-family:'Space Grotesk',sans-serif;font-weight:600}
+
+  /* Corners */
+  .hg-tl{position:absolute;top:18px;left:22px}
+  .hg-tr{position:absolute;top:18px;right:22px}
+  .hg-bl{position:absolute;bottom:22px;left:22px}
+  .hg-brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;letter-spacing:.05em}
+  .hg-meta{font-size:10px;letter-spacing:.08em;color:#8aa0c0;margin-top:2px}
+  .hg-link{color:#8aa0c0;text-decoration:none;font-size:11px;letter-spacing:.05em}
+  .hg-link:hover{color:#fff}
+  .hg-hint{color:#7a90b0;font-size:11px;letter-spacing:.04em;max-width:80vw}
+
+  /* Start gate */
+  .hg-startgate{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(10,20,40,.7), rgba(0,0,0,.95));backdrop-filter:blur(4px);transition:opacity .35s ease;z-index:50}
+  .hg-startgate.off{opacity:0;pointer-events:none}
+  .hg-startgate-inner{text-align:center;max-width:560px;padding:0 24px}
+  .hg-startgate h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(36px, 7vw, 72px);letter-spacing:-.01em;margin:0 0 14px;color:#fff}
+  .hg-startgate p{color:#9ab0ce;font-size:14px;line-height:1.5;margin:0 0 26px}
+  .hg-start{background:#cfe5ff;color:#0a1224;border:none;padding:13px 32px;font:700 13px/1 'Space Grotesk',sans-serif;letter-spacing:.12em;cursor:pointer;border-radius:3px;box-shadow:0 0 30px rgba(120,180,255,.35)}
+  .hg-start:hover{background:#fff}
+
+  /* Controls grid in start gate */
+  .hg-controls{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:30px;color:#9ab0ce;font-size:11px;letter-spacing:.04em}
+  .hg-controls span{display:inline-flex;align-items:center;gap:6px}
+  .hg-controls kbd{display:inline-block;background:rgba(140,200,255,.1);border:1px solid rgba(140,200,255,.3);border-bottom-width:2px;padding:3px 7px;border-radius:3px;font:600 10px/1 'Space Grotesk',sans-serif;color:#cfe5ff;letter-spacing:.05em}
+
+  /* Victory screen */
+  .hg-victory{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(20,40,80,.7), rgba(0,0,0,.95));backdrop-filter:blur(6px);z-index:55}
+  .hg-victory-inner{text-align:center;max-width:560px;padding:0 24px}
+  .hg-victory-kicker{font-size:11px;letter-spacing:.32em;color:#8aa0c0;text-transform:uppercase;margin-bottom:14px}
+  .hg-victory h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(36px, 7vw, 72px);letter-spacing:-.01em;margin:0 0 14px;color:#fff;text-shadow:0 0 30px rgba(120,200,255,.5)}
+  .hg-victory p{color:#9ab0ce;font-size:14px;line-height:1.5;margin:0 0 26px}
+
+  /* Song card */
+  .hg-song{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(10,20,40,.65), rgba(0,0,0,.92));z-index:40}
+  .hg-song-inner{padding:36px 44px;max-width:88vw;text-align:center}
+  .hg-song-kicker{font-size:10px;letter-spacing:.32em;color:#8aa0c0;text-transform:uppercase;margin-bottom:12px}
+  .hg-song-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(34px, 7vw, 84px);line-height:1.02;margin:0 0 14px;letter-spacing:-.02em;color:#fff}
+  .hg-song-meta{color:#8aa0c0;font-size:12px;letter-spacing:.06em;margin-bottom:22px;text-transform:lowercase}
+  .hg-song-actions{display:flex;gap:10px;justify-content:center}
+  .hg-btn{background:#cfe5ff;color:#0a1224;border:none;padding:11px 22px;font:700 12px/1 'Space Grotesk',sans-serif;letter-spacing:.08em;border-radius:3px;cursor:pointer}
+  .hg-btn-dim{background:transparent;color:#8aa0c0;border:1px solid rgba(140,200,255,.2)}
+  .hg-btn-dim:hover{color:#fff;border-color:rgba(255,255,255,.4)}
+
+  @media (max-width:600px){
+    .hg-shield-wrap{width:80vw}
+    .hg-hint{font-size:10px}
+  }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+  <audio id="player" preload="metadata" crossorigin="anonymous"></audio>
+
+<script>
+// Plain (non-module) script — runs synchronously before module imports,
+// so error handlers are live even if the ES module fails to load/parse.
+(function(){
+  window.__haloShowError = function(err){
+    console.error('[halo]', err);
+    var box = document.getElementById('hg-err');
+    if (!box){
+      box = document.createElement('div');
+      box.id = 'hg-err';
+      box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:18px 22px;background:#5a1a1a;color:#fff;font:500 12px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;max-height:70vh;overflow:auto;border-bottom:2px solid #ff5040';
+      document.body.appendChild(box);
+    }
+    box.textContent = '[halo error] ' + (err && (err.stack || err.message || err) || 'unknown');
+  };
+  window.__haloShowStatus = function(text){
+    var box = document.getElementById('hg-status');
+    if (!box){
+      box = document.createElement('div');
+      box.id = 'hg-status';
+      box.style.cssText = 'position:fixed;top:8px;left:8px;z-index:9998;padding:6px 10px;background:rgba(0,0,0,.6);color:#9af;font:500 11px/1 ui-monospace,Menlo,monospace;border-radius:3px';
+      document.body.appendChild(box);
+    }
+    box.textContent = text;
+  };
+  window.addEventListener('error', function(e){ window.__haloShowError(e.error || e.message); });
+  window.addEventListener('unhandledrejection', function(e){ window.__haloShowError(e.reason); });
+  window.__haloShowStatus('booting…');
+})();
+</script>
+
+<script type="module">
+window.__haloShowStatus('module: importing halo-game.js');
+import './js/halo-game.js';
+window.__haloShowStatus('module: halo-game.js imported');
+
+const audio = document.getElementById('player');
+let cfg = null;
+let tracks = [];
+let audioBase = '';
+
+const slugify = (s) => (s || '').toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+
+async function loadConfig(){
+  const res = await fetch('/config.json', { cache: 'no-store' });
+  const data = await res.json();
+  cfg = data;
+  audioBase = (data.audioBase || '').replace(/\/?$/, '/');
+  const featuredSet = new Set((data.featured || []).map(slugify));
+  const newSet = new Set((data.newReleases || []).map(i => typeof i === 'number' ? slugify((data.tracks[i] || {}).title || '') : slugify(i)));
+  tracks = (data.tracks || []).map((t) => ({
+    ...t,
+    isFeatured: featuredSet.has(slugify(t.title)),
+    isNew: newSet.has(slugify(t.title)),
+  }));
+}
+
+function loadTrack(i){
+  const t = tracks[i];
+  if (!t || !t.file) return;
+  const url = audioBase + t.file;
+  if (audio.src !== url) audio.src = url;
+}
+
+function playIndex(i){
+  loadTrack(i);
+  const p = audio.play();
+  if (p && p.catch) p.catch(err => console.warn('[halo] play blocked', err));
+}
+
+const showError  = window.__haloShowError;
+const showStatus = window.__haloShowStatus;
+
+async function boot(){
+  showStatus('boot: loading config.json');
+  await loadConfig();
+  showStatus(`boot: ${tracks.length} tracks loaded`);
+  if (!window.HaloGame) throw new Error('HaloGame module did not register on window');
+  showStatus('boot: HaloGame.init()');
+  const app = document.getElementById('app');
+  window.HaloGame.init(app, {
+    tracks,
+    audio,
+    slugify,
+    onPlay: playIndex,
+    buildNumber: 'b108',
+  });
+  showStatus('boot: ready');
+  // Hide status after a moment
+  setTimeout(() => {
+    const s = document.getElementById('hg-status');
+    if (s) s.style.display = 'none';
+  }, 1500);
+}
+
+boot().catch(showError);
+</script>
+</body>
+</html>

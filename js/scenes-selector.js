@@ -63,21 +63,22 @@ const PANEL_FRAG = `
     // Scanlines
     col *= 0.92 + 0.08 * sin(uv.y * 540.0);
 
-    // Glass panel surround tint — magenta-ish near edges
-    float edge = max(
-      smoothstep(0.96, 1.00, abs(uv.x - 0.5) * 2.0),
-      smoothstep(0.96, 1.00, abs(uv.y - 0.5) * 2.0)
-    );
-    vec3 frame = mix(vec3(0.05, 0.06, 0.10), uTint, 0.85);
-    col = mix(col, frame * (0.6 + uHover * 1.2 + uFocus * 0.8), edge);
+    // b208: shader edge-frame removed. The outer-4 percent UV mix to
+    // uTint produced bright tint-squared pixels along every border,
+    // which bloom then smeared outward into a wide colored rectangle
+    // around each panel. Real 3D steel framing already lives around
+    // the panel via _buildPanelHost, so the painted-on tint frame was
+    // redundant.
 
     // Inner caution-stripe dim band at the bottom (where the description sits)
     float band = smoothstep(0.78, 0.80, uv.y) * (1.0 - smoothstep(1.0, 1.02, uv.y));
     col *= 1.0 - band * 0.20;
 
+    // b216: tint RESTORED. The huge tinted halos the user kept seeing
+    // were the structure-uplight sprites, not this multiplication.
     col *= uTint;
 
-    // Hover pulse glow
+    // Hover pulse — adds the panel's own tint when hovered/focused.
     float pulse = 0.5 + 0.5 * sin(uTime * 4.0);
     col += uTint * (uHover * 0.10 + uFocus * 0.08) * pulse;
 
@@ -101,6 +102,12 @@ const POST_FRAG = `
     float g = texture2D(tDiffuse, uv).g;
     float b = texture2D(tDiffuse, uv + dir * ca).b;
     vec3 col = vec3(r, g, b);
+    // b224: global brightness lift. The base reads as silhouettes because every
+    // building uses MeshBasicMaterial with a near-black hex (0x2a3142 family),
+    // so no light source could ever brighten them — only the post pass can.
+    // Gain + tiny black-floor lift so dark structures separate from the ground
+    // without blowing out the panels (which already sit in the bright register).
+    col = col * 1.18 + 0.028;
     // Scanline modulation
     col *= 0.96 + 0.04 * sin(uv.y * uResolution.y * 1.8);
     // Grain
@@ -152,7 +159,7 @@ const ScenesSelector = {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x06080d, 0.015);
+    this.scene.fog = new THREE.FogExp2(0x0e1218, 0.0115);
 
     this.camera = new THREE.PerspectiveCamera(72, 1, 0.1, 420);
     this.camera.position.set(0, 0, 0);
@@ -161,23 +168,30 @@ const ScenesSelector = {
     this._buildHexDeck();              // b171: hexagonal observation deck (replaces painted helipad)
     this._buildStandoff();
     this._buildCentralDish();
-    this._buildPelicanPad();
+    this._buildPelicanPad();           // b193: relocated to SE airfield (was -2,+24 behind camera, now 50,+25)
     this._buildPlanet();
     this._buildStationLights();
     this._buildFlybys();
     this._buildScriptedPelican();
     this._buildPatrolWarthog();
-    this._buildBarracksRow();          // b171: 3 barracks lined up beside the existing one
-    this._buildFuelDepot();            // b171: cylindrical fuel tanks at far-right
-    this._buildAntennaArray();         // b171: dense comms antenna farm (back-left)
+    // b193: barracks row + antenna array DISABLED — both sat in v2 panel zones
+    // (barracks at z=-12 between camera and freqmap; antenna array at -58,-56
+    // overlapping the broken-dish + dimensions hosts). Will rebuild repositioned
+    // for the bivouac zone in b198 / NW comms cluster polish in b196.
+    this._buildFuelDepot();            // b171: cylindrical fuel tanks at far-right (kept — no v2 collision)
+    this._buildAntennaArray();         // b227: relocated outside east fence (was disabled in b193 — clipped panels)
     this._buildWatchtowers();          // b171: 4 perimeter watchtowers
-    this._buildPerimeterClutter();     // b171: jersey walls, floodlight catenary, fence segments
-    this._buildAllStructures();        // b173: pre-build every panel-host body so panel mounts only add trim
+    this._buildPerimeterClutter();     // b171/b227: real rectangular double fence + razor wire + conex stacks on flanks
+    this._buildDeckFlankFill();        // b237: fill the empty zones between deck and panel arc — guard shacks, equip sheds, drums, pallets, floods
+    this._buildOuterCompounds();       // s4: BIG silhouette anchors in the wide flanks (x=±78..±110) — propellant tank farm, hangar, secondary silo, SAM battery
+    this._buildAllStructures();        // b173/b193: now only ensures missile silo (other hosts inline)
     this._buildFloorProps();
     this._buildPanels();
     this._buildStructureUplights();    // illuminate the buildings from below
     this._buildBuildingFloodBeams();   // b171: focused volumetric beams ON the dishes/silo/radar
     this._buildBuildingWindows();      // b173: lit window grids on existing buildings (more man-made lighting)
+    this._buildBaseLighting();         // b201: perimeter streetlamps + stadium pylons + scaffold lights
+    this._buildPOI();                  // b202: discrete waypoint navigation across the base
     this._buildPelicanLights();        // b173: cockpit/nav/ramp glow + 4 floodlight stands around pelican
     this._buildEngineerCrew();         // b173: 3 ODST engineers around the parked pelican
     this._buildTents();                // b184: 3 bivouac clusters of GP-medium tents
@@ -209,7 +223,7 @@ const ScenesSelector = {
     // Concrete deck pad with painted helipad markings + caution stripes,
     // fading to dirt/rock at the edges. Replaces the b140 magenta grid so
     // the scene reads as a real ground surface, not a void-floating panel.
-    const floorGeo = new THREE.PlaneGeometry(220, 220, 1, 1);
+    const floorGeo = new THREE.PlaneGeometry(360, 360, 1, 1);  // b227: was 220 — expanded for bigger perimeter
     const floorMat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 } },
       vertexShader: `
@@ -235,7 +249,11 @@ const ScenesSelector = {
           float d = length(p);
 
           // ---- Tan dusty desert ground (Standoff/MGS-island vibe) ----
-          vec3 dirt = vec3(0.135, 0.112, 0.075);
+          // b224: lifted base value (.135/.112/.075 → .175/.148/.105) so the
+          // ground reads as moonlit-dusty, not a dark void. The post-pass
+          // brightness gain alone wasn't enough — the desert needed to start
+          // brighter so the buildings sit ON it instead of lost in it.
+          vec3 dirt = vec3(0.175, 0.148, 0.105);
           dirt += (noise(p * 0.16) - 0.5) * 0.050;     // big patches
           dirt += (noise(p * 0.85) - 0.5) * 0.028;     // mid scrub
           dirt += (noise(p * 4.20) - 0.5) * 0.018;     // grain
@@ -333,11 +351,15 @@ const ScenesSelector = {
           // ---- Distance dimming (b182: pushed out so the perimeter
           // loop and back buildings stay readable; previously kicked in
           // at d=80 which dimmed everything past the radar building).
+          // b214: base brightness raised 0.78→1.05 + moonlight wash
+          // tripled. Old values matched a "pitch-night-without-streetlights"
+          // read; user wanted the base lit "like a real military
+          // installation," not silhouettes against tan dust.
           float fade = 1.0 - smoothstep(140.0, 260.0, d) * 0.45;
-          col *= 0.78 + 0.22 * fade;
+          col *= 1.05 + 0.30 * fade;
 
-          // ---- Subtle moonlight cool tint ----
-          col += vec3(0.005, 0.008, 0.014);
+          // ---- Moonlight cool wash (b214: bumped 0.005/0.008/0.014 → 0.022/0.028/0.038) ----
+          col += vec3(0.022, 0.028, 0.038);
 
           gl_FragColor = vec4(col, 1.0);
         }
@@ -397,19 +419,24 @@ const ScenesSelector = {
     this.dust = new THREE.Points(dustGeo, dustMat);
     this.scene.add(this.dust);
 
-    // Atmospheric back-glow — wide soft sprite far behind
+    // Atmospheric back-glow — wide soft sprite far behind.
+    // b214: opacity dropped 0.45/0.40 → 0.18/0.15, scale tightened. These
+    // were a big chunk of the "random colored tint" haze the user flagged
+    // — wide additive blobs floating in the middle of the scene. Pushed
+    // back to z=-95/-105 so they sit beyond the missile silo (z=-107) as
+    // a true horizon glow instead of veiling the foreground.
     const bgTex = this._makeRadialGlowTexture('rgba(180,80,160,0.55)');
-    const bgMat = new THREE.SpriteMaterial({ map: bgTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.45 });
+    const bgMat = new THREE.SpriteMaterial({ map: bgTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.18 });
     const bg = new THREE.Sprite(bgMat);
-    bg.scale.set(140, 70, 1);
-    bg.position.set(0, 0, -55);
+    bg.scale.set(110, 50, 1);
+    bg.position.set(0, 4, -100);
     this.scene.add(bg);
 
     const bg2Tex = this._makeRadialGlowTexture('rgba(80,180,200,0.40)');
-    const bg2Mat = new THREE.SpriteMaterial({ map: bg2Tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.40 });
+    const bg2Mat = new THREE.SpriteMaterial({ map: bg2Tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.15 });
     const bg2 = new THREE.Sprite(bg2Mat);
-    bg2.scale.set(110, 60, 1);
-    bg2.position.set(-30, 5, -45);
+    bg2.scale.set(90, 42, 1);
+    bg2.position.set(-30, 6, -95);
     this.scene.add(bg2);
   },
 
@@ -434,8 +461,8 @@ const ScenesSelector = {
      is now just "dim moonlight on the deck" — actual dramatic
      illumination of base structures is done by `_buildStructureUplights`. */
   _buildFloodlightRig() {
-    const poleMat = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const fixtureMat = new THREE.MeshBasicMaterial({ color: 0x0c0e14 });
+    const poleMat = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const fixtureMat = new THREE.MeshBasicMaterial({ color: 0x1d2230 });
     const radius = 30;
     const height = 9;
     const groundSpotTex = this._makeGroundSpotTexture();
@@ -474,61 +501,15 @@ const ScenesSelector = {
      building / dish / silo gets a tall additive light-cone sprite at its
      base, painting the structure visible against the night sky. */
   _buildStructureUplights() {
-    const tex = this._makeUplightTexture();
-    // b184: dropped saturated palette (magenta/red/green looked like
-    // colored fog around buildings). All uplights now warm / cool / amber
-    // — readable industrial lighting, not a rave. Opacity 0.82 → 0.65 so
-    // the splash doesn't overpower the building silhouette.
-    const add = (x, z, scale = 1, color = 'warm') => {
-      const colors = {
-        warm:   { mat: 0xffd9a4 },
-        cool:   { mat: 0xb8d4ff },
-        amber:  { mat: 0xffaa55 },
-      };
-      const c = colors[color] || colors.warm;
-      const mat = new THREE.SpriteMaterial({
-        map: tex, color: c.mat, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, opacity: 0.65,
-      });
-      const sp = new THREE.Sprite(mat);
-      sp.scale.set(10 * scale, 20 * scale, 1);
-      sp.center.set(0.5, 0.0);  // pivot at bottom-center so scaling extends UP
-      sp.position.set(x, -8 + 0.1, z);
-      this.scene.add(sp);
-    };
-    // Central dish at (15, -8, -110) — biggest uplight
-    add(15, -110, 3.2, 'warm');
-    // Missile silo at (-55, -8, -84)
-    add(-55, -84, 1.8, 'amber');
-    // Cmd bunker at (-40, -8, -71)
-    add(-40, -71, 1.4, 'cool');
-    // Radar building at (20, -8, -47)
-    add(20, -47, 1.3, 'cool');
-    // Vehicle bay at (50, -8, -27)
-    add(50, -27, 1.2, 'amber');
-    // Comm tower at (-38, -8, -24)
-    add(-38, -24, 1.6, 'cool');
-    // Helipad at (42, -8, -19)
-    add(42, -19, 1.2, 'amber');
-    // Barracks at (-65, -8, -22)
-    add(-65, -22, 1.2, 'amber');
-    // Supply depot at (65, -8, -13)
-    add(65, -13, 1.2, 'cool');
-    // Back-far dishes — kept atmospheric (background distance, low scale)
-    add(58, 58, 1.0, 'warm');
-    add(-72, -45, 1.2, 'warm');
-    // b182 structures, b184 desaturated -----------------------------
-    add( 12, 38, 1.0, 'cool');     // biostation (was green)
-    add(-58, -49, 1.0, 'cool');    // antenna shed
-    add( 38,  44, 0.9, 'amber');   // back-right comm tower (was red)
-    add(-46, -28, 0.9, 'cool');    // mid-left comm tower
-    add(-12,  62, 0.9, 'amber');   // far-back comm tower (was red)
-    add( 48, -22, 0.9, 'cool');    // mid-right comm tower
-    add( 42, -38, 0.8, 'amber');   // standoff bunker (motor pool)
-    add(-30,  48, 0.8, 'amber');   // standoff bunker (back-left)
-    add(-58,  10, 0.8, 'amber');   // standoff bunker (mid-left)
-    // Note: removed the wall back-billboard (45,38) uplight — that was
-    // painting a magenta wash onto the panel face every frame.
+    // b216: ENTIRE FUNCTION DELETED. 16 calls × `_makeUplightTexture` ×
+    // additive sprite at every panel host's base = a tall tinted column
+    // sitting directly behind every billboard. Sprites face camera, so
+    // each one reads as a giant tinted rectangle. THIS WAS THE SOURCE of
+    // the orange box behind tape spine, the blue box behind freq map,
+    // the pink behind organism, the amber behind galaxy and deep sea —
+    // every halo flagged across screenshots. b215's "tighten to 8×14
+    // opacity 0.38" was not enough; user still saw them at full force.
+    // No more sprites. Buildings will read as silhouettes against the sky.
   },
 
   _makeUplightTexture() {
@@ -595,10 +576,10 @@ const ScenesSelector = {
     const floorY = -8.0;
     const deckH = 0.40;
 
-    const deckMat = new THREE.MeshBasicMaterial({ color: 0x1a1c22 });
-    const tread   = new THREE.MeshBasicMaterial({ color: 0x232730 });
-    const steel   = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const sandbag = new THREE.MeshBasicMaterial({ color: 0x14171d });
+    const deckMat = new THREE.MeshBasicMaterial({ color: 0x303440 });
+    const tread   = new THREE.MeshBasicMaterial({ color: 0x3a4050 });
+    const steel   = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const sandbag = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
     const yellow  = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
 
     // Hex deck floor (cylinder with 6-side geometry sits flat on the ground)
@@ -709,20 +690,11 @@ const ScenesSelector = {
       fixt.position.set(armEndX, floorY + postH - 0.30, armEndZ);
       fixt.lookAt(c.x + Math.cos(c.a) * 4, floorY + postH - 0.30, c.z + Math.sin(c.a) * 4);
       grp.add(fixt);
-      const lens = this._makeRunningLight(0xd4e0f0, 0.34);
+      const lens = this._makeRunningLight(0xd4e0f0, 0.20);
       lens.position.set(armEndX + Math.cos(c.a) * 0.18, floorY + postH - 0.30, armEndZ + Math.sin(c.a) * 0.18);
       grp.add(lens);
-      // Volumetric cone aimed outward+downward
-      const coneTex = this._makeFloodConeTexture();
-      const coneMat = new THREE.SpriteMaterial({
-        map: coneTex, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, opacity: 0.30, color: 0xb8c8e0,
-      });
-      const cone = new THREE.Sprite(coneMat);
-      cone.scale.set(8, 12, 1);
-      cone.center.set(0.5, 1.0);
-      cone.position.set(c.x + Math.cos(c.a) * 2.0, floorY + postH - 0.40, c.z + Math.sin(c.a) * 2.0);
-      grp.add(cone);
+      // b213: hex-deck floodlight cone removed (scale 8×12 painted a glowing
+      // rectangle off each post). Lens dot remains.
     });
 
     this.scene.add(grp);
@@ -732,10 +704,10 @@ const ScenesSelector = {
   /* ---------- b171: Barracks row — adds 3 more barracks beside the existing
      big barracks at (-65,-22), filling out the left-flank living quarters. */
   _buildBarracksRow() {
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
-    const olive = new THREE.MeshBasicMaterial({ color: 0x232714 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const olive = new THREE.MeshBasicMaterial({ color: 0x3a401e });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
 
     // Spec: 3 barracks at x=-50, -38, -26 along z=-12 (north-facing entries)
@@ -805,10 +777,10 @@ const ScenesSelector = {
      fills the otherwise-empty far-right zone. */
   _buildFuelDepot() {
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const tankPaint = new THREE.MeshBasicMaterial({ color: 0x6a6a4a });
     const tankBand = new THREE.MeshBasicMaterial({ color: 0x4a4a32 });
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
 
     // Concrete pad
@@ -893,7 +865,11 @@ const ScenesSelector = {
       grp.add(post);
     }
 
-    grp.position.set(72, -8, 8);
+    // b214: fuel depot pulled west x=72 → x=62. Old position put the east
+    // tank pair at world x=77, sitting inside the E perimeter road
+    // (x=78 ±4.5) — those are the "4 silos blocking the road" from the
+    // user's screenshot. New center keeps the depot well off the road.
+    grp.position.set(62, -8, 8);
     this.scene.add(grp);
   },
 
@@ -901,8 +877,8 @@ const ScenesSelector = {
      adds visual density to the otherwise sparse back-left zone. */
   _buildAntennaArray() {
     const grp = new THREE.Group();
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x1e222b });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
 
     // Concrete service pad
     const pad = new THREE.Mesh(new THREE.BoxGeometry(14, 0.4, 14), accent);
@@ -969,25 +945,29 @@ const ScenesSelector = {
     door.position.set(0, 0.8, 6 + 1.5 + 0.04);
     grp.add(door);
 
-    grp.position.set(-58, -8, -56);
+    // b227: relocated outside the eastern fence (was disabled in b193 because
+    // the original spot at (-58,-56) clipped through the broken-dish + dimensions
+    // panel hosts). Antenna farm is silhouette punctuation outside the wire,
+    // visible from the ridge POI as the eastern flank's silhouette frame.
+    // Pushed out further with the bigger b227 perimeter (outer fence at x=125).
+    grp.position.set(150, -8, -25);
     this.scene.add(grp);
   },
 
   /* ---------- b171: Watchtowers at perimeter corners ---------- */
   _buildWatchtowers() {
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x1e222b });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
 
-    // b184: nudged corners outward so all 4 sit OUTSIDE the new perimeter
-    // loop (x=±78, z=-90..50). The old "front-right" at (78, -78) sat
-    // dead-center on the east leg of the loop; Warthogs were going to
-    // drive through it.
+    // b227: corners pushed out to sit at the NEW outer fence corners
+    // (x=±125, z=-142/+98). Watchtowers should anchor the visible perimeter
+    // envelope, not float midway between fence and patrol road.
     const positions = [
-      { x:  88, z:  58, lightColor: 0xff3344 },  // back-right (SE)
-      { x: -88, z:  58, lightColor: 0x4488ff },  // back-left  (SW)
-      { x:  88, z: -98, lightColor: 0x4488ff },  // front-right (NE)
-      { x: -88, z: -98, lightColor: 0xff3344 },  // front-left  (NW)
+      { x:  127, z:  100, lightColor: 0xff3344 },  // back-right (SE)
+      { x: -127, z:  100, lightColor: 0x4488ff },  // back-left  (SW)
+      { x:  127, z: -144, lightColor: 0x4488ff },  // front-right (NE)
+      { x: -127, z: -144, lightColor: 0xff3344 },  // front-left  (NW)
     ];
 
     positions.forEach(({ x, z, lightColor }) => {
@@ -1095,8 +1075,8 @@ const ScenesSelector = {
      concrete blast walls. Loose props that fill the negative space
      between major buildings without adding more click targets. */
   _buildPerimeterClutter() {
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
 
     const addJerseyWallLine = (x1, z1, x2, z2) => {
@@ -1115,13 +1095,20 @@ const ScenesSelector = {
       }
     };
 
-    // Jersey walls flanking the spine road shoulders (between launch complex and ops row)
+    // b193 v2: jersey walls re-anchored to v2 layout shoulder protection.
+    // Spine road still goes from deck (z=-12) deep into base (z=-90), so the
+    // shoulder jerseys make sense; pulled inward to flank the missile silo
+    // approach (now at x=0 dead-axis, deeper at z=-94).
+    // Spine road shoulders (between deck and missile silo)
     addJerseyWallLine( 6, -50,  6, -85);
     addJerseyWallLine(-6, -50, -6, -85);
-    // Around the parked motor pool
-    addJerseyWallLine(28, -42, 48, -42);
-    // Between barracks row and the road
-    addJerseyWallLine(-58, -16, -22, -16);
+    // Around the SE airfield motor pool (parked vehicles)
+    // b214: pushed jersey line z=12 → z=4. Old line ran straight through
+    // the spread-out motor pool (vehicles at z=8/12/22). Now sits at the
+    // airfield south frontage as a fence between deck and motor pool.
+    addJerseyWallLine(26,   4, 48,   4);
+    // Behind the SW bivouac (suggests bivouac perimeter, b214: bivouac at -26,20)
+    addJerseyWallLine(-34, 28, -18, 28);
 
     // Floodlight catenary along spine road — pole-mounted lights
     for (let i = 0; i < 5; i++) {
@@ -1133,38 +1120,556 @@ const ScenesSelector = {
         const lampHead = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.15, 0.55), steel);
         lampHead.position.set(x - Math.sign(x) * 0.6, -8 + 6.7, z);
         this.scene.add(lampHead);
-        const lens = this._makeRunningLight(0xffe6a0, 0.18);
+        const lens = this._makeRunningLight(0xffe6a0, 0.14);
         lens.position.set(x - Math.sign(x) * 0.9, -8 + 6.6, z);
         this.scene.add(lens);
-        // Down-cast cone
-        const coneTex = this._makeFloodConeTexture();
-        const coneMat = new THREE.SpriteMaterial({
-          map: coneTex, transparent: true, depthWrite: false,
-          blending: THREE.AdditiveBlending, opacity: 0.22, color: 0xffe6a0,
-        });
-        const cone = new THREE.Sprite(coneMat);
-        cone.scale.set(5, 7, 1);
-        cone.center.set(0.5, 1.0);
-        cone.position.set(x - Math.sign(x) * 1.5, -8 + 6.0, z);
-        this.scene.add(cone);
+        // b213: catenary down-cone removed.
       });
     }
 
-    // Chain-link fence around the perimeter — posts only, every 8u out at r=92
-    for (let i = 0; i < 32; i++) {
-      const a = (i / 32) * Math.PI * 2;
-      const r = 92;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.4, 4), steel);
-      post.position.set(Math.cos(a) * r, -8 + 1.2, Math.sin(a) * r);
-      this.scene.add(post);
-      // Short top barb segment
-      if (i % 2 === 0) {
-        const top = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.8), steel);
-        top.position.set(Math.cos(a) * (r + 0.2), -8 + 2.5, Math.sin(a) * (r + 0.2));
-        top.rotation.y = a;
-        this.scene.add(top);
+    // b227: real rectangular DOUBLE chain-link perimeter — replaces the b171
+    // sparse circle of 32 posts at r=92 (invisible from ridge POI; floats
+    // disconnected from the actual rectangular base loop the patrols use).
+    // Inner fence at x=±82, z=-94/+54 (just inside the corner watchtowers at
+    // ±88,±58/±98). Outer fence at x=±90, z=-102/+62, with ~8u "clear zone"
+    // strip between. Razor wire coils on top of inner fence only. Sells a
+    // hardened installation perimeter from any vantage including ridge.
+    const fenceMat = new THREE.MeshBasicMaterial({ color: 0x363c4a });
+    const meshMat = new THREE.MeshBasicMaterial({
+      color: 0x2a3142, transparent: true, opacity: 0.55, side: THREE.DoubleSide,
+    });
+    const wireMat = new THREE.MeshBasicMaterial({ color: 0x8a94a4 });
+    const buildFenceLeg = (x1, z1, x2, z2, addRazor) => {
+      const dx = x2 - x1, dz = z2 - z1;
+      const len = Math.hypot(dx, dz);
+      const ang = Math.atan2(dz, dx);
+      // Posts every ~8u
+      const POST_STEP = 8;
+      const postCount = Math.max(2, Math.round(len / POST_STEP));
+      for (let i = 0; i <= postCount; i++) {
+        const t = i / postCount;
+        const cx = x1 + dx * t, cz = z1 + dz * t;
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 2.6, 4), fenceMat);
+        post.position.set(cx, -8 + 1.3, cz);
+        this.scene.add(post);
       }
+      // One continuous mesh-panel plane along the leg — semi-transparent so it
+      // reads as wire mesh, not a wall. Cheaper than 30 individual panels.
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(len, 2.0), meshMat);
+      panel.position.set((x1 + x2) / 2, -8 + 1.0, (z1 + z2) / 2);
+      panel.rotation.y = -ang;
+      this.scene.add(panel);
+      // Razor-wire coils on top of inner fence
+      if (addRazor) {
+        const COIL_STEP = 2.4;
+        const coils = Math.max(1, Math.round(len / COIL_STEP));
+        for (let i = 0; i < coils; i++) {
+          const t = (i + 0.5) / coils;
+          const cx = x1 + dx * t, cz = z1 + dz * t;
+          const coil = new THREE.Mesh(
+            new THREE.TorusGeometry(0.32, 0.03, 3, 6),
+            wireMat,
+          );
+          coil.rotation.y = -ang;
+          coil.rotation.x = Math.PI / 2;
+          coil.position.set(cx, -8 + 2.55, cz);
+          this.scene.add(coil);
+        }
+      }
+    };
+    // Inner fence (with razor wire) — bigger envelope per "bigger perimeter"
+    const IX = 110, INZ = -128, IPZ = 85;
+    buildFenceLeg(-IX, INZ,  IX, INZ, true);  // N
+    buildFenceLeg( IX, INZ,  IX, IPZ, true);  // E
+    buildFenceLeg( IX, IPZ, -IX, IPZ, true);  // S
+    buildFenceLeg(-IX, IPZ, -IX, INZ, true);  // W
+    // Outer fence (chain-link only) — 15u clear-strip beyond inner
+    const OX = 125, ONZ = -142, OPZ = 98;
+    buildFenceLeg(-OX, ONZ,  OX, ONZ, false);
+    buildFenceLeg( OX, ONZ,  OX, OPZ, false);
+    buildFenceLeg( OX, OPZ, -OX, OPZ, false);
+    buildFenceLeg(-OX, OPZ, -OX, ONZ, false);
+
+    // b227: conex shipping container stacks staged in the clear-strip BETWEEN
+    // the inner (x=±82) and outer (x=±90) perimeter fences — that's the only
+    // place real installations stage them outside the wire. Earlier b227
+    // placement put them in the panel/road infield (x=±70, z=-30) which
+    // blocked sight lines to the v2 panels from ridge POI. Aligned along the
+    // fence axis (yaw=±π/2 so the long 6u side runs along ±Z), centered at
+    // x=±86 (3u to inner fence, 1u to outer). Mix of single + double stacks.
+    const conexPalette = [0x3a4030, 0x4d4730, 0x36404f];
+    const buildConexStack = (x, z, yaw, count) => {
+      const grp = new THREE.Group();
+      for (let i = 0; i < count; i++) {
+        const col = conexPalette[(i + Math.abs((x | 0) + (z | 0))) % 3];
+        const mat = new THREE.MeshBasicMaterial({ color: col });
+        const box = new THREE.Mesh(new THREE.BoxGeometry(6, 2.6, 2.4), mat);
+        box.position.y = 1.3 + i * 2.65;
+        grp.add(box);
+        // Door end-cap — slightly darker
+        const door = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.3, 2.4),
+          new THREE.MeshBasicMaterial({ color: 0x1d2230 }),
+        );
+        door.position.set(3.01, 1.3 + i * 2.65, 0);
+        door.rotation.y = Math.PI / 2;
+        grp.add(door);
+      }
+      grp.position.set(x, -8, z);
+      grp.rotation.y = yaw;
+      this.scene.add(grp);
+    };
+    const HALFPI = Math.PI / 2;
+    // East clear-strip (between inner x=110 and outer x=125)
+    buildConexStack( 117, -120,  HALFPI, 2);
+    buildConexStack( 117,  -80,  HALFPI, 1);
+    buildConexStack( 117,  -40,  HALFPI, 2);
+    buildConexStack( 117,    0,  HALFPI, 1);
+    buildConexStack( 117,   45,  HALFPI, 2);
+    // West clear-strip
+    buildConexStack(-117, -120, -HALFPI, 1);
+    buildConexStack(-117,  -80, -HALFPI, 2);
+    buildConexStack(-117,  -40, -HALFPI, 1);
+    buildConexStack(-117,    0, -HALFPI, 2);
+    buildConexStack(-117,   45, -HALFPI, 1);
+  },
+
+  /* ---------- b237: deck-flank fill — gap zones between deck and panel arc.
+     User flagged the empty desert zones on either side of the spine corridor
+     from the observation-deck POV. Drops guard shacks, equipment sheds,
+     drum clusters, pallet stacks, and floodlight poles in the dead space
+     between the rail kiosks (z=-10) and the cement walkways (z=-30/-58).
+     Symmetrical-ish density on each flank; far-side fill past the deepsea/
+     neural panel hosts where x=±70 was empty between panel and patrol road. */
+  _buildDeckFlankFill() {
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const olive = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
+    const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x424c64 });
+
+    const buildGuardShack = (x, z, yaw) => {
+      const grp = new THREE.Group();
+      const shack = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3.0, 2.6), concrete);
+      shack.position.y = 1.5;
+      grp.add(shack);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.25, 3.0), concreteLit);
+      roof.position.y = 3.13;
+      grp.add(roof);
+      const door = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.95, 1.8),
+        new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      door.position.set(0, 1.1, 1.32);
+      door.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+      this.standoff?.windows.push(door);
+      grp.add(door);
+      const window = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.8, 0.55),
+        new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      window.position.set(1.1, 2.0, 1.32);
+      window.userData = { rate: 5.0, phase: Math.random() * 6, baseOpacity: 0.65 };
+      this.standoff?.windows.push(window);
+      grp.add(window);
+      const whip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.2, 4), steel);
+      whip.position.set(-1.1, 4.3, 0);
+      grp.add(whip);
+      grp.position.set(x, -8, z);
+      grp.rotation.y = yaw;
+      this.scene.add(grp);
+    };
+
+    const buildEquipShed = (x, z, yaw) => {
+      const grp = new THREE.Group();
+      const W = 5.0, H = 3.2, D = 3.6;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), olive);
+      body.position.y = H / 2;
+      grp.add(body);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.22, D + 0.4), oliveHi);
+      roof.position.y = H + 0.11;
+      grp.add(roof);
+      // Roll-up door (closed, dim outline)
+      const rollup = new THREE.Mesh(new THREE.PlaneGeometry(2.4, H * 0.85), accent);
+      rollup.position.set(0, H * 0.43, D / 2 + 0.04);
+      grp.add(rollup);
+      // Yellow caution stripe along door frame
+      [-1.3, 1.3].forEach(xo => {
+        const stripe = new THREE.Mesh(
+          new THREE.BoxGeometry(0.10, H * 0.85, 0.06),
+          new THREE.MeshBasicMaterial({ color: 0x6a5618 }),
+        );
+        stripe.position.set(xo, H * 0.43, D / 2 + 0.06);
+        grp.add(stripe);
+      });
+      // Side air vents
+      [-W / 2 - 0.04, W / 2 + 0.04].forEach(xo => {
+        for (let i = 0; i < 3; i++) {
+          const vent = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.30, 0.45), steel);
+          vent.position.set(xo, H * 0.5 + i * 0.45, -D / 4);
+          grp.add(vent);
+        }
+      });
+      grp.position.set(x, -8, z);
+      grp.rotation.y = yaw;
+      this.scene.add(grp);
+    };
+
+    const buildDrumCluster = (x, z) => {
+      const positions = [[0, 0], [0.95, 0], [0.48, 0.85], [1.43, 0.85], [-0.05, 1.7]];
+      positions.forEach(([dx, dz], i) => {
+        const drum = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.45, 0.45, 1.0, 10),
+          i % 2 === 0 ? olive : oliveHi,
+        );
+        drum.position.set(x + dx, -8 + 0.5, z + dz);
+        this.scene.add(drum);
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10), steel);
+        lid.position.set(x + dx, -8 + 1.02, z + dz);
+        this.scene.add(lid);
+      });
+    };
+
+    const buildPalletStack = (x, z, yaw) => {
+      const grp = new THREE.Group();
+      const pallet = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 1.8), olive);
+      pallet.position.y = 0.09;
+      grp.add(pallet);
+      [[0.55, 0.55, 0.65, 0.45], [-0.55, 0.55, 0.65, 0.45], [0, 1.30, 0.75, 0.5], [0, 2.00, 0.55, 0.4]].forEach(([dx, dh, w, d]) => {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(w, 0.65, d), oliveHi);
+        crate.position.set(dx, dh, 0);
+        grp.add(crate);
+      });
+      grp.position.set(x, -8, z);
+      grp.rotation.y = yaw;
+      this.scene.add(grp);
+    };
+
+    const buildFloodPole = (x, z, headDir) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 9.5, 5), steel);
+      pole.position.set(x, -8 + 4.75, z);
+      this.scene.add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.45, 0.65), accent);
+      head.position.set(x + headDir.x * 0.45, -8 + 9.6, z + headDir.z * 0.45);
+      this.scene.add(head);
+      const lens = this._makeRunningLight(0xfff0c8, 0.32);
+      lens.position.set(x + headDir.x * 0.75, -8 + 9.5, z + headDir.z * 0.75);
+      this.scene.add(lens);
+    };
+
+    // ----- Left flank -----
+    buildGuardShack(-22, -10,  0.4);
+    buildEquipShed(-38, -22,  0.2);
+    buildDrumCluster(-26, -25);
+    buildPalletStack(-44, -8,  0.3);
+    buildFloodPole(-26, -16, { x: 1, z: 0 });
+    buildFloodPole(-50, -28, { x: 1, z: 0 });
+
+    // ----- Right flank -----
+    buildGuardShack( 22, -10, -0.4);
+    buildEquipShed( 38, -22, -0.2);
+    buildDrumCluster(24, -25);
+    buildPalletStack( 44, -8, -0.3);
+    buildFloodPole( 26, -16, { x: -1, z: 0 });
+    buildFloodPole( 50, -28, { x: -1, z: 0 });
+
+    // ----- Far-left flank (between deepsea panel host at x=-66 and west patrol road at x=-78) -----
+    buildEquipShed(-72, -22, -Math.PI / 2);
+    buildPalletStack(-72,  -8, -Math.PI / 2);
+    buildDrumCluster(-72,   8);
+    buildFloodPole(-72, -36, { x: 1, z: 0 });
+
+    // ----- Far-right flank (between neural at x=66 and east patrol road at x=78) -----
+    buildEquipShed( 72, -22,  Math.PI / 2);
+    buildPalletStack( 72,  -8,  Math.PI / 2);
+    buildDrumCluster( 71,   8);
+    buildFloodPole( 72, -36, { x: -1, z: 0 });
+
+    // ===== s2: deck-flank readability pass =====
+    // User feedback: from the MISSILE SILO POI the wide floor on either
+    // flank reads as empty. Existing fills (3u guard shacks + 5u equip
+    // sheds + 1u drums) silhouette as small dots from 30-50u away. Adding
+    // taller / more recognizable assets — parked Warthogs, comm uplink
+    // trailers w/ slewed dish, HESCO barrier rows — to give each flank a
+    // distinct mid-distance read.
+
+    const buildCommUplinkTrailer = (x, z, yaw) => {
+      const grp = new THREE.Group();
+      // Trailer box (camouflage-olive, longer than the equip shed)
+      const tW = 3.4, tH = 2.0, tD = 5.4;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(tW, tH, tD), olive);
+      body.position.y = tH / 2 + 0.45;
+      grp.add(body);
+      // Roof
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(tW + 0.2, 0.18, tD + 0.2), oliveHi);
+      roof.position.y = tH + 0.55;
+      grp.add(roof);
+      // Stabilizer jack legs (4 corners — short angled struts)
+      [[-tW / 2, -tD / 2], [tW / 2, -tD / 2], [-tW / 2, tD / 2], [tW / 2, tD / 2]].forEach(([sx, sz]) => {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 0.95, 5), steel);
+        leg.position.set(sx * 0.92, 0.45, sz * 0.92);
+        grp.add(leg);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.10, 0.36), accent);
+        foot.position.set(sx * 0.92, 0.05, sz * 0.92);
+        grp.add(foot);
+      });
+      // Wheel pair (suggests trailer was towed in)
+      [-1.6, 1.6].forEach(wz => {
+        [-(tW / 2 + 0.05), tW / 2 + 0.05].forEach(wx => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.30, 10), steel);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(wx, 0.42, wz);
+          grp.add(wheel);
+        });
+      });
+      // Lit window strip on the long face
+      const winMat = new THREE.MeshBasicMaterial({
+        color: 0xffaa55, transparent: true, opacity: 0.72,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.36), winMat);
+      win.position.set(0, tH * 0.65 + 0.45, tD / 2 + 0.04);
+      win.userData = { rate: 4.6, phase: Math.random() * 6, baseOpacity: 0.72 };
+      grp.add(win);
+      this.standoff?.windows.push(win);
+      // Door glow at the cab end
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.5), winMat.clone());
+      door.material.opacity = 0.55;
+      door.position.set(-tW * 0.30, 1.2, tD / 2 + 0.05);
+      door.userData = { rate: 3.4, phase: Math.random() * 6, baseOpacity: 0.55 };
+      grp.add(door);
+      this.standoff?.windows.push(door);
+      // Tilted parabolic dish on the roof — proper SATCOM uplink silhouette
+      const dishMast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 1.6, 5), steel);
+      dishMast.position.set(0.4, tH + 1.4, -0.6);
+      grp.add(dishMast);
+      const dish = new THREE.Mesh(
+        new THREE.SphereGeometry(1.25, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.45),
+        accent,
+      );
+      dish.position.set(0.4, tH + 2.1, -0.6);
+      dish.rotation.x = -Math.PI * 0.42;
+      dish.rotation.z = -Math.PI / 2;
+      grp.add(dish);
+      // Dish feed horn
+      const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.18, 0.55, 6), steel);
+      feed.position.set(0.4 + 0.55, tH + 2.1, -0.6);
+      feed.rotation.z = Math.PI / 2;
+      grp.add(feed);
+      // Status LED beside the dish
+      const led = this._makeRunningLight(0x4488ff, 0.20);
+      led.position.set(-0.7, tH + 1.0, tD / 2 + 0.1);
+      led.userData = { rate: 2.8, phase: Math.random() * 6 };
+      grp.add(led);
+      // Cable spool drum on the ground beside the trailer
+      const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.45, 14), accent);
+      spool.position.set(-tW / 2 - 0.95, 0.30, tD * 0.20);
+      grp.add(spool);
+      const spoolHub = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.50, 8), steel);
+      spoolHub.position.set(-tW / 2 - 0.95, 0.30, tD * 0.20);
+      grp.add(spoolHub);
+      grp.position.set(x, -8, z);
+      grp.rotation.y = yaw;
+      this.scene.add(grp);
+    };
+
+    const buildHescoRow = (x, z, yaw, count) => {
+      // Row of HESCO Bastion barriers — wire-frame cubes filled with rubble.
+      // Real-world ubiquitous on FOBs, instantly reads as a fortified wall.
+      const grp = new THREE.Group();
+      const cubeW = 1.4, cubeH = 1.3, cubeD = 1.1;
+      const fillMat = new THREE.MeshBasicMaterial({ color: 0x4a4438 });
+      const meshMat = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+      for (let i = 0; i < count; i++) {
+        const cx = (i - (count - 1) / 2) * (cubeW + 0.06);
+        // Inner fill cube (slightly inset)
+        const fill = new THREE.Mesh(new THREE.BoxGeometry(cubeW * 0.94, cubeH * 0.96, cubeD * 0.92), fillMat);
+        fill.position.set(cx, cubeH / 2, 0);
+        grp.add(fill);
+        // Outer wire-frame cage (4 vertical edges + 2 horizontal bands)
+        [[-cubeW / 2, -cubeD / 2], [cubeW / 2, -cubeD / 2], [-cubeW / 2, cubeD / 2], [cubeW / 2, cubeD / 2]].forEach(([ex, ez]) => {
+          const edge = new THREE.Mesh(new THREE.BoxGeometry(0.04, cubeH, 0.04), meshMat);
+          edge.position.set(cx + ex, cubeH / 2, ez);
+          grp.add(edge);
+        });
+        [0.20, 0.95].forEach(yh => {
+          [-cubeD / 2, cubeD / 2].forEach(zh => {
+            const band = new THREE.Mesh(new THREE.BoxGeometry(cubeW + 0.06, 0.04, 0.04), meshMat);
+            band.position.set(cx, yh, zh);
+            grp.add(band);
+          });
+          [-cubeW / 2, cubeW / 2].forEach(xh => {
+            const band = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, cubeD + 0.06), meshMat);
+            band.position.set(cx + xh, yh, 0);
+            grp.add(band);
+          });
+        });
+        // 2nd-row stacked cube (every other for irregular skyline)
+        if (i % 2 === 0) {
+          const fill2 = new THREE.Mesh(new THREE.BoxGeometry(cubeW * 0.94, cubeH * 0.96, cubeD * 0.92), fillMat);
+          fill2.position.set(cx, cubeH * 1.5, 0);
+          grp.add(fill2);
+        }
+      }
+      grp.position.set(x, -8, z);
+      grp.rotation.y = yaw;
+      this.scene.add(grp);
+    };
+
+    const buildParkedWarthog = (x, z, yaw) => {
+      const car = this._buildWarthogMesh(olive, oliveHi, steel,
+        new THREE.MeshBasicMaterial({ color: 0x191d28 }));
+      car.position.set(x, -8, z);
+      car.rotation.y = yaw;
+      this.scene.add(car);
+    };
+
+    // LEFT FLANK — vehicle line + uplink trailer + HESCO wall along the
+    // cross road shoulder. Avoids the x=-30 cement walkway and the comms
+    // array shed at z=-72; everything sits in z=-32..-52 mid-ground.
+    buildParkedWarthog(-20, -32,  Math.PI * 0.55);
+    buildParkedWarthog(-26, -36,  Math.PI * 0.55);
+    buildCommUplinkTrailer(-40, -42,  Math.PI * 0.42);
+    buildHescoRow(-22, -52,  Math.PI * 0.05, 6);
+    buildFloodPole(-34, -50, { x: 1, z: 0.3 });
+
+    // RIGHT FLANK — mirror layout. Stays clear of the x=+30 walkway and
+    // the forward_ops bunker at z=-72.
+    buildParkedWarthog( 20, -32, -Math.PI * 0.55);
+    buildParkedWarthog( 26, -36, -Math.PI * 0.55);
+    buildCommUplinkTrailer( 40, -42, -Math.PI * 0.42);
+    buildHescoRow( 22, -52, -Math.PI * 0.05, 6);
+    buildFloodPole( 34, -50, { x: -1, z: 0.3 });
+  },
+
+  /* ---------- b201: comprehensive base lighting ----
+     Adds man-made light sources covering every quadrant: perimeter
+     streetlamps along all 4 loop legs, stadium-tower cluster around the
+     missile silo, scaffold floodlight at the broken dish, building-corner
+     running LEDs on every standoff structure we kept. The goal is "no
+     building reads as a black silhouette from any camera angle." */
+  _buildBaseLighting() {
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const dark  = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const coneTex = this._makeFloodConeTexture();
+
+    // ----- Streetlamp helper -----
+    // b213: down-cast cone sprite removed. ~20 streetlamps × additive cone =
+    // 20 glowing rectangles painted on the road. Now just pole + head +
+    // small lens dot — the lens still reads "lamp is on" via subtle bloom.
+    const addStreetlamp = (x, z, headDir) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, 7.5, 5), steel);
+      pole.position.set(x, -8 + 3.75, z);
+      this.scene.add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.65), steel);
+      head.position.set(x + headDir.x * 0.6, -8 + 7.2, z + headDir.z * 0.6);
+      this.scene.add(head);
+      const lens = this._makeRunningLight(0xffe6a0, 0.18);
+      lens.position.set(x + headDir.x * 0.85, -8 + 7.0, z + headDir.z * 0.85);
+      this.scene.add(lens);
+    };
+
+    // ----- Perimeter streetlamps -----
+    // Loop bounds: x = ±78, z ∈ [-90, +50]. Place lamps every 32u, alternating
+    // sides where possible to avoid one-side blowout.
+    // North leg (z=-90, lamps at z=-87 facing +z toward road)
+    for (let x = -65; x <= 65; x += 32) {
+      addStreetlamp(x, -87, { x: 0, z: 1 });
     }
+    // South leg (z=+50, lamps at z=+47 facing -z toward road)
+    for (let x = -65; x <= 65; x += 32) {
+      addStreetlamp(x, 47, { x: 0, z: -1 });
+    }
+    // West leg (x=-78, lamps at x=-75 facing +x toward road)
+    for (let z = -65; z <= 30; z += 32) {
+      addStreetlamp(-75, z, { x: 1, z: 0 });
+    }
+    // East leg (x=+78, lamps at x=+75 facing -x toward road)
+    for (let z = -65; z <= 30; z += 32) {
+      addStreetlamp(75, z, { x: -1, z: 0 });
+    }
+
+    // ----- Stadium-light pylons around missile silo @ (0, -8, -118) -----
+    // s2: re-symmetrized brackets at z=-110/-126 around the silo at z=-118
+    // (was -98/-120 — bracket center sat at z=-109, 9u north of the silo).
+    [[14, -110], [-14, -110], [14, -126], [-14, -126]].forEach(([px, pz]) => {
+      const grp = new THREE.Group();
+      grp.position.set(px, -8, pz);
+      const pylonH = 14;
+      const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, pylonH, 5), steel);
+      pylon.position.y = pylonH / 2;
+      grp.add(pylon);
+      // 3 lamp heads at the top, splayed.
+      // b213: per-head volumetric cone sprite REMOVED. 4 pylons × 3 cones at
+      // scale 6×18 were the dominant rectangular halo column around the
+      // missile silo (the "translucent box on the tower" in screenshot 3).
+      // Buildings don't get real lighting from these anyway — keep the
+      // head + lens so the pylon still reads as illuminated, drop the haze.
+      [-0.5, 0, 0.5].forEach((spread, i) => {
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.4), dark);
+        head.position.set(spread * 0.8, pylonH - 0.3, 0);
+        head.lookAt(-px + spread * 0.4, pylonH - 1.0, -118 - pz);
+        grp.add(head);
+        const lens = this._makeRunningLight(0xfff0c8, 0.18);
+        lens.position.set(spread * 0.8, pylonH - 0.5, 0);
+        grp.add(lens);
+      });
+      // Aviation strobe at top
+      const strobe = this._makeRunningLight(0xff3344, 0.18);
+      strobe.position.y = pylonH + 0.7;
+      strobe.userData = { rate: 1.4, phase: Math.random() * 6 };
+      grp.add(strobe);
+      this.standoff?.strobes.push(strobe);
+      this.scene.add(grp);
+    });
+
+    // ----- Portable scaffold floodlights at broken dish -----
+    // 2 yellow construction lamp stands, aimed at the broken rim
+    [[-58, -30], [-66, -28]].forEach(([sx, sz]) => {
+      const grp = new THREE.Group();
+      grp.position.set(sx, -8, sz);
+      const tripodMat = new THREE.MeshBasicMaterial({ color: 0x3a3416 });
+      // Tripod
+      [0, Math.PI * 2 / 3, Math.PI * 4 / 3].forEach(theta => {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.6, 4), dark);
+        leg.position.set(Math.cos(theta) * 0.35, 0.7, Math.sin(theta) * 0.35);
+        leg.rotation.z = -Math.cos(theta) * 0.30;
+        leg.rotation.x = -Math.sin(theta) * 0.30;
+        grp.add(leg);
+      });
+      // Vertical pole
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.6, 4), dark);
+      pole.position.y = 1.3;
+      grp.add(pole);
+      // Lamp head (yellow)
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.40, 0.32), tripodMat);
+      head.position.y = 2.5;
+      head.lookAt(-70 - sx, -8 + 4 - 0.5, -38 - sz);
+      grp.add(head);
+      const lens = this._makeRunningLight(0xfff0c8, 0.18);
+      const dxd = -70 - sx, dzd = -38 - sz;
+      const distd = Math.hypot(dxd, dzd);
+      const dirXd = dxd / distd, dirZd = dzd / distd;
+      lens.position.set(dirXd * 0.25, 2.5, dirZd * 0.25);
+      grp.add(lens);
+      // b213: 3-step volumetric cone chain at broken-dish scaffold removed
+      // — that's the bright orange disc near the deepsea host the user
+      // flagged. Lens dot remains.
+      this.scene.add(grp);
+    });
+
+    // ----- Distant-tower base LEDs -----
+    // Standoff comm tower (38, 44) and (-12, 62) — already have lit cabin
+    // windows from the rebuilt _buildCommTower. Add a low ground-marker pair
+    // at the base of each so the foot reads from camera too.
+    [[38, 44], [-12, 62], [58, 58]].forEach(([tx, tz]) => {
+      [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
+        const led = this._makeRunningLight(0xff3344, 0.10);
+        led.position.set(tx + Math.cos(theta) * 1.4, -8 + 0.30, tz + Math.sin(theta) * 1.4);
+        this.scene.add(led);
+      });
+    });
   },
 
   /* ---------- b171: Focused volumetric flood beams ON major structures ----
@@ -1173,92 +1678,92 @@ const ScenesSelector = {
      focused VOLUMETRIC CONES aimed AT the structure body (silo/dish/etc)
      so they read as lit, not silhouetted. */
   _buildBuildingFloodBeams() {
-    const beamTex = this._makeFloodConeTexture();
-    const addBeam = (sx, sz, tx, ty, tz, scaleY = 14, scaleX = 5, color = 0xffe6a0, opacity = 0.30) => {
-      // sx,sz: spotlight ground origin; tx,ty,tz: aim point on the structure
-      // Ground spotlight fixture (small box at the source)
+    // b213: volumetric-beam cone sprites + hit-glow at target REMOVED.
+    // Sprites always face camera, so the 4 cone-step stack read as a
+    // glowing rectangular column up the building (the "translucent box
+    // around the tower" the user flagged). Hit-glow at the target was a
+    // bright additive dot painted on each building face, which bloom then
+    // smeared into a colored halo. Buildings use MeshBasicMaterial so the
+    // beams never illuminated anything anyway — they were pure decoration.
+    // Now: keep the spotlight fixture (real geometry, suggests purpose)
+    // + a small "lens on" dot at the source so it reads as an active fixture.
+    // No additive cone column, no painted hit-glow on the target.
+    const addBeam = (sx, sz, tx, ty, tz, _scaleY, _scaleX, color = 0xffe6a0, _opacity) => {
       const fixt = new THREE.Mesh(
         new THREE.BoxGeometry(0.6, 0.4, 0.5),
-        new THREE.MeshBasicMaterial({ color: 0x14171e }),
+        new THREE.MeshBasicMaterial({ color: 0x2a3142 }),
       );
       fixt.position.set(sx, -8 + 0.2, sz);
       fixt.lookAt(tx, ty, tz);
       this.scene.add(fixt);
-      // Lens
-      const lens = this._makeRunningLight(color, 0.28);
+      // b214: lens dot opacity 0.16 → 0.08. ~22 of these scattered around
+      // the base, each blooms into a small halo that aggregates into haze.
+      const lens = this._makeRunningLight(color, 0.08);
       lens.position.set(sx, -8 + 0.30, sz);
       this.scene.add(lens);
-      // Volumetric cone sprite — pivot at base, aimed at target
-      const coneMat = new THREE.SpriteMaterial({
-        map: beamTex, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, opacity, color,
-      });
-      const cone = new THREE.Sprite(coneMat);
-      cone.scale.set(scaleX, scaleY, 1);
-      cone.center.set(0.5, 0.0);
-      // Sprites always face camera — to suggest a directional beam we place
-      // multiple along the path from source toward target.
-      const dx = tx - sx, dy = ty - (-8 + 0.30), dz = tz - sz;
-      const len = Math.hypot(dx, dy, dz);
-      const steps = 4;
-      for (let s = 0; s < steps; s++) {
-        const f = s / steps;
-        const c = new THREE.Sprite(coneMat.clone());
-        c.scale.set(scaleX * (0.4 + f * 0.6), scaleY * 0.3, 1);
-        c.position.set(sx + dx * f, (-8 + 0.30) + dy * f, sz + dz * f);
-        this.scene.add(c);
-      }
-      // Bright spot at the target (where the beam HITS the structure)
-      const hitGlow = this._makeRunningLight(color, 0.55);
-      hitGlow.position.set(tx, ty, tz);
-      this.scene.add(hitGlow);
     };
 
+    // b193 v2 — beams aim at new v2 panel host positions.
     // Beams onto the central dish (multiple angles to really light it up)
     addBeam( 30, -95, 15,  4, -110, 18, 7, 0xfff0c8, 0.40);
     addBeam(  0, -95, 15,  4, -110, 18, 7, 0xfff0c8, 0.40);
     addBeam(-15, -95, 15,  4, -110, 18, 7, 0xffd9a4, 0.34);
-    // Beams onto the missile silo
-    addBeam(-46, -78, -55, 6, -84, 14, 6, 0xffaa55, 0.45);
-    addBeam(-66, -78, -55, 6, -84, 14, 6, 0xffaa55, 0.45);
-    addBeam(-46, -94, -55, 6, -84, 14, 6, 0xffd9a4, 0.40);
-    // Beams onto the standoff back-right dish
+    // Beams onto the missile silo @ (0, -8, -118) — galaxy hero (s2: silo z
+    // canonical is -118; old -107 sources were 11u north of target.)
+    addBeam(-12, -110, 0, 6, -118, 16, 7, 0xffaa55, 0.50);
+    addBeam( 12, -110, 0, 6, -118, 16, 7, 0xffaa55, 0.50);
+    addBeam(  0, -130, 0, 6, -118, 14, 6, 0xffd9a4, 0.40);
+    // Beams onto comms array shed (dim host) @ (-26, -8, -70)
+    addBeam(-12, -62, -26, 4, -70, 12, 5, 0xb8d4ff, 0.32);
+    addBeam(-40, -62, -26, 4, -70, 12, 5, 0xb8d4ff, 0.32);
+    // Beams onto forward ops radar (livwall) @ (26, -8, -70)
+    addBeam( 12, -62,  26, 4, -70, 12, 5, 0xfff0c8, 0.34);
+    addBeam( 40, -62,  26, 4, -70, 12, 5, 0xfff0c8, 0.34);
+    // Beams onto SIGINT tower (freq) @ (-43, -8, -48)
+    addBeam(-30, -34, -43, 8, -48, 14, 4, 0xb8d4ff, 0.32);
+    addBeam(-56, -34, -43, 8, -48, 14, 4, 0xb8d4ff, 0.32);
+    // Beams onto logistics yard (tape) @ (43, -8, -48)
+    addBeam( 30, -34,  43, 4, -48, 12, 5, 0xfff0c8, 0.36);
+    addBeam( 56, -34,  43, 4, -48, 12, 5, 0xffaa55, 0.32);
+    // Beams onto BROKEN DISH (deepsea) @ (-70, -8, -38) — magenta-pink hazard tint
+    addBeam(-58, -50, -70, 8, -38, 16, 6, 0xff66aa, 0.40);
+    addBeam(-82, -28, -70, 8, -38, 16, 6, 0xff66aa, 0.40);
+    // Beams onto sensor pylon (neural) @ (66, -8, -35)
+    addBeam( 56, -22,  66, 4, -35, 12, 4, 0x88ddff, 0.30);
+    // Beams onto biostation (organism) @ (-42, -8, +42) — pink for grow lights
+    addBeam(-30,  30, -42, 4,  42, 10, 4, 0xff5fa8, 0.28);
+    // Beam onto wall billboard @ (42, -8, +42)
+    addBeam( 30,  30,  42, 4,  42, 10, 4, 0xb8d4ff, 0.28);
+    // Beams onto the standoff back-right dish (silhouette only)
     addBeam( 50,  46,  58, 8,  58, 16, 6, 0xff99cc, 0.35);
     addBeam( 66,  46,  58, 8,  58, 16, 6, 0xff99cc, 0.35);
-    // Beams onto the standoff back-left dish
-    addBeam(-62, -56, -72, 8, -45, 16, 6, 0x88aaff, 0.35);
-    addBeam(-82, -36, -72, 8, -45, 16, 6, 0x88aaff, 0.35);
-    // Beams onto the cmd bunker
-    addBeam(-30, -58, -40, 4, -71, 12, 5, 0xb8d4ff, 0.34);
-    addBeam(-50, -58, -40, 4, -71, 12, 5, 0xb8d4ff, 0.34);
-    // Beams onto the radar building
-    addBeam( 12, -34, 20, 3, -47, 10, 4, 0xb8d4ff, 0.32);
-    addBeam( 28, -34, 20, 3, -47, 10, 4, 0xb8d4ff, 0.32);
-    // Beam onto the comm tower
-    addBeam(-30, -16, -38, 8, -24, 14, 4, 0xb8d4ff, 0.30);
-    // Beam onto the antenna array
-    addBeam(-50, -46, -58, 8, -56, 14, 5, 0xb8d4ff, 0.30);
-    // Beam onto the fuel depot
-    addBeam( 60,   0, 72, 4,   8, 12, 5, 0xfff0c8, 0.32);
+    // Beam onto the fuel depot (b214: depot moved 72→62)
+    addBeam( 50,   0, 62, 4,   8, 12, 5, 0xfff0c8, 0.32);
+    // Beams onto pelican pad (SE airfield) @ (50, -8, +30)
+    addBeam( 38,  18,  50, 2,  30, 10, 5, 0xfff0c8, 0.32);
+    addBeam( 62,  18,  50, 2,  30, 10, 5, 0xfff0c8, 0.32);
   },
 
   /* ---------- b173: pre-build every panel-host body up-front, so panel
      mounts only add trim. Lets the panel remap (option A) move panels off
      buildings without losing the building itself. */
   _buildAllStructures() {
+    // b193: pruned to ONLY the structures still referenced by v2 hosts.
+    // The v2 panel hosts (`_buildPanelHost`) build their own complete
+    // chassis inline — no longer depend on these big bodies — so most
+    // of the b173-b187 ensure list is gone. Missile silo stays because
+    // the galaxy host still calls _buildMissileSite() for its launch
+    // pad + gantry + sandbags; it's just placed at the new dead-axis
+    // hero position now. The _build* methods of the removed kinds
+    // (cmdbunker, radarbuilding, vehiclebay, barracksbig, supplydepot,
+    // commtowerbig, helipad) stay in the file as deadcode — pruned
+    // in a follow-up cleanup pass.
     this._builtBuildings ??= new Set();
     const ensure = (kind, fn) => {
       if (this._builtBuildings.has(kind)) return;
       this._builtBuildings.add(kind);
       fn.call(this);
     };
-    ensure('cmdbunker',     this._buildCmdBunker);
-    ensure('radarbuilding', this._buildRadarBuilding);
-    ensure('vehiclebay',    this._buildVehicleBay);
-    ensure('barracks',      this._buildBarracksBig);
-    ensure('supplydepot',   this._buildSupplyDepot);
-    ensure('commtower',     this._buildCommTowerBig);
-    ensure('helipad',       this._buildHelipad);
     ensure('missilesite',   this._buildMissileSite);
   },
 
@@ -1308,20 +1813,23 @@ const ScenesSelector = {
     };
     const cam = new THREE.Vector3(0, 0, 0);
 
-    // Cmd bunker at world (-40, -8, -71). Front face camera-facing at z = -71 + 12/2 = -65.
-    addGrid(-40, -8 + 6, -65 + 0.05, 14, 4, cam, 6, 2);
-    // Radar building at (20, -8, -47.5). Front face at z = -42.5.
-    addGrid(20, -8 + 3.0, -42.5 + 0.05, 9, 2.5, cam, 5, 2);
-    // Vehicle bay at (50, -8, -25). Side wall facing camera (left side at x=43): face the camera through east face.
-    addGrid(50 - 7.2, -8 + 4.0, -25, 9, 4, cam, 4, 2);
-    // Big barracks at (-65, -8, -22). Front face camera-facing at z = -22 + 16/2 = -14.
-    addGrid(-65, -8 + 3.6, -14 + 0.05, 8, 2.4, cam, 5, 2);
-    // Supply depot at (65, -8, -13). Front face at z = -13 + 12/2 = -7.
-    addGrid(65, -8 + 4.5, -7 + 0.05, 7, 2, cam, 5, 2);
-    // Standoff bunker at (42, -8, -38) — close-ish, light its long side
-    addGrid(42, -8 + 2.4, -38 + 4.5, 5, 1.5, cam, 4, 1);
-    // Standoff bunker at (-30, -8, 48)
-    addGrid(-30, -8 + 2.0, 48 + 3.0, 4, 1.4, cam, 3, 1);
+    // b193 v2: window grids on the v2 panel-host bodies. The grids face the
+    // camera (lookAt origin) so they're always visible when looking outward
+    // from the deck. Positions match the new radial layout.
+    // Forward ops radar (livwall) @ (26, -8, -70). Big body, side window strip.
+    addGrid(26 - 5.5, -8 + 3.0, -70, 6, 2.4, cam, 4, 2);
+    addGrid(26 + 5.5, -8 + 3.0, -70, 6, 2.4, cam, 4, 2);
+    // Comms array shed (dim) @ (-26, -8, -70). Compact side window.
+    addGrid(-26 - 2.5, -8 + 1.8, -70, 3, 1.6, cam, 3, 1);
+    // SIGINT tower (freq) base trailers @ (-43, -8, -48): trailer side strip
+    addGrid(-43 - 4.0, -8 + 1.4, -48, 3, 1.0, cam, 3, 1);
+    addGrid(-43 + 4.0, -8 + 1.4, -48, 3, 1.0, cam, 3, 1);
+    // Logistics yard (tape) @ (43, -8, -48). Container side strip.
+    addGrid(43 + 4.5, -8 + 2.0, -48, 5, 1.6, cam, 4, 1);
+    // Biostation (org) @ (-42, -8, +42). Side wall lit windows (faint).
+    addGrid(-42 - 3.5, -8 + 2.0, 42, 4, 1.2, cam, 3, 1);
+    // Standoff bunker @ (-58, -8, +10) — kept in standoff
+    addGrid(-58, -8 + 2.0, 10 + 3.0, 4, 1.4, cam, 3, 1);
 
     // Wall-mounted exterior lamps along big buildings (warm cone splash)
     const lampCone = this._makeFloodConeTexture();
@@ -1329,7 +1837,7 @@ const ScenesSelector = {
       // Lamp fixture
       const f = new THREE.Mesh(
         new THREE.BoxGeometry(0.20, 0.14, 0.22),
-        new THREE.MeshBasicMaterial({ color: 0x14171e }),
+        new THREE.MeshBasicMaterial({ color: 0x2a3142 }),
       );
       f.position.set(x, y, z);
       this.scene.add(f);
@@ -1348,21 +1856,21 @@ const ScenesSelector = {
       cone.position.set(x, y - 0.30, z + dir * 0.4);
       this.scene.add(cone);
     };
-    // Cmd bunker — 3 lamps along front face top edge
-    [-5, 0, 5].forEach(xo => addLamp(-40 + xo, -8 + 11 - 0.2, -65 + 0.15, 1));
-    // Big barracks — 4 lamps
-    [-2.5, -0.5, 1.5, 3.5].forEach(xo => addLamp(-65 + xo, -8 + 6 - 0.2, -14 + 0.15, 1));
-    // Supply depot — 2 lamps on top container
-    [-2, 2].forEach(xo => addLamp(65 + xo, -8 + 6 - 0.2, -7 + 0.15, 1));
-    // Radar building — 2 lamps
-    [-3, 3].forEach(xo => addLamp(20 + xo, -8 + 5 - 0.2, -42.5 + 0.15, 1));
-    // b182: lamps for previously-unlit buildings -----------------
-    // Missile silo (-55, -8, -84): front face at z=-78
-    [-3, 0, 3].forEach(xo => addLamp(-55 + xo, -8 + 6.5, -78 + 0.15, 1));
-    // Vehicle bay (50, -8, -27): front (z=-19), 2 lamps
-    [-3, 3].forEach(xo => addLamp(50 + xo, -8 + 4.0, -19 + 0.15, 1));
-    // Comm tower base (-38, -8, -24): front face splash
-    [-2, 2].forEach(xo => addLamp(-38 + xo, -8 + 3.5, -19 + 0.15, 1));
+    // b193 v2: lamps on the v2 panel-host bodies (faces camera-side).
+    // Forward ops radar (livwall) @ (26, -8, -70): 3 lamps along top of front face
+    [-3.6, 0, 3.6].forEach(xo => addLamp(26 + xo, -8 + 5 - 0.2, -70 + 0.15, 1));
+    // Comms array shed (dim) @ (-26, -8, -70): 2 lamps
+    [-1.8, 1.8].forEach(xo => addLamp(-26 + xo, -8 + 3.6 - 0.2, -70 + 0.15, 1));
+    // SIGINT tower (freq) base @ (-43, -8, -48): 2 lamps at trailer height
+    [-3.6, 3.6].forEach(xo => addLamp(-43 + xo, -8 + 1.8, -48 + 0.15, 1));
+    // Logistics yard (tape) @ (43, -8, -48): 2 lamps on top container front
+    [-2, 2].forEach(xo => addLamp(43 + xo, -8 + 6 - 0.2, -48 + 4.5 + 0.15, 1));
+    // Missile silo @ (0, -8, -107): 3 lamps along control bunker (b214: silo pushed back)
+    [-3, 0, 3].forEach(xo => addLamp(0 + xo, -8 + 6.5, -101 + 0.15, 1));
+    // Biostation (org) @ (-42, -8, +42): 2 lamps
+    [-2, 2].forEach(xo => addLamp(-42 + xo, -8 + 4.0 - 0.2, 42 + 0.15, 1));
+    // Wall billboard @ (42, -8, +42): 2 lamps at base
+    [-2, 2].forEach(xo => addLamp(42 + xo, -8 + 4.0, 42 + 0.15, 1));
     // Biostation (12, -8, ~38): front face splash
     [-2, 2].forEach(xo => addLamp(12 + xo, -8 + 4.0, 32 + 0.15, 1));
     // Antenna shed (-58, -8, -49)
@@ -1374,9 +1882,12 @@ const ScenesSelector = {
      strobe), open rear ramp with warm interior glow, plus 4 portable
      construction floodlight stands around the pad aimed AT the Pelican. */
   _buildPelicanLights() {
-    // Pelican pad world center: (-2, -8, 24). Pelican on top at y=-8 + padH(1.2) + 1.8 = -5.0.
-    // b187: pulled forward from z=48 to z=24 to clear the south perimeter road (z=50±4.5).
-    const padX = -2, padY = -8, padZ = 24;
+    // b193: pelican pad relocated SE airfield at (50, -8, 30). Pelican on top
+    // at y=-8 + padH(1.2) + 1.8 = -5.0. The host pad's grp.rotation.y = -0.6
+    // angles cockpit toward NE corridor — these light positions stay in
+    // unrotated world coords, since they're offsets approximating the parked
+    // pelican silhouette and look fine within ~30° rotation tolerance.
+    const padX = 50, padY = -8, padZ = 30;
     const pelY = padY + 3.0;
 
     // Cockpit window glow (3 small lights at the front of the pelican)
@@ -1416,7 +1927,7 @@ const ScenesSelector = {
 
     // 4 portable construction floodlight stands around the pad, aimed at pelican
     const standMat = new THREE.MeshBasicMaterial({ color: 0x3a3416 });  // yellow-ish construction
-    const standDark = new THREE.MeshBasicMaterial({ color: 0x14171e });
+    const standDark = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
     const coneTex = this._makeFloodConeTexture();
     const standPositions = [
       { x: padX - 11, z: padZ + 1, color: 0xfff0c8 },
@@ -1445,25 +1956,11 @@ const ScenesSelector = {
       head.lookAt(padX, pelY, padZ);
       grp.add(head);
       // Lens
-      const lens = this._makeRunningLight(s.color, 0.28);
+      const lens = this._makeRunningLight(s.color, 0.18);
       const dirToPel = new THREE.Vector3(padX - s.x, pelY - (padY + 2.5), padZ - s.z).normalize();
       lens.position.set(dirToPel.x * 0.20, 2.5 + dirToPel.y * 0.20, dirToPel.z * 0.20);
       grp.add(lens);
-      // Volumetric beam aimed at the pelican
-      const beamMat = new THREE.SpriteMaterial({
-        map: coneTex, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, opacity: 0.32, color: s.color,
-      });
-      // 3 sprite chain along path
-      const dx = padX - s.x, dy = pelY - (padY + 2.5), dz = padZ - s.z;
-      const len = Math.hypot(dx, dy, dz);
-      for (let k = 1; k <= 3; k++) {
-        const f = k / 4;
-        const sp = new THREE.Sprite(beamMat.clone());
-        sp.scale.set(2.0 * (0.5 + f), 4.0 * f, 1);
-        sp.position.set(dx * f, 2.5 + dy * f, dz * f);
-        grp.add(sp);
-      }
+      // b213: 3-step volumetric cone chain to pelican removed.
       // Warning strobe on top of the lamp head
       const tip = this._makeRunningLight(0xffaa55, 0.16);
       tip.position.y = 2.85;
@@ -1478,14 +1975,15 @@ const ScenesSelector = {
      Three procedural humanoid figures with helmet+cyan-visor, torso, arms,
      legs as primitives. ~2u tall. Closed-helmet ODST style — no open faces. */
   _buildEngineerCrew() {
-    const padX = -2, padZ = 24;
+    // b193: pelican pad relocated from (-2, +24) to SE airfield (50, +30)
+    const padX = 50, padZ = 30;
     const pelY = -8 + 3.0;
     const ground = -8;
 
-    const armor = new THREE.MeshBasicMaterial({ color: 0x1f2218 });        // ODST dark olive
-    const armorHi = new THREE.MeshBasicMaterial({ color: 0x2c3122 });      // shoulder/chest plate accent
-    const visorRim = new THREE.MeshBasicMaterial({ color: 0x0c0e14 });     // helmet shell
-    const glove = new THREE.MeshBasicMaterial({ color: 0x14171e });
+    const armor = new THREE.MeshBasicMaterial({ color: 0x363c2c });        // ODST dark olive
+    const armorHi = new THREE.MeshBasicMaterial({ color: 0x42493a });      // shoulder/chest plate accent
+    const visorRim = new THREE.MeshBasicMaterial({ color: 0x1d2230 });     // helmet shell
+    const glove = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
 
     const buildEngineer = (poseKneeling) => {
       const g = new THREE.Group();
@@ -1602,7 +2100,7 @@ const ScenesSelector = {
      base reads as occupied, not deserted. */
   _makeTent(w = 4.0, l = 5.5, h = 2.4) {
     const olive = new THREE.MeshBasicMaterial({ color: 0x363f2c });
-    const oliveD = new THREE.MeshBasicMaterial({ color: 0x232a1c });
+    const oliveD = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
     const positions = new Float32Array([
       -w/2, 0,  l/2,
        w/2, 0,  l/2,
@@ -1649,20 +2147,25 @@ const ScenesSelector = {
         this.scene.add(tent);
       });
     };
-    // West bivouac — between the deck and the barracks row
-    cluster(-50, 6, 0.18);
-    // East bivouac — between the deck and the supply depot
-    cluster( 50, 6, -0.20);
-    // North bivouac — pulled west to clear the spine road (x=0±4.5).
-    // Was (-8, -56) which put the +5.4-offset tent at x=-2.6 ON the road.
-    cluster(-22, -56, 0.05);
+    // b193: bivouac re-anchored to the v2 layout. Old west cluster sat in
+    // the new SIGINT-tower lane; old east cluster sat in the new logistics
+    // approach. Pulled tents inward to a clean band south of camera (the
+    // back-of-house "bivouac" zone in BASEMAP.md), one cluster offset NW
+    // and another NE so the tents read as a long base camp behind the deck.
+    // b214: SE bivouac was sitting at (22,16) inside the motor pool spread
+    // — tents, hogs, scorpion all clustered in the same 12u square. Pulled
+    // west to (8,24) so the bivouac and the airfield read as separate zones.
+    cluster(-26,  20, 0.18);   // SW bivouac (clear of biostation @ -42,+42)
+    cluster(  8,  24, -0.20);  // SE bivouac (clear of motor pool x∈[32,50])
+    // Removed N bivouac — now overlapped by the new comms-array shed and
+    // missile silo at the deeper N positions.
   },
 
   _buildPersonnel() {
     this.personnel = [];
     const olive  = new THREE.MeshBasicMaterial({ color: 0x4a5238 });
     const skin   = new THREE.MeshBasicMaterial({ color: 0xb89072 });
-    const dark   = new THREE.MeshBasicMaterial({ color: 0x14171e });
+    const dark   = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
     const accent = new THREE.MeshBasicMaterial({ color: 0x2a3022 });
 
     const makeFigure = () => {
@@ -1710,18 +2213,23 @@ const ScenesSelector = {
       return grp;
     };
 
-    // Walking routes — pairs of waypoints inside the perimeter loop.
-    // Carefully picked to NOT cross the spine road (x=0) except at the
-    // front-cross walkway (z=-30) where it makes sense for soldiers to.
+    // b193 v2 walking routes. Anchored to the new v2 panel hosts so the
+    // base reads as occupied and trafficked between the actual buildings.
     const routes = [
-      { from: [-50,  6], to: [-65, -10], speed: 1.8 },  // W bivouac → barracks
-      { from: [-50,  6], to: [-30, -30], speed: 1.7 },  // W bivouac → mid walk
-      { from: [ 50,  6], to: [ 50, -22], speed: 1.7 },  // E bivouac → vehicle bay
-      { from: [ 50,  6], to: [ 65, -13], speed: 1.6 },  // E bivouac → supply depot
-      { from: [-30, -30], to: [ 30, -30], speed: 2.0 }, // soldier crossing midbase
-      { from: [ 20, -47], to: [ 50, -27], speed: 1.5 }, // radar → vehicle bay
-      { from: [-40, -65], to: [-20, -55], speed: 1.4 }, // cmdbunker area runner
-      { from: [-22, -56], to: [-30, -50], speed: 1.6 }, // N bivouac → mid
+      // Bivouac → forward ops cluster (b214: bivouac coords updated)
+      { from: [-26, 20], to: [-26, -64], speed: 1.7 },  // SW bivouac → comms array shed
+      { from: [  8, 24], to: [ 26, -64], speed: 1.7 },  // SE bivouac → forward ops bunker
+      // Cross-base inspection sweeps
+      { from: [-30, -42], to: [ 30, -42], speed: 2.0 }, // forward cross-road E↔W
+      { from: [-26, 20], to: [  8, 24], speed: 1.6 },   // SW ↔ SE bivouac
+      // Tape-spine logistics yard ↔ pelican pad (crew loading dock walk)
+      { from: [ 43, -42], to: [ 50, 24], speed: 1.5 },
+      // Sigint tower ↔ broken-dish (engineers walking to repair)
+      { from: [-43, -42], to: [-66, -32], speed: 1.4 },
+      // Galaxy hero ground crew (around launch pad perimeter, b214: silo at z=-107)
+      { from: [-10, -98], to: [ 10, -98], speed: 1.3 },
+      // Sensor pylon ↔ logistics
+      { from: [ 60, -32], to: [ 48, -44], speed: 1.6 },
     ];
     routes.forEach((r, i) => {
       const fig = makeFigure();
@@ -1766,8 +2274,8 @@ const ScenesSelector = {
     const grp = new THREE.Group();
     const olive = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
     const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const tread = new THREE.MeshBasicMaterial({ color: 0x0c0e14 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const tread = new THREE.MeshBasicMaterial({ color: 0x1d2230 });
 
     // Main hull (wide and squat)
     const hull = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.85, 5.5), olive);
@@ -1858,10 +2366,13 @@ const ScenesSelector = {
   },
 
   _buildScorpions() {
-    // 1 parked in the motor pool (front-right cluster, on the gravel apron
-    // beside the parked Warthogs but offset so it reads as the "heavy" zone).
+    // b193: parked Scorpion moved with the rest of the motor pool from
+    // (40, -38) — sat in the v2 logistics-yard host — to a spot south of
+    // the SE airfield, "heavy" of the airfield ground vehicles.
+    // b214: pulled west from (28,16) so the tank doesn't crowd the parked
+    // Warthogs (now at z=8/12/22) — sits at the airfield's west edge.
     const parked = this._buildScorpionMesh();
-    parked.position.set(40, -8, -38);
+    parked.position.set(22, -8, 14);
     parked.rotation.y = Math.PI * 0.65;
     this.scene.add(parked);
 
@@ -1902,19 +2413,23 @@ const ScenesSelector = {
     // Two satellite dishes (the iconic Standoff feature). Placed off the
     // panel arc so their bulk reads above the panel tops without occluding
     // the panel arc itself.
+    // b193: back-LEFT standoff dish removed — replaced by `_buildBrokenDish`
+    // (deepsea panel host, dramatic damaged variant placed at a similar
+    // bearing but at the v2 panel coords). Back-right kept as silhouette.
     this._buildDish( 58, -8,  58, 11, 0xff3344, 1.2);   // back-right, red strobe
-    this._buildDish(-72, -8, -45, 13, 0x4488ff, -0.7);  // back-left,  blue strobe
 
     // Comm towers — tall lattice, blinking aviation strobes
-    this._buildCommTower( 38, -8,  44, 22, 0xff3344);
-    this._buildCommTower(-46, -8, -28, 26, 0x4488ff);
-    this._buildCommTower(-12, -8,  62, 18, 0xff3344);
-    this._buildCommTower( 48, -8, -22, 20, 0x4488ff);
+    // b193: trimmed comm towers that sat in the v2 panel zones (NW & NE).
+    // Kept the rear/back ones for the silhouette ring.
+    this._buildCommTower( 38, -8,  44, 22, 0xff3344);   // back-right of camera
+    this._buildCommTower(-12, -8,  62, 18, 0xff3344);   // due-rear
+    // Removed: (-46, -28) sat 5u from the new freqmap host @ (-43, -48); too close
+    // Removed: (48, -22) sat in the new tape spine zone
 
     // Low bunker silhouettes with warm interior window glow
-    this._buildBunker( 42, -8, -38, 7, 4.0, 9, 0xffaa55);
-    this._buildBunker(-30, -8,  48, 8, 3.5, 6, 0xffaa55);
-    this._buildBunker(-58, -8,  10, 6, 3.0, 6, 0xffaa55);
+    // b193: removed (42, -38) — sat in the new tape-spine corridor.
+    // Removed (-30, +48) — sat ON the south perimeter road.
+    this._buildBunker(-58, -8,  10, 6, 3.0, 6, 0xffaa55);   // SW silhouette only
 
     // b171: removed loose sandbag berms — the hex observation deck now has
     // its own integrated sandbag wrap, and the loose berms here were
@@ -1946,8 +2461,16 @@ const ScenesSelector = {
       const mat = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
       this.scene.add(new THREE.Mesh(geo, mat));
     };
-    buildRing(112, 100, 12,  6, 7,  0x080a12);  // near ridge
-    buildRing( 72, 165, 16, 14, 10, 0x040611);  // far ridge — taller, darker
+    // b227 sized too far back (180/240) — ridges visually disappeared from
+    // ridge POI, fog blended them past the readable horizon line. Pulled in
+    // to 145/200: near ring just outside the N-S axis fence at z=±142,
+    // axis-aligned outer fence at x=±125 sits inside the silhouette. Heights
+    // bumped (7→11 / 16→24) so the horizon reads as substantial mountains
+    // not pancake bumps. Inner-fence diagonal corners (~169) poke past the
+    // near ridge silhouette — acceptable since corners sit far back-left/
+    // back-right and read as "fence in front of mountain" at most.
+    buildRing(112, 145, 18, 11, 14, 0x080a12);  // near ridge
+    buildRing( 72, 200, 22, 24, 18, 0x040611);  // far ridge — taller, darker
 
     // b177: aviation beacons sprinkled along the near ridgeline so the
     // background isn't pitch-black void. 14 strobes around the full 360°,
@@ -1957,7 +2480,7 @@ const ScenesSelector = {
     const beaconColors = [0xff3344, 0xffaa55, 0x4488ff];
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.10;
-      const r = 100 + (Math.sin(a * 2.3) + Math.sin(a * 5.7 + 0.8)) * 4.8 + Math.random() * 8;
+      const r = 145 + (Math.sin(a * 2.3) + Math.sin(a * 5.7 + 0.8)) * 5.0 + Math.random() * 9;
       const beaconY = -8 + 8 + Math.random() * 4;  // above the ridge top
       const color = beaconColors[i % beaconColors.length];
       // Slim mast under the strobe (a thin silhouette so it reads as a tower)
@@ -1978,7 +2501,7 @@ const ScenesSelector = {
     // suggest occupied structures across the valley. Tiny additive points.
     for (let i = 0; i < 24; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r = 165 + (Math.random() - 0.5) * 25;
+      const r = 200 + (Math.random() - 0.5) * 28;
       const y = -8 + 4 + Math.random() * 8;
       const warm = Math.random() < 0.7;
       const c = warm ? 0xffaa55 : 0x88aaff;
@@ -1994,8 +2517,8 @@ const ScenesSelector = {
     grp.position.set(x, y, z);
     grp.userData.baseYaw = baseYaw;
     grp.rotation.y = baseYaw;
-    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x22252e });
-    const accentMat = new THREE.MeshBasicMaterial({ color: 0x16191f });
+    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x3a3e4a });
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x2c303a });
     const struMat = new THREE.MeshBasicMaterial({ color: 0x0e1118 });
 
     // Concrete plinth/platform
@@ -2003,6 +2526,33 @@ const ScenesSelector = {
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(8, plinthH, 8), accentMat);
     plinth.position.y = plinthH / 2;
     grp.add(plinth);
+    // b201: lit operator-room windows on the plinth — 1 per face — so
+    // the dish base reads as occupied even from the far side of the base.
+    const winMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa55, transparent: true, opacity: 0.75,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
+      const win = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.4, 0.55),
+        winMat.clone(),
+      );
+      win.position.set(Math.cos(theta) * 4.05, plinthH * 0.62, Math.sin(theta) * 4.05);
+      win.lookAt(
+        Math.cos(theta) * 100,
+        plinthH * 0.62,
+        Math.sin(theta) * 100,
+      );
+      win.userData = { rate: 4.0 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.75 };
+      this.standoff?.windows.push(win);
+      grp.add(win);
+    });
+    // 4 corner running lights on the plinth top
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sx,sz]) => {
+      const led = this._makeRunningLight(0xffe6a0, 0.18);
+      led.position.set(sx * 3.95, plinthH + 0.30, sz * 3.95);
+      grp.add(led);
+    });
     // Stepped base
     const step = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.6, 6.5), bodyMat);
     step.position.y = plinthH + 0.3;
@@ -2029,7 +2579,7 @@ const ScenesSelector = {
     // Dish — half-flat sphere section forms the parabola
     const tilt = -Math.PI * 0.34;  // points up/sky
     const dishGeo = new THREE.SphereGeometry(dishR, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.42);
-    const dishMat = new THREE.MeshBasicMaterial({ color: 0x1c1f27, side: THREE.DoubleSide });
+    const dishMat = new THREE.MeshBasicMaterial({ color: 0x32384a, side: THREE.DoubleSide });
     const dish = new THREE.Mesh(dishGeo, dishMat);
     dish.position.set(0, yokeY + 1.0, 0);
     dish.rotation.x = tilt;
@@ -2090,10 +2640,249 @@ const ScenesSelector = {
     this.standoff.dishes.push(grp);
   },
 
+  /* ---------- b193: BROKEN DISH (deepsea panel host) ----------
+     Damaged parabolic dish replacing the back-left standoff dish. Built
+     as a complete parabola but with a chunk of the east rim *missing*
+     (clipped sphere section) + a sagging fragment hanging by a single
+     truss + scaffold prop + hazard cones + sparking sprite at the
+     break point. Marks the gap position on `standoff.brokenDishGap`
+     so future flyby code (b196) can detour Longswords through it.
+     World position: (-66, -8, -35) — adjacent to the deepsea panel
+     billboard at (-66, 8, -35). */
+  _buildBrokenDish() {
+    const grp = new THREE.Group();
+    const x = -70, y = -8, z = -38;
+    grp.position.set(x, y, z);
+    const baseYaw = Math.atan2(-x, -z);  // face origin
+    grp.userData.baseYaw = baseYaw;
+    grp.rotation.y = baseYaw;
+
+    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x3a3e4a });
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x2c303a });
+    const struMat = new THREE.MeshBasicMaterial({ color: 0x0e1118 });
+    const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
+    const brokenSteel = new THREE.MeshBasicMaterial({ color: 0x4a3225 });  // burnt/rusted
+
+    const dishR = 10;
+
+    // Concrete plinth/platform
+    const plinthH = 2.4;
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(8, plinthH, 8), accentMat);
+    plinth.position.y = plinthH / 2;
+    grp.add(plinth);
+    const step = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.6, 6.5), bodyMat);
+    step.position.y = plinthH + 0.3;
+    grp.add(step);
+    // b201: lit operator/equipment windows on the plinth — fault-tinted
+    // (more red, less amber) so it reads as a damaged-but-still-occupied
+    // facility. Each side face gets a window.
+    const plinthWinMat = new THREE.MeshBasicMaterial({
+      color: 0xff7755, transparent: true, opacity: 0.65,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
+      const win = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.2, 0.50),
+        plinthWinMat.clone(),
+      );
+      win.position.set(Math.cos(theta) * 4.05, plinthH * 0.60, Math.sin(theta) * 4.05);
+      win.lookAt(
+        Math.cos(theta) * 100,
+        plinthH * 0.60,
+        Math.sin(theta) * 100,
+      );
+      win.userData = { rate: 5.5 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.65, fault: true };
+      this.standoff?.windows.push(win);
+      grp.add(win);
+    });
+    // 4 corner running lights on the plinth (red — fault status)
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sx,sz]) => {
+      const led = this._makeRunningLight(0xff3344, 0.16);
+      led.position.set(sx * 3.95, plinthH + 0.30, sz * 3.95);
+      grp.add(led);
+    });
+
+    // Pedestal column
+    const colH = 5.2;
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.4, colH, 10), bodyMat);
+    ped.position.y = plinthH + 0.6 + colH / 2;
+    grp.add(ped);
+
+    // Yoke — TILTED in damage (the dish couldn't slew level any more)
+    const yokeY = plinthH + 0.6 + colH + 0.5;
+    const yoke = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.9, 1.2), bodyMat);
+    yoke.position.y = yokeY;
+    yoke.rotation.z = 0.18;  // permanent lean
+    grp.add(yoke);
+    [-1.4, 1.4].forEach(sx => {
+      const flange = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.4, 0.8), bodyMat);
+      flange.position.set(sx, yokeY + 0.5, 0);
+      flange.rotation.z = 0.18;
+      grp.add(flange);
+    });
+
+    // Dish — partial sphere section. We use thetaStart + thetaLength to
+    // CARVE OUT the east rim (the broken part). 240° arc instead of full 360°.
+    const dishTilt = -Math.PI * 0.34;
+    const dishYawCarve = Math.PI * 0.65;  // start of carved section
+    const dishArc = Math.PI * 1.6;        // 288° — leaves a ~72° gap in east rim
+    const dishGeo = new THREE.SphereGeometry(
+      dishR, 28, 18,
+      dishYawCarve, dishArc,
+      0, Math.PI * 0.42,
+    );
+    const dishMat = new THREE.MeshBasicMaterial({ color: 0x32384a, side: THREE.DoubleSide });
+    const dish = new THREE.Mesh(dishGeo, dishMat);
+    dish.position.set(0, yokeY + 1.0, 0);
+    dish.rotation.x = dishTilt;
+    dish.rotation.z = 0.18;  // matches yoke lean
+    grp.add(dish);
+
+    // Concentric ribs only across the intact arc
+    for (let r = 0.30; r < 1.0; r += 0.20) {
+      const ribGeo = new THREE.TorusGeometry(
+        dishR * r, 0.03, 4, 36,
+        dishArc,  // partial torus matching the dish arc
+      );
+      const rib = new THREE.Mesh(ribGeo, struMat);
+      rib.position.copy(dish.position);
+      rib.position.y += Math.sqrt(Math.max(0, dishR * dishR - (dishR * r) * (dishR * r))) * 0.20;
+      rib.rotation.x = Math.PI / 2;
+      rib.rotation.z = dishYawCarve;
+      grp.add(rib);
+    }
+    // Outer rim — also partial
+    const rimGeo = new THREE.TorusGeometry(dishR, 0.10, 5, 48, dishArc);
+    const rim = new THREE.Mesh(rimGeo, struMat);
+    rim.position.copy(dish.position);
+    rim.rotation.x = Math.PI / 2;
+    rim.rotation.z = dishYawCarve;
+    grp.add(rim);
+
+    // SAGGING FRAGMENT — a chunk of dish ripped off, hanging by a single
+    // strap, dangling below the broken rim. Positioned at the gap center.
+    const gapAngle = dishYawCarve + dishArc + (Math.PI * 0.4 / 2);  // middle of the missing 72°
+    const gapX = Math.cos(gapAngle) * dishR;
+    const gapZ = Math.sin(gapAngle) * dishR;
+    const fragGroup = new THREE.Group();
+    fragGroup.position.set(gapX, yokeY - 1.4, gapZ);
+    fragGroup.rotation.set(0.85, gapAngle, 0.40);  // tilted/twisted
+    grp.add(fragGroup);
+    // Fragment plate (a small slice of curved dish material)
+    const fragGeo = new THREE.SphereGeometry(
+      dishR * 0.85, 14, 8,
+      0, Math.PI * 0.42,
+      0, Math.PI * 0.30,
+    );
+    const fragMat = new THREE.MeshBasicMaterial({ color: 0x2c303a, side: THREE.DoubleSide });
+    const frag = new THREE.Mesh(fragGeo, fragMat);
+    fragGroup.add(frag);
+    // Strap holding the fragment up (single thin steel cable to rim)
+    const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.5, 4), brokenSteel);
+    strap.position.set(-1.5, 1.6, 0);
+    strap.rotation.z = 0.45;
+    fragGroup.add(strap);
+
+    // Snapped support truss — a single beam jutting out where the support
+    // arm broke. Burnt/rusted material.
+    const snapBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 4.0, 6), brokenSteel);
+    snapBeam.position.set(gapX * 0.5, yokeY - 0.8, gapZ * 0.5);
+    snapBeam.lookAt(gapX * 1.4, yokeY + 1.6, gapZ * 1.4);
+    snapBeam.rotateX(Math.PI / 2);
+    grp.add(snapBeam);
+    // Burnt-end charring sprite at the snap point
+    const burnTex = this._makeRadialGlowTexture('rgba(255,80,40,0.85)');
+    const burn = new THREE.Sprite(new THREE.SpriteMaterial({ map: burnTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }));
+    burn.scale.set(1.2, 1.2, 1);
+    burn.position.set(gapX * 0.5, yokeY - 0.8, gapZ * 0.5);
+    grp.add(burn);
+
+    // 3 scaffolding posts propping the damaged rim from below — bright
+    // industrial yellow so the user reads "active repair site"
+    [-1.6, 0, 1.6].forEach((offset, i) => {
+      const sx = gapX * 0.7 + Math.cos(gapAngle + Math.PI / 2) * offset;
+      const sz = gapZ * 0.7 + Math.sin(gapAngle + Math.PI / 2) * offset;
+      const sH = yokeY - 0.5;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, sH, 4), yellow);
+      post.position.set(sx, sH / 2, sz);
+      grp.add(post);
+      // Cross-brace at mid-height to next post
+      if (i < 2) {
+        const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.7, 4), yellow);
+        brace.rotation.z = Math.PI / 2;
+        const bx = sx + Math.cos(gapAngle + Math.PI / 2) * 0.8;
+        const bz = sz + Math.sin(gapAngle + Math.PI / 2) * 0.8;
+        brace.position.set(bx, sH * 0.55, bz);
+        brace.lookAt(bx + 1, sH * 0.55, bz);
+        brace.rotateX(Math.PI / 2);
+        grp.add(brace);
+      }
+    });
+
+    // Welder pulse — additive sprite that blinks bright every ~4s on top
+    // scaffold post, simulating a repair crew arc-welding. Drives off
+    // standoff.windows so the existing flicker tick handles it (high rate).
+    const welderTex = this._makeRadialGlowTexture('rgba(150,200,255,0.95)');
+    const welder = new THREE.Sprite(new THREE.SpriteMaterial({ map: welderTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.0, color: 0xc8e0ff }));
+    welder.scale.set(2.6, 2.6, 1);
+    welder.position.set(gapX * 0.7, yokeY - 0.3, gapZ * 0.7);
+    welder.userData = { rate: 6.0, phase: Math.random() * 6, baseOpacity: 0.65, isWelder: true };
+    grp.add(welder);
+    this.standoff?.windows.push(welder);
+
+    // Continuous spark sprite at the break point (bigger, sustained
+    // additive, additional small jittery point particles)
+    const sparkTex = this._makeRadialGlowTexture('rgba(255,180,80,0.95)');
+    const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.45, color: 0xffd070 }));
+    spark.scale.set(1.6, 1.6, 1);
+    spark.position.set(gapX * 0.55, yokeY - 0.4, gapZ * 0.55);
+    spark.userData = { rate: 8.0, phase: Math.random() * 6, baseOpacity: 0.55, isSpark: true };
+    grp.add(spark);
+    this.standoff?.windows.push(spark);
+
+    // Hazard cones around the dish base
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const r = 5.5;
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.85, 6), yellow);
+      cone.position.set(Math.cos(a) * r, plinthH + 0.45, Math.sin(a) * r);
+      grp.add(cone);
+    }
+
+    // FAULT-PATTERN aviation strobe — uses irregular rate so it reads as
+    // damaged (skipping flashes vs steady cadence)
+    const strobe = this._makeRunningLight(0xff3344, 0.55);
+    strobe.position.set(0, yokeY + 4.5, 0);
+    strobe.userData = { rate: 0.8, phase: Math.random() * 6, fault: true };
+    grp.add(strobe);
+    this.standoff?.strobes.push(strobe);
+
+    // Receiver tell-tale at focal point — DEAD (very dim, no pulse)
+    const tell = this._makeRunningLight(0x882244, 0.10);
+    const focalY = yokeY + 1.0 + dishR * 0.55;
+    tell.position.set(0, focalY, 0);
+    grp.add(tell);
+
+    this.scene.add(grp);
+    this.standoff?.dishes.push(grp);
+
+    // Mark the gap position in WORLD coords for b196 flyby-through gag.
+    // `gapAngle` is local; rotate by baseYaw to get world bearing.
+    const worldGapAngle = baseYaw + gapAngle;
+    this.standoff.brokenDishGap = {
+      x: x + Math.cos(worldGapAngle) * dishR,
+      y: y + yokeY + 1.0,
+      z: z + Math.sin(worldGapAngle) * dishR,
+      // outward normal pointing camera-ward (will be hand-tuned in b196)
+      normal: new THREE.Vector3(-Math.cos(worldGapAngle), 0, -Math.sin(worldGapAngle)),
+    };
+  },
+
   _buildCommTower(x, y, z, height, lightColor) {
     const grp = new THREE.Group();
     grp.position.set(x, y, z);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x10131a });
+    const mat = new THREE.MeshBasicMaterial({ color: 0x3a4050 });
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x32384a });
 
     // 4 lattice legs
     const baseW = 1.2;
@@ -2111,6 +2900,36 @@ const ScenesSelector = {
       ring.position.y = h;
       grp.add(ring);
     }
+    // b201: operator booth at the top of every standoff comm tower. Was
+    // a pure-silhouette mast — now reads as a manned tower with a lit
+    // 4-sided cabin facing every cardinal direction.
+    const cabinH = 1.8;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(baseW * 1.1, cabinH, baseW * 1.1), accentMat);
+    cabin.position.y = height - cabinH / 2 - 0.4;
+    grp.add(cabin);
+    const winMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa55, transparent: true, opacity: 0.78,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach(theta => {
+      const win = new THREE.Mesh(
+        new THREE.PlaneGeometry(baseW * 0.85, 0.55),
+        winMat.clone(),
+      );
+      win.position.set(
+        Math.cos(theta) * (baseW * 0.56),
+        height - cabinH / 2 - 0.4,
+        Math.sin(theta) * (baseW * 0.56),
+      );
+      win.lookAt(
+        Math.cos(theta) * 100,
+        height - cabinH / 2 - 0.4,
+        Math.sin(theta) * 100,
+      );
+      win.userData = { rate: 4.5 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.78 };
+      this.standoff?.windows.push(win);
+      grp.add(win);
+    });
     // Top antenna mast
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 3, 4), mat);
     mast.position.y = height + 1.5;
@@ -2121,6 +2940,13 @@ const ScenesSelector = {
     strobe.userData = { isRunningLight: false, rate: lightColor === 0xff3344 ? 1.8 : 1.1, phase: Math.random() * 6 };
     grp.add(strobe);
     this.standoff.strobes.push(strobe);
+    // b201: leg-corner running lights at base — small dim red points so
+    // the ground footprint reads from camera even when the tower is far
+    [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach(theta => {
+      const led = this._makeRunningLight(0xff3344, 0.10);
+      led.position.set(Math.cos(theta) * baseW * 0.6, 0.4, Math.sin(theta) * baseW * 0.6);
+      grp.add(led);
+    });
 
     this.scene.add(grp);
   },
@@ -2129,8 +2955,8 @@ const ScenesSelector = {
     const grp = new THREE.Group();
     grp.position.set(x, y, z);
     grp.rotation.y = Math.random() * Math.PI * 2;
-    const wallMat = new THREE.MeshBasicMaterial({ color: 0x222836 });
-    const accentMat = new THREE.MeshBasicMaterial({ color: 0x1c2028 });
+    const wallMat = new THREE.MeshBasicMaterial({ color: 0x36404f });
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x32384a });
 
     // Main concrete shell
     const shell = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
@@ -2184,7 +3010,7 @@ const ScenesSelector = {
     // Tangent direction to the deck circle
     const tx = -Math.sin(theta);
     const tz = Math.cos(theta);
-    const bagMat = new THREE.MeshBasicMaterial({ color: 0x14171d });
+    const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
     const spacing = 1.05;
     for (let i = 0; i < length; i++) {
       const offset = (i - (length - 1) / 2) * spacing;
@@ -2375,7 +3201,7 @@ const ScenesSelector = {
     const designs = [
       { kind: 'capital',  size: 1.4, engineColor: 'rgba(120, 220, 255, 1.0)', runningLight: 0xff8866, bodyColor: 0x303040 },
       { kind: 'cruiser',  size: 1.0, engineColor: 'rgba(255, 130, 200, 1.0)', runningLight: 0x88ddff, bodyColor: 0x252535 },
-      { kind: 'pelican',  size: 0.85, engineColor: 'rgba(140, 200, 255, 1.0)', runningLight: 0xff4444, bodyColor: 0x202028 },
+      { kind: 'pelican',  size: 0.85, engineColor: 'rgba(140, 200, 255, 1.0)', runningLight: 0xff4444, bodyColor: 0x363640 },
       { kind: 'fighter',  size: 0.55, engineColor: 'rgba(255, 200, 120, 1.0)', runningLight: 0xff6677, bodyColor: 0x303040 },
       { kind: 'forerunner', size: 0.95, engineColor: 'rgba(180, 140, 255, 1.0)', runningLight: 0xc8a8ff, bodyColor: 0x202030 },
     ];
@@ -2613,12 +3439,14 @@ const ScenesSelector = {
     const passSign   = Math.random() < 0.5 ? 1 : -1;  // L→R or R→L
     const sideExtent = 80 + Math.random() * 40;       // off-screen spawn margin
 
-    // Altitude: 70% eye-level, 18% high pass (over panels), 12% low pass (under)
+    // Altitude: 70% mid-air pass (above deck, around panel height), 18% high pass
+    // (over panels), 12% low-but-clear pass. All clamped above ground to stop
+    // ships clipping through the deck/desert floor.
     let altitude;
     const r = Math.random();
-    if (r < 0.18)      altitude = camY + 18 + Math.random() * 10;
-    else if (r < 0.30) altitude = camY - 6  - Math.random() * 4;
-    else               altitude = camY + (Math.random() - 0.3) * 5;
+    if (r < 0.18)      altitude = camY + 18 + Math.random() * 10;          // high — above buildings
+    else if (r < 0.30) altitude = camY + 3 + Math.random() * 3;            // low pass — just above deck (was -6..-10, clipped ground)
+    else               altitude = camY + 6 + Math.random() * 6;            // mid — panel/building height (was -1.5..+3.5)
 
     // Forward-axis jitter so ships don't all cross at the same depth/angle
     const spawnFwd  = passDepth + (Math.random() - 0.5) * 25;
@@ -2645,7 +3473,11 @@ const ScenesSelector = {
     ship.userData.spawnPos = startPos.clone();
     ship.userData.totalDist = startPos.distanceTo(target);
     ship.lookAt(target);
-    ship.rotateY(Math.PI);  // flip nose-forward (see Ship convention note above)
+    // three.js Object3D.lookAt aims +Z at the target (NOT -Z — that's only the
+    // camera/light convention). Ships are modelled with nose at -Z, so we
+    // rotate 180° around Y to put the nose at +Z = the lookAt-aligned axis.
+    // Removing this flip makes ships fly tail-forward.
+    ship.rotateY(Math.PI);
     // Slight banking roll on each respawn for visual variety
     ship.rotation.z += (Math.random() - 0.5) * 0.5;
   },
@@ -2658,7 +3490,7 @@ const ScenesSelector = {
   _buildScriptedPelican() {
     const grp = new THREE.Group();
     const sz = 1.0;
-    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x202028 });
+    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x363640 });
     const engineColor = 'rgba(140, 200, 255, 1.0)';
 
     // Forward fuselage (nose at -Z). Geometry mirrors the random pelican but
@@ -2750,7 +3582,10 @@ const ScenesSelector = {
 
     sp.position.copy(startPos);
     sp.lookAt(dropZone);
-    sp.rotateY(Math.PI);  // nose-forward (see Ship convention note)
+    // three.js Object3D.lookAt aims +Z at target (non-camera convention).
+    // Pelican model is nose-at-(-Z), so flip 180° around Y to put the nose
+    // at +Z = the axis lookAt aligned with dropZone.
+    sp.rotateY(Math.PI);
     ud.vel.copy(dir).multiplyScalar(speed);
     ud.dropZone = dropZone;
     ud.hatchPivot.rotation.x = 0;
@@ -2973,10 +3808,15 @@ const ScenesSelector = {
       this.props.push(prop);
     };
 
-    // 10 traffic cones — kept off the hex deck (deck r=12)
-    for (let i = 0; i < 10; i++) {
+    // b200: bumped counts + extended outer radius to fill the mid-foreground
+    // gap between deck (r≈15) and the new v2 panel arc (r≈60-90). The b199
+    // orphan-building purge left a lot of empty desert between camera and
+    // the working base; more props + wider scatter sells "active base."
+
+    // 18 traffic cones — kept off the hex deck (deck r=12)
+    for (let i = 0; i < 18; i++) {
       const cone = this._makeTrafficCone();
-      const p = placeRandomly(14, 32);
+      const p = placeRandomly(14, 50);
       cone.rotation.y = Math.random() * Math.PI * 2;
       // Some cones knocked over for chaos
       if (Math.random() < 0.20) {
@@ -2985,10 +3825,10 @@ const ScenesSelector = {
       addProp(cone, p.x, p.z, FLOOR_Y);
     }
 
-    // 5 fusion coils — kept off the deck and away from buildings
-    for (let i = 0; i < 5; i++) {
+    // 9 fusion coils — kept off the deck and away from buildings
+    for (let i = 0; i < 9; i++) {
       const coil = this._makeFusionCoil();
-      const p = placeRandomly(15, 28);
+      const p = placeRandomly(15, 45);
       coil.rotation.y = Math.random() * Math.PI * 2;
       addProp(coil, p.x, p.z, FLOOR_Y);
     }
@@ -3008,10 +3848,11 @@ const ScenesSelector = {
       addProp(ball, bx, bz, restY);
     }
 
-    // 8 supply crates — outside the deck, scattered across the apron
-    for (let i = 0; i < 8; i++) {
+    // 16 supply crates — outside the deck, scattered across the apron +
+    // mid-foreground fill
+    for (let i = 0; i < 16; i++) {
       const crate = this._makeCrate();
-      const p = placeRandomly(15, 30);
+      const p = placeRandomly(15, 50);
       crate.rotation.y = Math.random() * Math.PI * 2;
       addProp(crate, p.x, p.z, FLOOR_Y);
     }
@@ -3803,53 +4644,41 @@ const ScenesSelector = {
     this.panelHosts = [];
     const home = { id: 'home', num: '00', title: 'galaxy', body: 'Back to the main hall — track titles drifting in the void. Click any to surface it.', hue: 0.55, isHome: true };
 
-    // b167 layout: panels are now embedded WINDOWS in real buildings spread
-    // asymmetrically across a forward arc. Heavy concentration in front
-    // (-Z), sparse on the sides, near-empty behind. Smaller panels (5×3
-    // default) so they read as displays mounted on big buildings, not as
-    // floating UI cards. Foreground holds 3 small console terminals close
-    // to camera so the user has something close grounding them.
-    // b169 layout: buildings pushed out 50-70%. Panel sizes grow to keep
-    // readability from camera. Foreground 3 close consoles ground the
-    // user; everything else is 40-90u out so the installation reads as
-    // a real base extending outward, not a ring.
-    // b173 layout (option A — full theme remap). Every panel mounted on a
-    // thematically-justifiable building. Foreground floating tables killed;
-    // organism moves onto the barracks-row middle building, terrain + villa
-    // become deck-rail kiosks at the front of the hex deck.
-    // b176 layout — fixes the left-side cluster pile-up + the stretched
-    // portrait aspect on tape spine & wall. Panel texture is hardcoded
-    // 720×432 (1.667 landscape), so any panel sized portrait gets visibly
-    // squashed. Three relocations:
-    //   - tape spine: 5×8 portrait → 8×4.8 landscape, mounted on top of
-    //     the supply-depot container stack instead of awkwardly floating.
-    //   - wall: 4×6.5 portrait on fuel-tank (behind camera at +97°) →
-    //     8×4.8 landscape on a new back-perimeter billboard at +130° az.
-    //   - organism: middle-barracks at -82° azimuth (the biggest left
-    //     cluster offender) → new biostation host at +165° az, behind
-    //     the deck. Fills the previously empty rear-center void.
+    // b193 v2 layout — RADIAL SPEC. Locked in BASEMAP.md.
+    // Every panel ≥18u from any other panel in (x,z); 11 clean radial bearings
+    // from the camera so no two panels collapse into one along the sight axis.
+    // Each host builds its own complete on-site structure (no dependency on
+    // pre-built `_buildAllStructures` bodies — those are now orphans being
+    // phased out). Bearings are measured from forward (-Z); R is panel radius
+    // from camera.
+    //
+    //  galaxy       0°    R=88   HERO, dead-axis
+    //  dimensions  -20°   R=75   NW
+    //  livingwall  +20°   R=75   NE
+    //  freqmap     -42°   R=65   W-mid
+    //  tape spine  +42°   R=65   E-mid
+    //  deepsea     -62°   R=75   NW-far (broken dish)
+    //  neural      +62°   R=75   E-far  (sensor pylon)
+    //  organism   -135°   R=60   SW-rear
+    //  wall       +135°   R=60   SE-rear
+    //  terrain / villa   deck-rail kiosks (unchanged)
+    // b200: y-tier system — panel altitude is a function of distance, not
+    // building roof, so the arc reads as a clean tiered horizon instead of
+    // the b199 chaos (y=1 on radar, y=8 on dish, y=3 on biostation, all
+    // mixed). Hero galaxy at y=10. Far panels (R≥75) at y=7. Mid (R≈65)
+    // at y=5. Rear panels (R=60) at y=4. Kiosks at y=-3.
     const mounts = [
-      // KEEP — these stayed in place:
-      { scene: home,      pos: [-55,   8, -78], size: [16, 9.6],  host: 'missilesite' },             // galaxy → silo
-      { scene: SCENES[1], pos: [ 20,   1, -42], size: [9,  5.4],  host: 'radarbuilding' },           // living wall → radar
-      { scene: SCENES[3], pos: [-38,   5, -25], size: [8,  4.8],  host: 'commtowerbig' },            // freq map → comm tower
-      { scene: SCENES[0], pos: [-58,  11, -49], size: [7,  4.2],  host: 'antenna_shed' },            // dimensions → antenna shed (b177: y=2 → y=11 to stratify above galaxy/deep-sea)
-      { scene: SCENES[7], pos: [-72,   8, -38], size: [11, 6.6],  host: 'standoff_dish_billboard' }, // deep sea → standoff dish
+      { scene: home,      pos: [-14,  10, -88], size: [16, 9.6],  host: 'missilesite' },             // galaxy   →   missile silo (HERO; s2: panel offset west so the silo at world (0,-8,-118) sits unobstructed dead-center from the MISSILE SILO POI; billboard reads as an offset entry sign)
+      { scene: SCENES[0], pos: [-26,   7, -70], size: [8,  4.8],  host: 'comms_array_shed' },        // dimensions → comms array shed
+      { scene: SCENES[1], pos: [ 26,   7, -70], size: [9,  5.4],  host: 'forward_ops_radar' },       // livingwall → forward ops bunker w/ rotating radar
+      { scene: SCENES[3], pos: [-43,   5, -48], size: [8,  4.8],  host: 'sigint_tower' },            // freqmap   → SIGINT tower
+      { scene: SCENES[4], pos: [ 43,   5, -48], size: [8,  4.8],  host: 'logistics_yard' },          // tape spine → logistics yard (containers)
+      { scene: SCENES[7], pos: [-66,   7, -35], size: [11, 6.6],  host: 'broken_dish' },             // deepsea   → BROKEN parabolic dish (sparking, scaffold, flyby gag)
+      { scene: SCENES[8], pos: [ 66,   7, -35], size: [7,  4.2],  host: 'sensor_pylon' },            // neural    → sensor pylon w/ obelisk ring
+      { scene: SCENES[2], pos: [-42,   4,  42], size: [7,  4.2],  host: 'biostation_quarantine' },   // organism  → biostation w/ quarantine perimeter
+      { scene: SCENES[5], pos: [ 42,   4,  42], size: [8,  4.8],  host: 'back_billboard_lattice' },  // wall      → free-standing lattice billboard (rear-right)
 
-      // RELOCATED (b176) — break the left cluster + fix portrait aspect:
-      { scene: SCENES[4], pos: [ 60,   4,  -2], size: [8,  4.8],  host: 'supplydepot_top' },         // tape spine → horizontal billboard atop containers
-      // RELOCATED (b187) — pulled the south-edge panels interior so the host buildings
-      // sit clear of the south perimeter road (z=50±4.5). Was z=38 (12u from the road
-      // edge, building footprint ate into that gap). Stagger z so wall + organism don't read flat.
-      { scene: SCENES[5], pos: [ 45,   4,  32], size: [8,  4.8],  host: 'back_billboard' },          // wall → back-perimeter billboard (b187: z=38 → 32)
-      { scene: SCENES[2], pos: [ 12,   3,  28], size: [7,  4.2],  host: 'biostation' },              // organism → biostation greenhouse (b187: z=38 → 28)
-
-      // RELOCATED (b187) — neural was at (40, -22), 3u from the helipad at (42, -25).
-      // Building host stack-up read as a chaotic single mass. Pulled forward + east to
-      // give the neural billboard its own clean foreground.
-      { scene: SCENES[8], pos: [ 52,   4, -16], size: [7,  4.2],  host: 'back_billboard' },          // neural → standalone back-billboard, clear of helipad (b187)
-
-      // DECK-RAIL TACTICAL KIOSKS:
+      // DECK-RAIL TACTICAL KIOSKS (unchanged):
       { scene: SCENES[6], pos: [ -5, -3.0, -10], size: [3.0, 1.8], host: 'rail_kiosk_left' },        // terrain → topo display kiosk
       { scene: SCENES[9], pos: [  5, -3.0, -10], size: [3.0, 1.8], host: 'rail_kiosk_right' },       // villa → CRT kiosk
     ];
@@ -3875,22 +4704,18 @@ const ScenesSelector = {
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
       const pos = new THREE.Vector3(x, y, z);
       plane.position.copy(pos);
-      plane.lookAt(0, y * 0.5, 0);
+      // b200: face the camera horizontally — the animate-loop tick will
+      // refresh this every frame; matching here so the first frame is
+      // upright not tilted.
+      plane.lookAt(0, y, 0);
       plane.userData = { isPanel: true, scene: s, basePos: pos.clone(), baseScale: 1, sizeW: w, sizeH: h };
       this.scene.add(plane);
 
-      // b184: was a 1.8× radial sprite at 0.45 opacity which painted a
-      // huge saturated splash onto whatever building was behind the panel.
-      // Now a tight 1.05× backing card at 0.10 opacity — gives the panel
-      // a subtle screen-glow rim without the colored fog.
-      const haloTex = this._makeRadialGlowTexture(`rgba(${(tint[0]*255)|0},${(tint[1]*255)|0},${(tint[2]*255)|0},0.55)`);
-      const haloMat = new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.10 });
-      const halo = new THREE.Sprite(haloMat);
-      halo.scale.set(w * 1.05, h * 1.05, 1);
-      halo.position.copy(pos);
-      this.scene.add(halo);
-
-      this.panels.push({ mesh: plane, halo, scene: s, basePos: pos.clone(), tint, sizeW: w, sizeH: h });
+      // b208: halo sprite removed. The 1.05× additive card sat directly on
+      // top of the panel — combined with bloom (strength 0.65, radius 0.55,
+      // threshold 0.10) it painted that ghosted cyan ring around every
+      // billboard. The shader's edge frame + bloom alone now carry the glow.
+      this.panels.push({ mesh: plane, scene: s, basePos: pos.clone(), tint, sizeW: w, sizeH: h });
 
       this._buildPanelHost(m.host, x, y, z, w, h);
     });
@@ -3908,14 +4733,18 @@ const ScenesSelector = {
     this._builtBuildings ??= new Set();
     const grp = new THREE.Group();
     grp.position.set(px, py, pz);
-    grp.lookAt(0, py * 0.5, 0);
+    // b200: face camera HORIZONTALLY (was `py * 0.5` which tilted the
+    // chassis by atan(py/2 / R). For galaxy at py=10, R=88 → 3° tilt;
+    // not catastrophic but it leaned the gantry tower visibly. Building
+    // chassis must be upright; the panel mesh itself does its own lookAt.
+    grp.lookAt(0, py, 0);
     const floorY = -8 - py;  // local Y of the world floor
 
-    const steel  = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x1e222b });
-    const dark   = new THREE.MeshBasicMaterial({ color: 0x0c0e14 });
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x222836 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x2c3344 });
+    const steel  = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
+    const dark   = new THREE.MeshBasicMaterial({ color: 0x1d2230 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x36404f });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x424c64 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
     const olive  = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
     const oliveHi= new THREE.MeshBasicMaterial({ color: 0x4d5440 });
@@ -3970,6 +4799,601 @@ const ScenesSelector = {
       this.standoff?.strobes.push(strobe);
     }
 
+    // ============================================================
+    // b193 v2 RADIAL HOSTS — each builds its own complete chassis
+    // around the panel. No dependency on _buildAllStructures bodies.
+    // ============================================================
+
+    else if (kind === 'comms_array_shed') {
+      // Dimensions panel @ NW (-26, 7, -70). Equipment shed behind panel +
+      // 3 antennas flanking + 2 sigint trailers + caution stripes +
+      // 2 support masts down to ground so panel reads as mounted.
+      // Support masts (panel altitude → floor)
+      [-w * 0.42, w * 0.42].forEach(xo => {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, -floorY, 6), steel);
+        mast.position.set(xo, floorY / 2, -0.30);
+        grp.add(mast);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.9), concrete);
+        foot.position.set(xo, floorY + 0.20, -0.30);
+        grp.add(foot);
+      });
+      const sW = 5.0, sH = 3.6, sD = 4.5;
+      const shed = new THREE.Mesh(new THREE.BoxGeometry(sW, sH, sD), concrete);
+      shed.position.set(0, floorY + sH / 2, -sD / 2 - 0.45);
+      grp.add(shed);
+      const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(sW + 0.4, 0.30, sD + 0.4), concreteLit);
+      shedRoof.position.set(0, floorY + sH + 0.15, -sD / 2 - 0.45);
+      grp.add(shedRoof);
+      // 2 lit window slits on the front face + warm door glow
+      [-1.0, 1.0].forEach(xo => {
+        const slit = new THREE.Mesh(
+          new THREE.PlaneGeometry(sW * 0.32, 0.42),
+          new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.80, blending: THREE.AdditiveBlending, depthWrite: false }),
+        );
+        slit.position.set(xo, floorY + sH * 0.72, 0.04);
+        slit.userData = { rate: 4.0 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.80 };
+        grp.add(slit);
+        this.standoff?.windows.push(slit);
+      });
+      // Door (warm glow) at base center
+      const door = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.85, 1.6),
+        new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      door.position.set(0, floorY + 0.85, 0.05);
+      grp.add(door);
+      // 3 antennas — 12u, 16u, 14u
+      [{ x: -3.6, h: 12, color: 0x4488ff }, { x:  3.4, h: 16, color: 0xff3344 }, { x:  4.8, h: 14, color: 0x4488ff }].forEach(a => {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, a.h, 5), steel);
+        mast.position.set(a.x, floorY + a.h / 2, -1.2);
+        grp.add(mast);
+        // Cross arm
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 0.06), steel);
+        arm.position.set(a.x, floorY + a.h * 0.6, -1.2);
+        grp.add(arm);
+        // Tip strobe
+        const tip = this._makeRunningLight(a.color, 0.25);
+        tip.position.set(a.x, floorY + a.h + 0.4, -1.2);
+        tip.userData = { rate: 1.6 + Math.random() * 0.4, phase: Math.random() * 6 };
+        grp.add(tip);
+        this.standoff?.strobes.push(tip);
+      });
+      // 2 sigint trailers (boxy vans w/ rooftop antennas)
+      [{ x: -5.0, z: -0.5 }, { x: 4.6, z: 0.6 }].forEach(t => {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 4.0), olive);
+        body.position.set(t.x, floorY + 0.95, t.z);
+        body.rotation.y = (Math.random() - 0.5) * 0.20;
+        grp.add(body);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.2, 1.4), oliveHi);
+        cab.position.set(t.x, floorY + 1.4, t.z + 1.2);
+        cab.rotation.y = body.rotation.y;
+        grp.add(cab);
+        // Rooftop dish
+        const tDish = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.42), accent);
+        tDish.position.set(t.x, floorY + 2.0, t.z - 0.6);
+        tDish.rotation.x = -Math.PI * 0.45;
+        grp.add(tDish);
+      });
+      // Caution stripe along base of panel
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w * 1.30, 0.10, 0.06), yellow);
+      stripe.position.set(0, -h/2 - 0.30, 0.05);
+      grp.add(stripe);
+    }
+
+    else if (kind === 'forward_ops_radar') {
+      // Livingwall panel @ NE (26, 7, -70). Concrete ops bunker w/ rotating
+      // radar on the roof + lit windows + 2 support masts so the panel
+      // reads as mounted on a roof billboard above the bunker.
+      // Support masts (panel altitude → floor)
+      [-w * 0.42, w * 0.42].forEach(xo => {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, -floorY, 6), steel);
+        mast.position.set(xo, floorY / 2, -0.30);
+        grp.add(mast);
+      });
+      const bW = 11, bH = 5.0, bD = 8;
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(bW, bH, bD), concrete);
+      shell.position.set(0, floorY + bH / 2, -bD / 2 - 0.45);
+      grp.add(shell);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(bW + 0.5, 0.35, bD + 0.5), concreteLit);
+      roof.position.set(0, floorY + bH + 0.18, -bD / 2 - 0.45);
+      grp.add(roof);
+      // Caution stripe on roof front
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(bW + 0.5, 0.14, 0.08), yellow);
+      stripe.position.set(0, floorY + bH + 0.36, 0.10);
+      grp.add(stripe);
+      // Vertical concrete ribs flanking the panel
+      [-2, 2].forEach(i => {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.30, bH, 0.40), concreteLit);
+        rib.position.set(i * 2.4, floorY + bH / 2, 0.04);
+        grp.add(rib);
+      });
+      // 2 lit windows above the panel (warm interior glow, on bunker face)
+      [-2.6, 2.6].forEach(xo => {
+        const winMat = new THREE.MeshBasicMaterial({
+          color: 0xffaa55, transparent: true, opacity: 0.78,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), winMat);
+        win.position.set(xo, h / 2 + 0.85, 0.06);
+        win.userData = { rate: 4.4 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.78 };
+        grp.add(win);
+        this.standoff?.windows.push(win);
+      });
+      // 4 lit windows BELOW the panel on the front face — gives the bunker
+      // body a strong "occupied/ops-room" read at the panel altitude
+      [-3.6, -1.2, 1.2, 3.6].forEach(xo => {
+        const winMat = new THREE.MeshBasicMaterial({
+          color: 0xffaa55, transparent: true, opacity: 0.66,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.45), winMat);
+        win.position.set(xo, floorY + bH * 0.55, 0.04);
+        win.userData = { rate: 5.0 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.66 };
+        grp.add(win);
+        this.standoff?.windows.push(win);
+      });
+      // Rotating radar antenna on the roof — pushed onto the spin pivot list.
+      // s2: moved to OUTER (east) corner of the bunker so the rotating bar
+      // doesn't sweep across the missile-silo silhouette from the MISSILE
+      // SILO POI. Strobe flipped to inner corner so the two roof features
+      // sit on opposite ends instead of stacked.
+      const radarBase = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, 1.1, 8), concrete);
+      radarBase.position.set(bW * 0.30, floorY + bH + 0.75, -bD / 2 - 0.45);
+      grp.add(radarBase);
+      const radarPivot = new THREE.Group();
+      radarPivot.position.set(bW * 0.30, floorY + bH + 1.5, -bD / 2 - 0.45);
+      grp.add(radarPivot);
+      const radarBar = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.18, 0.18), accent);
+      radarBar.position.set(0, 0, 0);
+      radarPivot.add(radarBar);
+      const radarFin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 0.10), accent);
+      radarFin.position.set(2.0, 0.5, 0);
+      radarPivot.add(radarFin);
+      this._radarBuildingPivots ??= [];
+      this._radarBuildingPivots.push(radarPivot);
+      // Rooftop strobe (inner / west corner)
+      const strobe = this._makeRunningLight(0xff3344, 0.40);
+      strobe.position.set(-bW * 0.40, floorY + bH + 0.80, -bD / 2 - 0.45);
+      strobe.userData = { rate: 1.1, phase: Math.random() * 6 };
+      grp.add(strobe);
+      this.standoff?.strobes.push(strobe);
+      // Sandbag berm in front of the panel
+      const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
+      for (let i = -3; i <= 3; i++) {
+        const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.36, 0.55), bagMat);
+        b1.position.set(i * 0.95, floorY + 0.18, 0.65);
+        b1.rotation.y = (Math.random() - 0.5) * 0.15;
+        grp.add(b1);
+      }
+    }
+
+    else if (kind === 'sigint_tower') {
+      // Freqmap panel @ W-mid (-43, 5, -48). Tall lattice comm tower; panel
+      // mounted on a service platform partway up. Slewing dish on platform.
+      const towerH = 16;
+      const baseW = 2.8;
+      // 4 lattice legs
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.16, towerH, 4), steel);
+        leg.position.set(Math.cos(a) * baseW * 0.5, floorY + towerH / 2, Math.sin(a) * baseW * 0.5 - 0.45);
+        grp.add(leg);
+      }
+      // Cross-bracing rings
+      for (let hh = floorY + 1.5; hh < floorY + towerH - 0.5; hh += 2.0) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(baseW * 0.55, 0.04, 4, 14), steel);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(0, hh, -0.45);
+        grp.add(ring);
+      }
+      // Service platform (where the panel mounts)
+      const plat = new THREE.Mesh(new THREE.BoxGeometry(baseW * 1.8, 0.20, baseW * 1.6), accent);
+      plat.position.set(0, -h/2 - 0.20, -0.10);
+      grp.add(plat);
+      // Catwalk railing front of panel
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(baseW * 1.8, 0.05, 0.05), steel);
+      rail.position.set(0, -h/2 - 0.20 + 0.65, 0.50);
+      grp.add(rail);
+      // Top antenna mast
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 4.0, 4), steel);
+      mast.position.set(0, floorY + towerH + 2.0, -0.45);
+      grp.add(mast);
+      // Tip strobe
+      const strobe = this._makeRunningLight(0xff3344, 0.55);
+      strobe.position.set(0, floorY + towerH + 4.2, -0.45);
+      strobe.userData = { rate: 1.8, phase: Math.random() * 6 };
+      grp.add(strobe);
+      this.standoff?.strobes.push(strobe);
+      // Slewing dish on platform side (slow b194 anim hook)
+      const platDish = new THREE.Mesh(
+        new THREE.SphereGeometry(0.85, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.42),
+        accent,
+      );
+      platDish.position.set(baseW * 0.85, -h/2 - 0.20 + 0.85, 0.30);
+      platDish.rotation.x = -Math.PI * 0.40;
+      platDish.rotation.z = -Math.PI / 2;
+      grp.add(platDish);
+      // 2 sigint vans at base — both with lit windscreens
+      [{ x: -3.8, z: 1.0, c: olive }, { x: 3.6, z: 1.4, c: oliveHi }].forEach(t => {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 3.6), t.c);
+        body.position.set(t.x, floorY + 0.90, t.z);
+        body.rotation.y = (Math.random() - 0.5) * 0.20;
+        grp.add(body);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 1.3), accent);
+        cab.position.set(t.x, floorY + 1.35, t.z + 1.2);
+        cab.rotation.y = body.rotation.y;
+        grp.add(cab);
+        // Lit windscreen
+        const wsMat = new THREE.MeshBasicMaterial({
+          color: 0xffaa55, transparent: true, opacity: 0.72,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), wsMat);
+        ws.position.set(t.x, floorY + 1.40, t.z + 1.86);
+        ws.rotation.y = body.rotation.y;
+        ws.userData = { rate: 4.6, phase: Math.random() * 6, baseOpacity: 0.72 };
+        grp.add(ws);
+        this.standoff?.windows.push(ws);
+        // Body side strip
+        const sideStrip = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.18), wsMat.clone());
+        sideStrip.position.set(t.x + 1.12, floorY + 1.05, t.z);
+        sideStrip.rotation.y = -Math.PI / 2;
+        sideStrip.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+        sideStrip.material.opacity = 0.55;
+        grp.add(sideStrip);
+        this.standoff?.windows.push(sideStrip);
+      });
+      // Cable run from van to tower base
+      const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4.5, 5), steel);
+      cable.rotation.z = Math.PI / 2;
+      cable.position.set(-1.8, floorY + 0.10, 1.2);
+      grp.add(cable);
+    }
+
+    else if (kind === 'logistics_yard') {
+      // Tape spine panel @ E-mid (43, 4, -48). Stacked containers (panel
+      // mounted on top of upper container) + crane + crates + caution rim.
+      const cW = 8, cH = 3.0, cD = 9;
+      // Bottom container
+      const lower = new THREE.Mesh(new THREE.BoxGeometry(cW, cH, cD), olive);
+      lower.position.set(0, floorY + cH / 2, -cD / 2 - 0.5);
+      grp.add(lower);
+      // Top container offset
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(cW * 0.92, cH, cD * 0.95), oliveHi);
+      upper.position.set(0.5, floorY + cH + cH / 2 + 0.10, -cD / 2 - 0.5 - 0.4);
+      grp.add(upper);
+      // Container ribs
+      for (let i = -3; i <= 3; i++) {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.10, cH, 0.10), oliveHi);
+        rib.position.set(cW / 2 + 0.04, floorY + cH / 2, -cD / 2 - 0.5 + i * 1.2);
+        grp.add(rib);
+      }
+      // Stencil mark on lower container
+      const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.20, 0.04), stencil);
+      mark.position.set(0, floorY + cH * 0.7, 0.04);
+      grp.add(mark);
+      // Open container door strip — warm interior glow (cargo hold lit
+      // for the loading crew)
+      const doorMat = new THREE.MeshBasicMaterial({
+        color: 0xffaa55, transparent: true, opacity: 0.78,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const cargoDoor = new THREE.Mesh(new THREE.PlaneGeometry(2.2, cH * 0.65), doorMat);
+      cargoDoor.position.set(-1.5, floorY + cH * 0.45, 0.04);
+      cargoDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.78 };
+      grp.add(cargoDoor);
+      this.standoff?.windows.push(cargoDoor);
+      // Top container side strip lights
+      const topStrip = new THREE.Mesh(new THREE.PlaneGeometry(cW * 0.70, 0.18), doorMat.clone());
+      topStrip.position.set(0.5, floorY + cH * 1.7, 0.04);
+      topStrip.material.opacity = 0.60;
+      topStrip.userData = { rate: 4.4, phase: Math.random() * 6, baseOpacity: 0.60 };
+      grp.add(topStrip);
+      this.standoff?.windows.push(topStrip);
+      // Catwalk under panel
+      const cat = new THREE.Mesh(new THREE.BoxGeometry(w * 1.20, 0.16, 0.65), accent);
+      cat.position.set(0, -h/2 - 0.35, 0.12);
+      grp.add(cat);
+      const railA = new THREE.Mesh(new THREE.BoxGeometry(w * 1.20, 0.04, 0.04), steel);
+      railA.position.set(0, -h/2 - 0.35 + 0.55, 0.42);
+      grp.add(railA);
+      // 2 short support posts from catwalk down to top container so the
+      // billboard reads as bolted to the container stack, not floating
+      const containerTopLocal = floorY + 6.10;  // 2× cH (3.0) + 0.10 offset
+      const postLen = (-h/2 - 0.35) - containerTopLocal;
+      [-w * 0.42, w * 0.42].forEach(xo => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, postLen, 6), steel);
+        post.position.set(xo, (-h/2 - 0.35 + containerTopLocal) / 2, 0.04);
+        grp.add(post);
+      });
+      // Caution stripe above panel
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w * 1.30, 0.12, 0.08), yellow);
+      stripe.position.set(0, h/2 + 0.34, 0);
+      grp.add(stripe);
+      // Loose crates on the ground beside containers
+      [{ x: -cW/2 - 1.4, z: -1.2 }, { x: -cW/2 - 1.4, z: -2.7 }, { x: -cW/2 - 2.5, z: -1.9 }].forEach(p => {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.3), olive);
+        crate.position.set(p.x, floorY + 0.45, p.z);
+        crate.rotation.y = (Math.random() - 0.5) * 0.20;
+        grp.add(crate);
+      });
+      // Stack of crates on the right
+      [{ y: 0.45 }, { y: 1.35 }].forEach(p => {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.3), oliveHi);
+        crate.position.set(cW/2 + 1.4, floorY + p.y, -1.5);
+        crate.rotation.y = 0.10;
+        grp.add(crate);
+      });
+      // Crane / forklift suggestion: yellow boom on a base 4u east
+      const craneBase = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 2.2), accent);
+      craneBase.position.set(cW/2 + 2.8, floorY + 0.80, 1.2);
+      grp.add(craneBase);
+      const boom = new THREE.Mesh(new THREE.BoxGeometry(0.30, 5.0, 0.30), yellow);
+      boom.position.set(cW/2 + 2.8, floorY + 3.0, 1.2);
+      boom.rotation.z = 0.40;
+      grp.add(boom);
+      const boomTip = this._makeRunningLight(0xffaa55, 0.18);
+      boomTip.position.set(cW/2 + 2.0, floorY + 5.4, 1.2);
+      grp.add(boomTip);
+      // Top strobe on container stack
+      const strobe = this._makeRunningLight(0xffaa55, 0.30);
+      strobe.position.set(w * 0.35, h/2 + 0.55, 0);
+      strobe.userData = { rate: 1.4, phase: Math.random() * 6 };
+      grp.add(strobe);
+      this.standoff?.strobes.push(strobe);
+    }
+
+    else if (kind === 'sensor_pylon') {
+      // Neural panel @ E-far (66, 4, -35). Single pylon mast w/ ring of 8
+      // small sensor obelisks around the base.
+      // Mast supporting the panel
+      const mastH = -floorY + h / 2;
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.40, mastH, 6), steel);
+      mast.position.set(0, floorY + mastH / 2, -0.40);
+      grp.add(mast);
+      // Concrete footing
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 0.40, 12), concrete);
+      foot.position.set(0, floorY + 0.20, -0.40);
+      grp.add(foot);
+      // Top dish above the panel
+      const topDish = new THREE.Mesh(
+        new THREE.SphereGeometry(0.65, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.42),
+        accent,
+      );
+      topDish.position.set(0, h/2 + 0.85, -0.25);
+      topDish.rotation.x = -Math.PI * 0.45;
+      grp.add(topDish);
+      // Tip strobe
+      const tipStrobe = this._makeRunningLight(0x4488ff, 0.30);
+      tipStrobe.position.set(0, h/2 + 1.6, -0.25);
+      tipStrobe.userData = { rate: 1.5, phase: Math.random() * 6 };
+      grp.add(tipStrobe);
+      this.standoff?.strobes.push(tipStrobe);
+      // Ring of 8 sensor obelisks around the base
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const r = 4.5;
+        const ox = Math.cos(a) * r;
+        const oz = Math.sin(a) * r - 0.40;
+        // Obelisk body
+        const obelisk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 1.6, 4), accent);
+        obelisk.position.set(ox, floorY + 0.80, oz);
+        grp.add(obelisk);
+        // Obelisk LED tip
+        const led = this._makeRunningLight(0x66ff99, 0.10);
+        led.position.set(ox, floorY + 1.65, oz);
+        led.userData = { rate: 1.0 + i * 0.15, phase: i * 0.5 };
+        grp.add(led);
+        this.standoff?.strobes.push(led);
+      }
+      // Cable run snaking on the ground (3 short segments)
+      [-2.0, 0, 2.0].forEach(xo => {
+        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.6, 5), steel);
+        cable.rotation.z = Math.PI / 2;
+        cable.position.set(xo, floorY + 0.06, -2.5);
+        grp.add(cable);
+      });
+      // Tech-shed (small box) behind the array
+      const techShed = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.0, 2.0), concrete);
+      techShed.position.set(0, floorY + 1.0, -3.5);
+      grp.add(techShed);
+      const techDoor = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.7, 1.4),
+        new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      techDoor.position.set(0, floorY + 0.70, -2.45);
+      grp.add(techDoor);
+    }
+
+    else if (kind === 'biostation_quarantine') {
+      // Organism panel @ SW-rear (-42, 4, +42). Greenhouse w/ pink glow
+      // roof + 4 yellow-tape hazard posts forming a quarantine perimeter
+      // + 2 specimen tanks + warning sign + support masts.
+      // Support masts (panel altitude → floor)
+      [-w * 0.42, w * 0.42].forEach(xo => {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.20, -floorY, 6), steel);
+        mast.position.set(xo, floorY / 2, -0.30);
+        grp.add(mast);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), concrete);
+        foot.position.set(xo, floorY + 0.20, -0.30);
+        grp.add(foot);
+      });
+      const gW = 6.5, gH = 3.6, gD = 5.5;
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(gW, gH, gD), concrete);
+      shell.position.set(0, floorY + gH / 2, -gD / 2 - 0.45);
+      grp.add(shell);
+      // Pitched glass-roof skylight (pink)
+      const glass = new THREE.MeshBasicMaterial({
+        color: 0xff5fa8, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      [-1, 1].forEach(side => {
+        const r = new THREE.Mesh(new THREE.PlaneGeometry(gW + 0.3, gD * 0.6), glass);
+        r.position.set(0, floorY + gH + 0.45, -gD / 2 - 0.45 + side * gD * 0.18);
+        r.rotation.x = side * 0.42;
+        grp.add(r);
+      });
+      // Roof ridge
+      const ridge = new THREE.Mesh(new THREE.BoxGeometry(gW + 0.4, 0.16, 0.16), concreteLit);
+      ridge.position.set(0, floorY + gH + 0.85, -gD / 2 - 0.45);
+      grp.add(ridge);
+      // Caution stripe along bottom of panel
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w * 1.30, 0.12, 0.06), yellow);
+      stripe.position.set(0, -h/2 - 0.30, 0.05);
+      grp.add(stripe);
+      // 4 hazard posts forming a 6×6 perimeter
+      [[-3.5, 1.5], [3.5, 1.5], [-3.5, -3.0], [3.5, -3.0]].forEach(([px, pz]) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 1.6, 4), yellow);
+        post.position.set(px, floorY + 0.80, pz);
+        grp.add(post);
+        const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.30), yellow);
+        flag.position.set(px, floorY + 1.55, pz);
+        grp.add(flag);
+      });
+      // Yellow tape spans (4 sides)
+      const tape = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
+      [
+        { a: [-3.5, 1.5], b: [3.5, 1.5] },
+        { a: [-3.5, -3.0], b: [3.5, -3.0] },
+        { a: [-3.5, -3.0], b: [-3.5, 1.5] },
+        { a: [3.5, -3.0], b: [3.5, 1.5] },
+      ].forEach(p => {
+        const dx = p.b[0] - p.a[0], dz = p.b[1] - p.a[1];
+        const len = Math.hypot(dx, dz);
+        const span = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.04), tape);
+        span.position.set((p.a[0] + p.b[0]) / 2, floorY + 1.10, (p.a[1] + p.b[1]) / 2);
+        span.rotation.y = Math.atan2(dz, dx);
+        grp.add(span);
+      });
+      // 2 specimen tanks outside the greenhouse (between panel and tape line)
+      [-1.5, 1.5].forEach(xo => {
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.4, 12), accent);
+        tank.position.set(xo, floorY + 0.70, 0.95);
+        grp.add(tank);
+        const tankGlow = this._makeRunningLight(0xff5fa8, 0.15);
+        tankGlow.position.set(xo, floorY + 1.30, 0.95);
+        tankGlow.userData = { rate: 0.6, phase: Math.random() * 6 };
+        grp.add(tankGlow);
+        this.standoff?.strobes.push(tankGlow);
+      });
+      // Warning sign on the front-left post
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), yellow);
+      sign.position.set(-3.5, floorY + 0.45, 1.85);
+      grp.add(sign);
+      // Strobe on greenhouse roof
+      const strobe = this._makeRunningLight(0xff3344, 0.20);
+      strobe.position.set(0, floorY + gH + 1.4, -0.45);
+      strobe.userData = { rate: 1.8, phase: Math.random() * 6 };
+      grp.add(strobe);
+      this.standoff?.strobes.push(strobe);
+    }
+
+    else if (kind === 'back_billboard_lattice') {
+      // Wall panel @ SE-rear (42, 4, +42). Free-standing lattice billboard
+      // with maintenance scaffolding on one leg + worker spotlight.
+      const fW = w * 1.10, fH = h * 1.22, fT = 0.34;
+      [-fH/2, fH/2].forEach(yo => {
+        const r = new THREE.Mesh(new THREE.BoxGeometry(fW, fT, 0.45), steel);
+        r.position.set(0, yo, -0.06); grp.add(r);
+      });
+      [-fW/2, fW/2].forEach(xo => {
+        const r = new THREE.Mesh(new THREE.BoxGeometry(fT, fH, 0.45), steel);
+        r.position.set(xo, 0, -0.06); grp.add(r);
+      });
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.04, h * 1.06), dark);
+      back.position.set(0, 0, -0.20);
+      grp.add(back);
+      // Twin support masts down to the ground
+      [-fW * 0.40, fW * 0.40].forEach(xo => {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.26, -floorY, 6), steel);
+        mast.position.set(xo, floorY / 2, -0.34);
+        grp.add(mast);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 1.1), concrete);
+        foot.position.set(xo, floorY + 0.25, -0.34);
+        grp.add(foot);
+      });
+      // Maintenance scaffolding on the LEFT leg (x = -fW * 0.40)
+      const scaffX = -fW * 0.40;
+      const scaffH = -floorY * 0.85;
+      // 4 scaffold uprights forming a 1.4×1.4 cage
+      [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]].forEach(([sx, sz]) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, scaffH, 4), steel);
+        post.position.set(scaffX + sx, floorY + scaffH / 2, sz - 0.30);
+        grp.add(post);
+      });
+      // 3 platform decks
+      for (let lvl = 1; lvl <= 3; lvl++) {
+        const dy = floorY + (scaffH * lvl / 3);
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.10, 1.6), accent);
+        deck.position.set(scaffX, dy, -0.30);
+        grp.add(deck);
+        const railF = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 0.04), steel);
+        railF.position.set(scaffX, dy + 0.55, 0.40);
+        grp.add(railF);
+      }
+      // Worker spotlight at the top scaffold
+      const wlight = this._makeRunningLight(0xffe6a0, 0.30);
+      wlight.position.set(scaffX, floorY + scaffH + 0.20, -0.30);
+      grp.add(wlight);
+      // Caution stripe along the bottom
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(fW, 0.12, 0.08), yellow);
+      stripe.position.set(0, -fH/2 - 0.30, 0.05);
+      grp.add(stripe);
+      // Top strobe
+      const strobe = this._makeRunningLight(0xff3344, 0.40);
+      strobe.position.set(0, fH/2 + 0.6, 0);
+      strobe.userData = { rate: 1.6, phase: Math.random() * 6 };
+      grp.add(strobe);
+      this.standoff?.strobes.push(strobe);
+    }
+
+    else if (kind === 'broken_dish') {
+      // Deepsea panel @ NW-far (-66, 8, -35). Damaged parabolic dish — east
+      // half of rim sags, support truss snapped, scaffold prop, hazard cones,
+      // sparking sprite at break point. Panel mounts on the intact west rim.
+      // The dish itself is built by the standalone _buildBrokenDish() (called
+      // once from _buildStandoff). Here we just place panel-host trim:
+      // a small support frame + the spark sprite + the welder pulse.
+      if (!this._builtBuildings.has('broken_dish_host')) {
+        this._builtBuildings.add('broken_dish_host');
+        this._buildBrokenDish();
+      }
+      // Support masts (panel altitude → floor) so the billboard reads as
+      // a free-standing sign in front of the dish, not floating
+      [-w * 0.42, w * 0.42].forEach(xo => {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.26, -floorY, 6), steel);
+        mast.position.set(xo, floorY / 2, -0.34);
+        grp.add(mast);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 1.0), concrete);
+        foot.position.set(xo, floorY + 0.25, -0.34);
+        grp.add(foot);
+      });
+      // Frame around panel (heavy — it's bolted to the intact rim)
+      const fW = w * 1.10, fH = h * 1.16, fT = 0.30;
+      [-fH/2, fH/2].forEach(yo => {
+        const r = new THREE.Mesh(new THREE.BoxGeometry(fW, fT, 0.40), steel);
+        r.position.set(0, yo, -0.05); grp.add(r);
+      });
+      [-fW/2, fW/2].forEach(xo => {
+        const r = new THREE.Mesh(new THREE.BoxGeometry(fT, fH, 0.40), steel);
+        r.position.set(xo, 0, -0.05); grp.add(r);
+      });
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.02, h * 1.04), dark);
+      back.position.set(0, 0, -0.18);
+      grp.add(back);
+      // Caution stripe across the panel (this dish is FAULTY)
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(fW, 0.12, 0.08), yellow);
+      stripe.position.set(0, -fH/2 - 0.30, 0.05);
+      grp.add(stripe);
+    }
+
+    // ============================================================
+    // DEADCODE — pre-v2 host kinds, no longer referenced by mounts table.
+    // Left in place for one cycle in case anything else needs them; pruned
+    // in a follow-up cleanup pass. The `else if` chain stays intact so the
+    // file parses; the cases just never fire.
+    // ============================================================
     else if (kind === 'cmdbunker_window') {
       if (!this._builtBuildings.has('cmdbunker')) {
         this._builtBuildings.add('cmdbunker');
@@ -4008,7 +5432,7 @@ const ScenesSelector = {
         this._buildBarracksBig();
       }
       // Sandbag berm in front of the window
-      const bagMat = new THREE.MeshBasicMaterial({ color: 0x14171d });
+      const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
       for (let i = -2; i <= 2; i++) {
         const x1 = i * 0.95;
         const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.36, 0.55), bagMat);
@@ -4324,7 +5748,7 @@ const ScenesSelector = {
       awning.position.set(0, h/2 + 0.25, 0.20);
       grp.add(awning);
       // Sandbag berm in front (small, 4 bags wide)
-      const bagMat = new THREE.MeshBasicMaterial({ color: 0x14171d });
+      const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
       for (let i = -1; i <= 2; i++) {
         const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.36, 0.55), bagMat);
         b1.position.set(i * 0.95 - 0.45, floorY + 0.18, 0.55);
@@ -4383,9 +5807,9 @@ const ScenesSelector = {
     // Forward-left: 2-story concrete bunker. 18 wide × 12 tall × 14 deep.
     // Sized so its front-face roof sits where the cmdbunker_billboard mounts.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const dark   = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const dark   = new THREE.MeshBasicMaterial({ color: 0x191d28 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
 
     const W = 16, H = 11, D = 12;
@@ -4443,13 +5867,13 @@ const ScenesSelector = {
     // Open-front garage. 14×7×11 with an open front (no front wall) so the
     // parked Warthog inside is visible. Panel mounts on the back interior.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
     const olive   = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
     const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
-    const steel   = new THREE.MeshBasicMaterial({ color: 0x14171e });
+    const steel   = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
 
     const W = 14, H = 7, D = 11;
     // Side walls (no front wall — open garage)
@@ -4507,10 +5931,10 @@ const ScenesSelector = {
   _buildBarracksBig() {
     // Long low building, gable roof. 11×6×16.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
-    const olive = new THREE.MeshBasicMaterial({ color: 0x232714 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const olive = new THREE.MeshBasicMaterial({ color: 0x3a401e });
 
     const W = 11, H = 6, D = 16;
     const shell = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), concrete);
@@ -4550,9 +5974,9 @@ const ScenesSelector = {
     // Stacked shipping-container style — 2 containers stacked, with a
     // vertical screen on the side facing camera.
     const grp = new THREE.Group();
-    const oliveDark = new THREE.MeshBasicMaterial({ color: 0x232714 });
+    const oliveDark = new THREE.MeshBasicMaterial({ color: 0x3a401e });
     const oliveMid = new THREE.MeshBasicMaterial({ color: 0x2e3318 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
     const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
 
     const cW = 8, cH = 3.0, cD = 12;
@@ -4591,9 +6015,9 @@ const ScenesSelector = {
      visible through the roof. Reads as a small life-sciences outpost. */
   _buildBioStation() {
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
     const glass = new THREE.MeshBasicMaterial({
       color: 0xff5fa8, transparent: true, opacity: 0.55,
@@ -4663,8 +6087,8 @@ const ScenesSelector = {
     // Tall 4-leg lattice tower with a service platform near the top
     // (where the freq-map display mounts) + dish + strobe at the very tip.
     const grp = new THREE.Group();
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x1e222b });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
 
     const towerH = 16;
     const baseW = 2.4;
@@ -4713,8 +6137,8 @@ const ScenesSelector = {
   _buildHelipad() {
     // Round elevated helipad with a control booth on the side.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
     const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
 
@@ -4778,15 +6202,20 @@ const ScenesSelector = {
     // adjacent to it. Galaxy panel mounts on the side of the control
     // bunker as a free-standing billboard.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
     const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x2c3344 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x424c64 });
+    // b220: missing material decls for the generator shed (b217 added the
+    // shed code at line ~6039 but never declared these — broke /scenes init).
+    const olive = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
+    const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
 
-    // Octagonal launch pad
-    const padR = 7.5, padH = 0.6;
+    // Octagonal launch pad — b235 scaled up substantially (7.5 → 13) so the
+    // silo reads as monumental from missile-silo POI at z=-55 (~52u away).
+    const padR = 13, padH = 1.2;
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(padR, padR + 0.3, padH, 8), concrete);
     pad.position.set(0, padH / 2, 0);
     grp.add(pad);
@@ -4817,82 +6246,395 @@ const ScenesSelector = {
     }
 
     // Vertical silo / launch tube — central feature
-    const siloR = 1.5, siloH = 12;
+    // b235: scaled 1.5/12 → 2.8/22 — silo now stands 23u above the pad,
+    // dwarfing the panel at y=10 the way real Minuteman launch tubes dominate.
+    const siloR = 2.8, siloH = 22;
     const silo = new THREE.Mesh(new THREE.CylinderGeometry(siloR, siloR + 0.3, siloH, 12), concrete);
     silo.position.set(0, padH + siloH / 2, 0);
     grp.add(silo);
-    // Caution chevrons up the silo (ring of yellow stripes)
-    for (let h = padH + 1; h < padH + siloH - 1; h += 2) {
+    // Caution chevrons up the silo (ring of yellow stripes) — wider spacing for taller silo
+    for (let h = padH + 1.5; h < padH + siloH - 1; h += 3) {
       const chev = new THREE.Mesh(new THREE.TorusGeometry(siloR + 0.05, 0.10, 4, 16), yellow);
       chev.rotation.x = Math.PI / 2;
       chev.position.set(0, h, 0);
       grp.add(chev);
     }
-    // Number "07" stencil
-    const stencilNum = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.0), stencil);
+    // Number "07" stencil — bigger to match scaled silo
+    const stencilNum = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.7), stencil);
     stencilNum.position.set(0, padH + siloH * 0.5, siloR + 0.05);
     grp.add(stencilNum);
     // Silo cap — domed/conical top
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(siloR + 0.1, 1.4, 12), concreteLit);
-    cap.position.set(0, padH + siloH + 0.7, 0);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(siloR + 0.2, 2.4, 12), concreteLit);
+    cap.position.set(0, padH + siloH + 1.2, 0);
     grp.add(cap);
     // Missile body partially extruded (suggests silo is loaded)
-    const missile = new THREE.Mesh(new THREE.CylinderGeometry(siloR * 0.55, siloR * 0.50, 4, 12), accent);
-    missile.position.set(0, padH + siloH + 0.5, 0);
+    const missile = new THREE.Mesh(new THREE.CylinderGeometry(siloR * 0.60, siloR * 0.55, 7, 12), accent);
+    missile.position.set(0, padH + siloH + 1.0, 0);
     grp.add(missile);
-    const missileNose = new THREE.Mesh(new THREE.ConeGeometry(siloR * 0.55, 1.6, 12), stencil);
-    missileNose.position.set(0, padH + siloH + 3.3, 0);
+    const missileNose = new THREE.Mesh(new THREE.ConeGeometry(siloR * 0.60, 2.8, 12), stencil);
+    missileNose.position.set(0, padH + siloH + 5.9, 0);
     grp.add(missileNose);
     // Strobe at the silo cap
-    const siloStrobe = this._makeRunningLight(0xff3344, 0.55);
-    siloStrobe.position.set(0, padH + siloH + 1.6, 0);
+    const siloStrobe = this._makeRunningLight(0xff3344, 0.85);
+    siloStrobe.position.set(0, padH + siloH + 2.5, 0);
     siloStrobe.userData = { rate: 1.4, phase: Math.random() * 6 };
     grp.add(siloStrobe);
     this.standoff?.strobes.push(siloStrobe);
 
-    // Launch service gantry — open lattice tower beside the silo
-    const gantryH = siloH + 2;
-    [-1, 1].forEach(side => {
-      const xo = side * (siloR + 1.4);
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, gantryH, 5), steel);
-      post.position.set(xo, padH + gantryH / 2, -2.8);
-      grp.add(post);
+    // b217: full 4-leg lattice service gantry beside the silo (was 2 posts).
+    // Tower stands behind+left of silo, three service platforms at 1/3,
+    // 2/3, and top. Diagonal bracing on every face. Vertical ladder run on
+    // the camera-facing leg.
+    const gantryH = siloH + 4;
+    const gx = -(siloR + 5.0), gz = -3.6, gWidth = 2.8, gDepth = 2.4;
+    const legPositions = [
+      [gx - gWidth / 2, gz - gDepth / 2],
+      [gx + gWidth / 2, gz - gDepth / 2],
+      [gx - gWidth / 2, gz + gDepth / 2],
+      [gx + gWidth / 2, gz + gDepth / 2],
+    ];
+    legPositions.forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, gantryH, 5), steel);
+      leg.position.set(lx, padH + gantryH / 2, lz);
+      grp.add(leg);
     });
-    // Cross bracing on the gantry
-    for (let h = padH + 1.5; h < gantryH; h += 2) {
-      const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.4, 4), steel);
-      cross.rotation.z = Math.PI / 2;
-      cross.position.set(0, h, -2.8);
-      grp.add(cross);
+    // Diagonal X-bracing on all 4 faces
+    const addXBrace = (x1, z1, x2, z2, h) => {
+      const span = Math.hypot(x2 - x1, z2 - z1);
+      const diag = Math.hypot(span, h);
+      const yaw = Math.atan2(z2 - z1, x2 - x1);
+      [+1, -1].forEach(dir => {
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, diag, 4), steel);
+        bar.position.set((x1 + x2) / 2, padH + h / 2 + (legPositions[0] ? 0 : 0), (z1 + z2) / 2);
+        bar.rotation.order = 'YXZ';
+        bar.rotation.y = yaw;
+        bar.rotation.z = Math.PI / 2 - dir * Math.atan2(h, span);
+        grp.add(bar);
+      });
+    };
+    for (let tier = 0; tier < 5; tier++) {
+      const yBase = padH + tier * (gantryH / 5);
+      const tierH = gantryH / 5;
+      const setOnFace = (x1, z1, x2, z2) => addXBrace(x1, z1, x2, z2, tierH);
+      // 4 faces — front/back/left/right of leg square
+      // Front (cam-side, +z)
+      const yMid = yBase + tierH / 2;
+      [
+        [legPositions[2], legPositions[3]],
+        [legPositions[0], legPositions[1]],
+        [legPositions[0], legPositions[2]],
+        [legPositions[1], legPositions[3]],
+      ].forEach(([a, b]) => {
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const diag = Math.hypot(len, tierH);
+        [+1, -1].forEach(dir => {
+          const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, diag, 4), steel);
+          bar.position.set((a[0] + b[0]) / 2, yMid, (a[1] + b[1]) / 2);
+          const yaw = Math.atan2(b[1] - a[1], b[0] - a[0]);
+          bar.rotation.order = 'YXZ';
+          bar.rotation.y = yaw;
+          bar.rotation.z = dir * Math.atan2(tierH, len) + Math.PI / 2;
+          grp.add(bar);
+        });
+        // Horizontal stringer at top of tier
+        const horiz = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, len, 4), steel);
+        horiz.position.set((a[0] + b[0]) / 2, yBase + tierH, (a[1] + b[1]) / 2);
+        horiz.rotation.y = Math.atan2(b[1] - a[1], b[0] - a[0]);
+        horiz.rotation.z = Math.PI / 2;
+        grp.add(horiz);
+      });
     }
-    // Service arm reaching toward silo at mid-height
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 0.6), steel);
-    arm.position.set(0, padH + siloH * 0.55, -1.4);
-    grp.add(arm);
+    // 3 service platforms at 1/3, 2/3, top — slatted deck + handrails
+    const accentLit = new THREE.MeshBasicMaterial({ color: 0x424c64 });
+    [0.33, 0.66, 0.95].forEach((frac, idx) => {
+      const yp = padH + gantryH * frac;
+      // Deck reaches from gantry toward silo
+      const deckW = (siloR + 2.4 - gx + gWidth / 2);
+      const deckCenterX = (gx + gWidth / 2 + (siloR + 0.4)) / 2;
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(deckW, 0.10, gDepth + 0.6), accentLit);
+      deck.position.set(deckCenterX, yp, gz);
+      grp.add(deck);
+      // Slats
+      for (let s = -3; s <= 3; s++) {
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(deckW, 0.04, 0.06), steel);
+        slat.position.set(deckCenterX, yp + 0.08, gz + s * 0.30);
+        grp.add(slat);
+      }
+      // Toe-kick + handrail ring along the silo-facing edge
+      [-(gDepth / 2 + 0.30), (gDepth / 2 + 0.30)].forEach(zOff => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(deckW, 0.05, 0.05), steel);
+        rail.position.set(deckCenterX, yp + 1.05, gz + zOff);
+        grp.add(rail);
+        const midRail = new THREE.Mesh(new THREE.BoxGeometry(deckW, 0.04, 0.04), steel);
+        midRail.position.set(deckCenterX, yp + 0.55, gz + zOff);
+        grp.add(midRail);
+      });
+      // 4 handrail posts
+      [-deckW / 2 + 0.2, deckW / 2 - 0.2].forEach(xOff => {
+        [-(gDepth / 2 + 0.30), (gDepth / 2 + 0.30)].forEach(zOff => {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.10, 0.05), steel);
+          post.position.set(deckCenterX + xOff, yp + 0.55, gz + zOff);
+          grp.add(post);
+        });
+      });
+      // Service arm: connects platform to silo at this tier
+      if (idx < 2) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.20, 0.40), steel);
+        arm.position.set(siloR + 0.20, yp + 0.30, gz);
+        grp.add(arm);
+        // Hose loop suggesting fuel/cryo line
+        const hose = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 4, 12, Math.PI), accentLit);
+        hose.position.set(siloR + 0.10, yp + 0.50, gz);
+        hose.rotation.y = Math.PI / 2;
+        grp.add(hose);
+      }
+    });
+    // Vertical ladder up the camera-facing leg pair
+    {
+      const ladderLegs = [legPositions[2], legPositions[3]];
+      const lx = (ladderLegs[0][0] + ladderLegs[1][0]) / 2;
+      const lz = ladderLegs[0][1] + 0.18;
+      // Side rails
+      [-0.30, 0.30].forEach(off => {
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, gantryH - 0.5, 4), steel);
+        rail.position.set(lx + off, padH + (gantryH - 0.5) / 2, lz);
+        grp.add(rail);
+      });
+      // Rungs every 0.4u
+      for (let h = padH + 0.3; h < padH + gantryH - 0.3; h += 0.40) {
+        const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.62, 4), steel);
+        rung.rotation.z = Math.PI / 2;
+        rung.position.set(lx, h, lz);
+        grp.add(rung);
+      }
+      // Safety cage hoops above 3u
+      for (let h = padH + 3.0; h < padH + gantryH - 0.5; h += 0.7) {
+        const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.03, 4, 12, Math.PI * 1.1), steel);
+        hoop.position.set(lx, h, lz);
+        hoop.rotation.x = Math.PI / 2;
+        hoop.rotation.z = -Math.PI / 2;
+        grp.add(hoop);
+      }
+    }
+    // Lightning rod + aviation strobe at the gantry top
+    const tipMast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.0, 4), steel);
+    tipMast.position.set(gx, padH + gantryH + 1.0, gz);
+    grp.add(tipMast);
+    const gantryStrobe = this._makeRunningLight(0xff3344, 0.40);
+    gantryStrobe.position.set(gx, padH + gantryH + 2.0, gz);
+    gantryStrobe.userData = { rate: 1.6, phase: Math.random() * 6 };
+    grp.add(gantryStrobe);
+    this.standoff?.strobes.push(gantryStrobe);
 
-    // Adjacent control bunker — small, behind the launch pad
-    const cbW = 5, cbH = 4, cbD = 5;
+    // ----- LOX / cryo tank — insulated cylinder beside silo (s2: pushed
+    // further from siloR+11.5 → siloR+15 so the west compound breathes;
+    // user feedback "everything is too close together on the missile side") -----
+    const loxR = 1.8, loxH = 6.5;
+    const loxX = -(siloR + 15), loxZ = 4.0;
+    const lox = new THREE.Mesh(new THREE.CylinderGeometry(loxR, loxR, loxH, 12), concreteLit);
+    lox.position.set(loxX, padH + loxH / 2, loxZ);
+    grp.add(lox);
+    // Insulation banding rings (frost rings)
+    [0.20, 0.50, 0.80].forEach(f => {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(loxR + 0.04, 0.06, 4, 18), stencil);
+      band.rotation.x = Math.PI / 2;
+      band.position.set(loxX, padH + loxH * f, loxZ);
+      grp.add(band);
+    });
+    // End caps (dome)
+    const loxCap = new THREE.Mesh(new THREE.SphereGeometry(loxR, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), concreteLit);
+    loxCap.position.set(loxX, padH + loxH, loxZ);
+    grp.add(loxCap);
+    // Vent stack
+    const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 1.6, 4), steel);
+    vent.position.set(loxX, padH + loxH + 0.8, loxZ);
+    grp.add(vent);
+    // Fuel line conduit running to silo base
+    const conduit = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, Math.abs(loxX) + siloR, 5), steel);
+    conduit.rotation.z = Math.PI / 2;
+    conduit.position.set(loxX / 2, padH + 0.20, loxZ);
+    grp.add(conduit);
+    // Cradle — saddle support at base
+    [-loxH * 0.30, loxH * 0.30].forEach(off => {
+      const cradle = new THREE.Mesh(new THREE.BoxGeometry(loxR * 1.6, 0.50, 0.30), accent);
+      cradle.position.set(loxX + off / 4, padH + 0.25, loxZ);
+      cradle.rotation.y = Math.PI / 2;
+      grp.add(cradle);
+    });
+    // Hazard placard on the tank face
+    const placard = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6), yellow);
+    placard.position.set(loxX, padH + loxH * 0.55, loxZ + loxR + 0.04);
+    grp.add(placard);
+
+    // ----- Generator shed beside the launch pad (s2: padR+6 → padR+9 so
+    // shed clears the bunker side wall and the pad reads less crowded.) -----
+    const gsW = 5.5, gsH = 3.5, gsD = 6.5;
+    const gsX = padR + 9, gsZ = 8.5;
+    const gShed = new THREE.Mesh(new THREE.BoxGeometry(gsW, gsH, gsD), olive);
+    gShed.position.set(gsX, padH + gsH / 2, gsZ);
+    grp.add(gShed);
+    // Roof panel
+    const gsRoof = new THREE.Mesh(new THREE.BoxGeometry(gsW + 0.3, 0.18, gsD + 0.3), oliveHi);
+    gsRoof.position.set(gsX, padH + gsH + 0.09, gsZ);
+    grp.add(gsRoof);
+    // Diesel exhaust stack on roof
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 1.4, 6), steel);
+    stack.position.set(gsX + gsW * 0.35, padH + gsH + 0.85, gsZ - gsD * 0.30);
+    grp.add(stack);
+    // Stack rain cap
+    const stackCap = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.20, 6), steel);
+    stackCap.position.set(gsX + gsW * 0.35, padH + gsH + 1.65, gsZ - gsD * 0.30);
+    grp.add(stackCap);
+    // Louvre vents on the long face
+    for (let i = -2; i <= 2; i++) {
+      const louvre = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.50), steel);
+      louvre.position.set(gsX - gsW / 2 - 0.04, padH + gsH * 0.55, gsZ + i * 0.55);
+      grp.add(louvre);
+    }
+    // Door (dim warm interior)
+    const gsDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.6),
+      new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+    gsDoor.position.set(gsX + gsW * 0.30, padH + 0.80, gsZ + gsD / 2 + 0.03);
+    gsDoor.userData = { rate: 3.2, phase: Math.random() * 6, baseOpacity: 0.45 };
+    grp.add(gsDoor);
+    this.standoff?.windows.push(gsDoor);
+    // Fuel drums beside the shed
+    [-gsW / 2 - 0.4, -gsW / 2 - 0.9].forEach((off, i) => {
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.0, 10), i === 0 ? olive : oliveHi);
+      drum.position.set(gsX + off, padH + 0.50, gsZ - gsD / 2 + 0.4);
+      grp.add(drum);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10), steel);
+      lid.position.set(gsX + off, padH + 1.02, gsZ - gsD / 2 + 0.4);
+      grp.add(lid);
+    });
+
+    // ----- Bunker constants — single source of truth for everything that
+    // references the control bunker (b237: extracted from scattered
+    // `padR + 1.5` / `-3.0` literals that were left stale when the bunker
+    // grew + moved in b235, causing blast door, HVAC, cable trays, slit
+    // window, and antenna farm to clip OR float in front of the new bunker).
+    const cbW = 8, cbH = 6, cbD = 7;
+    const bunkerX = padR + 2.5;   // bunker center X
+    const bunkerZ = -4.5;         // bunker center Z
+    const bunkerFront = bunkerZ + cbD / 2;  // +Z face (toward camera/silo)
+
+    // ----- Cable tray network — runs from generator → bunker → silo -----
+    const trayMat = new THREE.MeshBasicMaterial({ color: 0x303540 });
+    // Horizontal run from generator to bunker (sits south of both, z=+2)
+    const tray1Span = Math.abs(gsX - bunkerX);
+    const tray1 = new THREE.Mesh(new THREE.BoxGeometry(tray1Span + 0.5, 0.10, 0.40), trayMat);
+    tray1.position.set((gsX + bunkerX) / 2, padH + 0.10, 2.0);
+    grp.add(tray1);
+    // Tray from bunker side to silo base — runs along bunker's silo-side wall
+    const tray2Span = bunkerFront - 0 + 1.5;
+    const tray2 = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.10, tray2Span), trayMat);
+    tray2.position.set(bunkerX - cbW / 2 - 0.4, padH + 0.10, (bunkerFront + 1.5) / 2 - 0.5);
+    grp.add(tray2);
+    // 3 cable supports along tray1
+    for (let i = 1; i <= 3; i++) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.30, 0.50), steel);
+      pillar.position.set(gsX - i * 1.2, padH + 0.15, 2.0);
+      grp.add(pillar);
+    }
+
+    // ----- Antenna farm — pushed out beyond the bunker -----
+    // s2: padR+14 → padR+18 (= 31) and farmZ -12 → -16 so the dipole array
+    // sits well clear of the new generator shed at gsX=padR+9 and reads as
+    // a distinct east outbuilding instead of being lost in the bunker mass.
+    const farmX = padR + 18, farmZ = -16;
+    [0, 1, 2].forEach(i => {
+      const dipoleH = 4.5 - i * 0.6;
+      const dipole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, dipoleH, 4), steel);
+      dipole.position.set(farmX + i * 0.9, padH + dipoleH / 2, farmZ);
+      grp.add(dipole);
+      // Cross dipole element near top
+      const xEl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 4), steel);
+      xEl.rotation.z = Math.PI / 2;
+      xEl.position.set(farmX + i * 0.9, padH + dipoleH * 0.85, farmZ);
+      grp.add(xEl);
+    });
+    // Guy wires (3 per dipole array — only on tallest)
+    [0, 2.094, 4.188].forEach(theta => {
+      const guy = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 5.5, 3), steel);
+      const tipX = farmX, tipY = padH + 4.2, tipZ = farmZ;
+      const baseX = farmX + Math.cos(theta) * 2.4;
+      const baseZ = farmZ + Math.sin(theta) * 2.4;
+      const dx = tipX - baseX, dy = tipY - padH, dz = tipZ - baseZ;
+      const len = Math.hypot(dx, dy, dz);
+      guy.scale.y = len / 5.5;
+      guy.position.set((tipX + baseX) / 2, (tipY + padH) / 2, (tipZ + baseZ) / 2);
+      guy.lookAt(tipX, tipY, tipZ);
+      guy.rotateX(Math.PI / 2);
+      grp.add(guy);
+    });
+
+    // ----- Bunker entrance stairs + blast door (anchored to bunkerFront) -----
+    const stairW = 1.6;
+    [0, 1, 2].forEach(step => {
+      const tread = new THREE.Mesh(new THREE.BoxGeometry(stairW, 0.18, 0.45), concreteLit);
+      tread.position.set(bunkerX - cbW * 0.25, padH + 0.09 + step * 0.18, bunkerFront + 0.6 + step * 0.45);
+      grp.add(tread);
+    });
+    // Blast door slab — flush against bunker front face
+    const blastDoor = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 0.20), steel);
+    blastDoor.position.set(bunkerX - cbW * 0.25, padH + 1.40, bunkerFront + 0.04);
+    grp.add(blastDoor);
+    // Door frame
+    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(2.20, 2.80, 0.10), accent);
+    doorFrame.position.set(bunkerX - cbW * 0.25, padH + 1.40, bunkerFront + 0.10);
+    grp.add(doorFrame);
+    // Wall-mount lamp beside blast door
+    const wallLamp = this._makeRunningLight(0xffaa55, 0.22);
+    wallLamp.position.set(bunkerX - cbW * 0.25 - 1.5, padH + 2.6, bunkerFront + 0.04);
+    grp.add(wallLamp);
+
+    // ----- HVAC unit on the bunker roof -----
+    const hvac = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.9, 1.4), accent);
+    hvac.position.set(bunkerX + cbW * 0.25, cbH + 0.45, bunkerZ - cbD * 0.30);
+    grp.add(hvac);
+    const hvacFan = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.40, 0.12, 12), steel);
+    hvacFan.rotation.x = Math.PI / 2;
+    hvacFan.position.set(bunkerX + cbW * 0.25, cbH + 0.95, bunkerZ - cbD * 0.30);
+    grp.add(hvacFan);
+
+    // ----- Blast deflector ring — thick concrete lip around silo base -----
+    const deflector = new THREE.Mesh(
+      new THREE.CylinderGeometry(siloR + 1.6, siloR + 2.2, 0.70, 16),
+      concreteLit,
+    );
+    deflector.position.set(0, padH + 0.40, 0);
+    grp.add(deflector);
+    // Yellow caution paint on deflector
+    const deflectorRing = new THREE.Mesh(
+      new THREE.RingGeometry(siloR + 1.6, siloR + 2.15, 32),
+      yellow,
+    );
+    deflectorRing.rotation.x = -Math.PI / 2;
+    deflectorRing.position.set(0, padH + 0.78, 0);
+    grp.add(deflectorRing);
+
+    // Adjacent control bunker — anchored to bunkerX/bunkerZ
     const cb = new THREE.Mesh(new THREE.BoxGeometry(cbW, cbH, cbD), concrete);
-    cb.position.set(padR + 1.5, cbH / 2, -3.0);
+    cb.position.set(bunkerX, cbH / 2, bunkerZ);
     grp.add(cb);
     const cbRoof = new THREE.Mesh(new THREE.BoxGeometry(cbW + 0.4, 0.3, cbD + 0.4), concreteLit);
-    cbRoof.position.set(padR + 1.5, cbH + 0.15, -3.0);
+    cbRoof.position.set(bunkerX, cbH + 0.15, bunkerZ);
     grp.add(cbRoof);
-    // Slit window with warm interior glow
+    // Slit window with warm interior glow — front face
     const slit = new THREE.Mesh(
-      new THREE.PlaneGeometry(cbW * 0.7, 0.6),
+      new THREE.PlaneGeometry(cbW * 0.7, 0.9),
       new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    slit.position.set(padR + 1.5, cbH * 0.65, cbD / 2 + 0.04 - 3.0);
+    slit.position.set(bunkerX, cbH * 0.65, bunkerFront + 0.04);
     slit.userData = { rate: 4.2, phase: Math.random() * 6, baseOpacity: 0.85 };
     grp.add(slit);
     this.standoff?.windows.push(slit);
 
-    // Sandbag perimeter around the launch pad
-    const bagMat = new THREE.MeshBasicMaterial({ color: 0x14171d });
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      const r = padR + 1.4;
+    // Sandbag perimeter around the launch pad — denser to wrap bigger pad
+    const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
+    for (let i = 0; i < 56; i++) {
+      const a = (i / 56) * Math.PI * 2;
+      const r = padR + 1.8;
       const b = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.40, 0.65), bagMat);
       b.position.set(Math.cos(a) * r, padH + 0.20, Math.sin(a) * r);
       b.rotation.y = a + (Math.random() - 0.5) * 0.10;
@@ -4908,17 +6650,441 @@ const ScenesSelector = {
       grp.add(jersey);
     }
 
-    this._placeBuilding(grp, -55, -8, -78 - 6);
+    // ===== b235: typical LF (Launch Facility) compound features =====
+    // Real Minuteman LFs are ringed with: 4 corner floodlight pylons, security
+    // cameras on poles at compass points, "DEADLY FORCE AUTHORIZED" red signs
+    // on stakes facing outward, an above-ground diesel fuel tank, a payload
+    // transporter (PT) truck parked nearby for missile maintenance, a sloped
+    // concrete personnel access hatch separate from the main blast door, and
+    // an inner LF security fence around the whole compound.
+
+    const compoundR = padR + 17;  // s2: padR+12 → padR+17 LF compound — perimeter pulled out so floodlight pylons / cameras / warning signs ring the spread-out compound instead of clustering on top of the moved-outboard equipment.
+
+    // ----- 4 corner floodlight pylons -----
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sx,sz]) => {
+      const px = sx * compoundR * 0.78, pz = sz * compoundR * 0.78;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 11, 5), steel);
+      pole.position.set(px, padH + 5.5, pz);
+      grp.add(pole);
+      // Yoke arm
+      const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.10, 1.6), steel);
+      yoke.position.set(px - sx * 0.5, padH + 11, pz - sz * 0.5);
+      yoke.rotation.y = Math.atan2(-sz, -sx);
+      grp.add(yoke);
+      // Lamp head — bank of 3 floods
+      [-0.45, 0, 0.45].forEach(off => {
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.30, 0.55), accent);
+        lamp.position.set(px - sx * 1.2 + off * sz, padH + 11, pz - sz * 1.2 - off * sx);
+        grp.add(lamp);
+        const lens = this._makeRunningLight(0xfff0c8, 0.30);
+        lens.position.set(px - sx * 1.5 + off * sz, padH + 10.85, pz - sz * 1.5 - off * sx);
+        grp.add(lens);
+      });
+      // Aviation strobe at very top
+      const tipStrobe = this._makeRunningLight(0xff3344, 0.50);
+      tipStrobe.position.set(px, padH + 11.8, pz);
+      tipStrobe.userData = { rate: 1.5 + Math.random() * 0.5, phase: Math.random() * 6 };
+      grp.add(tipStrobe);
+      this.standoff?.strobes.push(tipStrobe);
+    });
+
+    // ----- Security camera poles at cardinals -----
+    [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
+      const cx = Math.cos(theta) * (compoundR * 0.62);
+      const cz = Math.sin(theta) * (compoundR * 0.62);
+      const cpole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 6, 5), steel);
+      cpole.position.set(cx, padH + 3, cz);
+      grp.add(cpole);
+      // Camera housing — small box angled slightly down toward pad
+      const cam = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.30, 0.65), accent);
+      cam.position.set(cx, padH + 6.0, cz);
+      cam.lookAt(0, padH + 1, 0);
+      grp.add(cam);
+      // Tiny red status LED
+      const led = this._makeRunningLight(0xff3344, 0.10);
+      led.position.set(cx, padH + 6.2, cz);
+      led.userData = { rate: 2.8, phase: Math.random() * 6 };
+      grp.add(led);
+    });
+
+    // ----- "RESTRICTED AREA" warning signs on stakes -----
+    const signMat = new THREE.MeshBasicMaterial({
+      color: 0xc83838, side: THREE.DoubleSide,
+    });
+    const signWhite = new THREE.MeshBasicMaterial({
+      color: 0xe8e0d0, side: THREE.DoubleSide,
+    });
+    [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75].forEach(theta => {
+      const sx = Math.cos(theta) * (compoundR * 0.92);
+      const sz = Math.sin(theta) * (compoundR * 0.92);
+      // Stake
+      const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.4, 4), steel);
+      stake.position.set(sx, padH + 1.2, sz);
+      grp.add(stake);
+      // Sign panel — red
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), signMat);
+      sign.position.set(sx, padH + 1.9, sz);
+      sign.lookAt(0, padH + 1.9, 0);
+      grp.add(sign);
+      // White stripe on sign (suggesting "RESTRICTED AREA" text band)
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.18), signWhite);
+      stripe.position.set(sx, padH + 1.95, sz);
+      stripe.lookAt(0, padH + 1.95, 0);
+      stripe.translateZ(0.02);
+      grp.add(stripe);
+    });
+
+    // ----- Above-ground diesel fuel tank beside generator shed -----
+    const fuelR = 1.6, fuelL = 5.5;
+    const fuelX = gsX + gsW / 2 + fuelR + 1.0;
+    const fuelTank = new THREE.Mesh(
+      new THREE.CylinderGeometry(fuelR, fuelR, fuelL, 14),
+      concreteLit,
+    );
+    fuelTank.rotation.z = Math.PI / 2;
+    fuelTank.position.set(fuelX, padH + fuelR, gsZ - 0.5);
+    grp.add(fuelTank);
+    // End caps (domes)
+    [+1, -1].forEach(s => {
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(fuelR, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        concreteLit,
+      );
+      cap.position.set(fuelX + s * fuelL / 2, padH + fuelR, gsZ - 0.5);
+      cap.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2;
+      grp.add(cap);
+    });
+    // Saddle supports
+    [-fuelL * 0.3, fuelL * 0.3].forEach(off => {
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, fuelR * 1.8), accent);
+      saddle.position.set(fuelX + off, padH + 0.6, gsZ - 0.5);
+      grp.add(saddle);
+    });
+    // Hazard placard
+    const fuelPlacard = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.6), yellow);
+    fuelPlacard.position.set(fuelX, padH + fuelR, gsZ - 0.5 + fuelR + 0.04);
+    grp.add(fuelPlacard);
+    // Vent stack
+    const fuelVent = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 1.8, 4), steel);
+    fuelVent.position.set(fuelX - fuelL * 0.35, padH + fuelR + 0.9, gsZ - 0.5);
+    grp.add(fuelVent);
+
+    // ===== s3: rocket-propulsion-themed clutter to fill the SW compound
+    // floor between the LOX tank and the payload transporter. User feedback:
+    // "in screenshotted area more fuel tanks or shit that makes sense near
+    // rockets". Real Minuteman/Atlas LFs have helium/GN2 bottle racks, a
+    // second oxidizer tank, hypergolic propellant cabinets, hose reels, and
+    // spill-containment berms in this exact zone.
+
+    // ----- Secondary spherical oxidizer/fuel tank, west of the launch pad -----
+    // Spherical pressurized tank w/ skirt support, hazard placard.
+    {
+      const sphR = 2.4;
+      const sphX = -(siloR + 9), sphZ = -7;
+      const sph = new THREE.Mesh(
+        new THREE.SphereGeometry(sphR, 18, 12),
+        concreteLit,
+      );
+      sph.position.set(sphX, padH + sphR + 0.8, sphZ);
+      grp.add(sph);
+      // Skirt / support ring
+      const skirt = new THREE.Mesh(
+        new THREE.CylinderGeometry(sphR * 0.55, sphR * 0.65, 1.4, 12),
+        accent,
+      );
+      skirt.position.set(sphX, padH + 0.7, sphZ);
+      grp.add(skirt);
+      // Equator band
+      const eq = new THREE.Mesh(new THREE.TorusGeometry(sphR + 0.04, 0.10, 4, 18), stencil);
+      eq.rotation.x = Math.PI / 2;
+      eq.position.set(sphX, padH + sphR + 0.8, sphZ);
+      grp.add(eq);
+      // Vent tower (taller — gives the tank a vertical accent visible from POI)
+      const sphVent = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 2.4, 4), steel);
+      sphVent.position.set(sphX, padH + sphR + 0.8 + sphR + 1.2, sphZ);
+      grp.add(sphVent);
+      const sphVentCap = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.25, 6), steel);
+      sphVentCap.position.set(sphX, padH + sphR + 0.8 + sphR + 2.5, sphZ);
+      grp.add(sphVentCap);
+      // Hazard placard (red — this one is fuel)
+      const sphPlacard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }));
+      sphPlacard.position.set(sphX, padH + sphR + 0.8, sphZ + sphR + 0.04);
+      grp.add(sphPlacard);
+      // Pipe to silo base
+      const sphPipe = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, Math.abs(sphX) + siloR, 5),
+        steel,
+      );
+      sphPipe.rotation.z = Math.PI / 2;
+      sphPipe.position.set(sphX / 2, padH + 0.30, sphZ);
+      grp.add(sphPipe);
+    }
+
+    // ----- Helium / GN2 high-pressure bottle rack (12 cylinders in caged frame) -----
+    {
+      const rkX = -(siloR + 6), rkZ = -10;
+      // Steel cage frame
+      const frameW = 3.6, frameH = 2.2, frameD = 1.2;
+      [[-frameW / 2, -frameD / 2], [frameW / 2, -frameD / 2], [-frameW / 2, frameD / 2], [frameW / 2, frameD / 2]].forEach(([fx, fz]) => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, frameH, 0.08), steel);
+        post.position.set(rkX + fx, padH + frameH / 2, rkZ + fz);
+        grp.add(post);
+      });
+      [0.30, frameH - 0.15].forEach(yh => {
+        [-frameD / 2, frameD / 2].forEach(fz => {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(frameW + 0.08, 0.06, 0.06), steel);
+          rail.position.set(rkX, padH + yh, rkZ + fz);
+          grp.add(rail);
+        });
+      });
+      // 12 high-pressure gas cylinders (2 rows of 6)
+      const bottleR = 0.22, bottleH = 1.85;
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 6; col++) {
+          const bx = rkX - frameW / 2 + 0.30 + col * 0.60;
+          const bz = rkZ - frameD / 2 + 0.30 + row * 0.60;
+          const bottle = new THREE.Mesh(
+            new THREE.CylinderGeometry(bottleR, bottleR, bottleH, 10),
+            (col + row) % 2 === 0 ? olive : oliveHi,
+          );
+          bottle.position.set(bx, padH + bottleH / 2 + 0.08, bz);
+          grp.add(bottle);
+          // Brass valve dome on top
+          const valve = new THREE.Mesh(new THREE.SphereGeometry(bottleR * 0.55, 6, 5), steel);
+          valve.position.set(bx, padH + bottleH + 0.10, bz);
+          grp.add(valve);
+        }
+      }
+      // Yellow placard "HE" / "GN2" on the cage front
+      const rkPlacard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), yellow);
+      rkPlacard.position.set(rkX, padH + frameH * 0.85, rkZ + frameD / 2 + 0.06);
+      grp.add(rkPlacard);
+    }
+
+    // ----- Hypergolic propellant cabinet (closed steel locker w/ hazard tape) -----
+    {
+      const cabX = -(siloR + 4), cabZ = 7;
+      const cabW = 2.2, cabH = 2.6, cabD = 1.4;
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(cabW, cabH, cabD), accent);
+      cab.position.set(cabX, padH + cabH / 2, cabZ);
+      grp.add(cab);
+      // Roof
+      const cabRoof = new THREE.Mesh(new THREE.BoxGeometry(cabW + 0.18, 0.14, cabD + 0.18), steel);
+      cabRoof.position.set(cabX, padH + cabH + 0.07, cabZ);
+      grp.add(cabRoof);
+      // Door split lines (2 hinged doors)
+      const split = new THREE.Mesh(new THREE.BoxGeometry(0.04, cabH * 0.85, 0.04), steel);
+      split.position.set(cabX, padH + cabH * 0.5, cabZ + cabD / 2 + 0.02);
+      grp.add(split);
+      // Hazard diamond (orange — corrosive/oxidizer)
+      const diamond = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7),
+        new THREE.MeshBasicMaterial({ color: 0xd06420 }));
+      diamond.rotation.z = Math.PI / 4;
+      diamond.position.set(cabX, padH + cabH * 0.70, cabZ + cabD / 2 + 0.04);
+      grp.add(diamond);
+      // Yellow caution stripes around base
+      const baseStripe = new THREE.Mesh(new THREE.BoxGeometry(cabW + 0.10, 0.18, cabD + 0.10), yellow);
+      baseStripe.position.set(cabX, padH + 0.09, cabZ);
+      grp.add(baseStripe);
+    }
+
+    // ----- Propellant drum cluster on a caged pallet (4 drums, color-coded) -----
+    {
+      const dpX = -(siloR + 2.5), dpZ = 11;
+      // Pallet base
+      const pallet = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.20, 2.2), oliveHi);
+      pallet.position.set(dpX, padH + 0.10, dpZ);
+      grp.add(pallet);
+      // 4 drums (red oxidizer, olive fuel, yellow caution, blue water)
+      const drumColors = [0xc83838, 0x3a4030, 0x8a7020, 0x3a5870];
+      [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]].forEach(([dx, dz], i) => {
+        const drum = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.45, 0.45, 1.2, 12),
+          new THREE.MeshBasicMaterial({ color: drumColors[i] }),
+        );
+        drum.position.set(dpX + dx, padH + 0.80, dpZ + dz);
+        grp.add(drum);
+        // Lid
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 12), steel);
+        lid.position.set(dpX + dx, padH + 1.42, dpZ + dz);
+        grp.add(lid);
+        // Top band (black ring around upper third)
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.04, 4, 12),
+          new THREE.MeshBasicMaterial({ color: 0x101218 }));
+        band.rotation.x = Math.PI / 2;
+        band.position.set(dpX + dx, padH + 1.20, dpZ + dz);
+        grp.add(band);
+      });
+      // Cage corner posts
+      [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]].forEach(([px, pz]) => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.7, 0.06), steel);
+        post.position.set(dpX + px, padH + 0.95, dpZ + pz);
+        grp.add(post);
+      });
+    }
+
+    // ----- Hose reel + fuel pump cabinet (small ground unit between sphere
+    // tank and silo) -----
+    {
+      const hrX = -(siloR + 5), hrZ = -2;
+      // Pump cabinet base
+      const pump = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 0.8), accent);
+      pump.position.set(hrX, padH + 0.80, hrZ);
+      grp.add(pump);
+      // Pump cap
+      const pumpCap = new THREE.Mesh(new THREE.BoxGeometry(1.10, 0.10, 0.90), steel);
+      pumpCap.position.set(hrX, padH + 1.65, hrZ);
+      grp.add(pumpCap);
+      // Hose reel (round drum w/ hose wrapped)
+      const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.50, 12), steel);
+      reel.rotation.x = Math.PI / 2;
+      reel.position.set(hrX + 0.85, padH + 0.85, hrZ);
+      grp.add(reel);
+      const reelCenter = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.55, 8), accent);
+      reelCenter.rotation.x = Math.PI / 2;
+      reelCenter.position.set(hrX + 0.85, padH + 0.85, hrZ);
+      grp.add(reelCenter);
+      // Hose snake to ground
+      const hose = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 4, 12, Math.PI), steel);
+      hose.position.set(hrX + 0.85, padH + 0.30, hrZ + 0.5);
+      hose.rotation.x = Math.PI / 2;
+      grp.add(hose);
+      // Status LED
+      const pumpLed = this._makeRunningLight(0x44dd66, 0.10);
+      pumpLed.position.set(hrX, padH + 1.45, hrZ + 0.42);
+      grp.add(pumpLed);
+    }
+
+    // ----- Spill-containment berm — low concrete curb around the propellant
+    // cluster so the area reads as engineered, not random clutter -----
+    {
+      const bermPts = [
+        [-(siloR + 17), -3], [-(siloR + 17), 14],
+        [-(siloR + 1),  14], [-(siloR + 1),  -12],
+        [-(siloR + 17), -12], [-(siloR + 17), -3],
+      ];
+      for (let i = 0; i < bermPts.length - 1; i++) {
+        const [x1, z1] = bermPts[i];
+        const [x2, z2] = bermPts[i + 1];
+        const len = Math.hypot(x2 - x1, z2 - z1);
+        const yaw = Math.atan2(z2 - z1, x2 - x1);
+        const curb = new THREE.Mesh(new THREE.BoxGeometry(len, 0.32, 0.30), concreteLit);
+        curb.position.set((x1 + x2) / 2, padH + 0.16, (z1 + z2) / 2);
+        curb.rotation.y = -yaw;
+        grp.add(curb);
+        // Yellow caution stripe on the curb top
+        const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.32), yellow);
+        stripe2.position.set((x1 + x2) / 2, padH + 0.34, (z1 + z2) / 2);
+        stripe2.rotation.y = -yaw;
+        grp.add(stripe2);
+      }
+    }
+
+    // ----- Payload transporter (PT) — flatbed semi parked SW of pad
+    // (s2: -padR-8 / +9 → -padR-13 / +14 so the truck doesn't crowd the
+    // LOX tank now that LOX itself moved further west.) -----
+    const ptX = -padR - 13, ptZ = 14;
+    const ptYaw = -0.3;
+    const pt = new THREE.Group();
+    // Cab — green olive truck cab
+    const ptCab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.2, 3.0), olive);
+    ptCab.position.set(0, padH + 1.5, -3.5);
+    pt.add(ptCab);
+    const ptCabRoof = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 3.0), oliveHi);
+    ptCabRoof.position.set(0, padH + 2.7, -3.5);
+    pt.add(ptCabRoof);
+    // Headlights
+    [-1.0, 1.0].forEach(hx => {
+      const hl = this._makeRunningLight(0xfff0c8, 0.30);
+      hl.position.set(hx, padH + 1.4, -5.0);
+      pt.add(hl);
+    });
+    // Cab windshield (warm interior)
+    const ptWind = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 1.0),
+      new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    ptWind.position.set(0, padH + 2.1, -5.01);
+    pt.add(ptWind);
+    // Trailer flatbed — long, low
+    const ptBed = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.6, 9), olive);
+    ptBed.position.set(0, padH + 1.0, 2.8);
+    pt.add(ptBed);
+    // Faux missile-shape cargo lashed to bed (canister)
+    const ptCargo = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 8.0, 12), oliveHi);
+    ptCargo.rotation.x = Math.PI / 2;
+    ptCargo.position.set(0, padH + 1.85, 3.0);
+    pt.add(ptCargo);
+    // Lashing straps
+    for (let i = -2; i <= 2; i++) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.06, 0.10), steel);
+      strap.position.set(0, padH + 1.65, 3.0 + i * 1.5);
+      pt.add(strap);
+    }
+    // Wheels — 10 wheels (cab x4, trailer x6)
+    const wheelMat = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    [[-1.4, -4.5],[1.4, -4.5],[-1.4, -2.6],[1.4, -2.6],
+     [-1.4, 0.4],[1.4, 0.4],[-1.4, 3.0],[1.4, 3.0],[-1.4, 5.6],[1.4, 5.6]].forEach(([wx, wz]) => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 12), wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, padH + 0.55, wz);
+      pt.add(wheel);
+    });
+    // Roof beacon (amber)
+    const ptBeacon = this._makeRunningLight(0xffaa22, 0.45);
+    ptBeacon.position.set(0, padH + 3.0, -3.5);
+    ptBeacon.userData = { rate: 2.4, phase: Math.random() * 6 };
+    grp.add(ptBeacon);  // add at top level so animation tick can find via standoff windows
+    pt.position.set(ptX, 0, ptZ);
+    pt.rotation.y = ptYaw;
+    grp.add(pt);
+
+    // ----- Sloped concrete personnel access hatch — separate from blast door -----
+    const hatchX = padR - 2, hatchZ = -padR + 2;
+    const hatch = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 2.6), concreteLit);
+    hatch.position.set(hatchX, padH + 0.45, hatchZ);
+    grp.add(hatch);
+    // Slanted top (suggests hatch lid lifted)
+    const hatchLid = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 2.4), steel);
+    hatchLid.position.set(hatchX, padH + 1.05, hatchZ);
+    hatchLid.rotation.x = -0.25;
+    grp.add(hatchLid);
+    // Yellow caution stripe on hatch sides
+    const hatchStripe = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.12, 0.04), yellow);
+    hatchStripe.position.set(hatchX, padH + 0.20, hatchZ + 1.32);
+    grp.add(hatchStripe);
+    // Hand-rail loop at the lifted edge
+    [-1.0, 1.0].forEach(rx => {
+      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 4), steel);
+      rail.position.set(hatchX + rx, padH + 1.3, hatchZ);
+      grp.add(rail);
+    });
+    const railTop = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.0, 4), steel);
+    railTop.rotation.z = Math.PI / 2;
+    railTop.position.set(hatchX, padH + 1.8, hatchZ);
+    grp.add(railTop);
+
+    // b214: silo pushed back z=-94 → z=-107. Old position straddled the N
+    // perimeter road (z=-90 ±4.5). Sandbag perimeter (silo+8.9u) at z=-85.1
+    // sat dead in the road; jeeps couldn't pass without clipping. New
+    // position puts the sandbag north edge at z=-98.1 — 3.6u south of the
+    // road's south edge — leaving a clean asphalt strip between the road
+    // and the launch pad. Panel still floats at (0, 10, -88) so the
+    // billboard reads as the entry sign for the launch zone behind it.
+    // b235: pad scaled up + new LF compound features added; pushed deeper
+    // (z=-107 → z=-118) so the bigger compound clears the road shoulder.
+    this._placeBuilding(grp, 0, -8, -118);
   },
 
   /* ---------- Radar / operations building (living wall panel host) ---------- */
   _buildRadarBuilding() {
     // Squat operations building with a rotating radar antenna on the roof.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const steel = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x2c3344 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x424c64 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
 
     const W = 12, H = 5, D = 10;
@@ -4974,6 +7140,483 @@ const ScenesSelector = {
     this._placeBuilding(grp, 20, -8, -42 - D / 2 - 0.5);
   },
 
+  /* ---------- s4: outer-base silhouette anchors ----------
+     User feedback: "use our available free space ... we built a floor
+     plan originally so you'd get an idea of how to shape shit doesn't
+     mean be rigid". The wide flanks at x=±78..±110 (between the
+     perimeter loop road and the inner fence) and the deep N at z=-90..-110
+     read as black void from every front-facing POI. Four big BUILDINGS
+     out there to anchor the silhouette: west propellant tank farm,
+     east aircraft hangar, NW secondary launch silo, NE SAM battery. */
+  _buildOuterCompounds() {
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const olive = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
+    const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x424c64 });
+    const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
+    const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const winMat = (op = 0.72) => new THREE.MeshBasicMaterial({
+      color: 0xffaa55, transparent: true, opacity: op,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+
+    /* ===== WEST PROPELLANT TANK FARM ===== centered (-92, -8, -45) =====
+       5 vertical fuel tanks in a row, walkway between them, gantry catwalk
+       on top, hazard placards. The whole structure ~36u long. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-92, -8, -45);
+      // 5 tanks
+      const tankR = 3.0, tankH = 11;
+      for (let i = 0; i < 5; i++) {
+        const tx = (i - 2) * 6.5;
+        const tank = new THREE.Mesh(
+          new THREE.CylinderGeometry(tankR, tankR, tankH, 16),
+          i % 2 === 0 ? concreteLit : oliveHi,
+        );
+        tank.position.set(tx, tankH / 2 + 0.4, 0);
+        grp.add(tank);
+        // Dome top
+        const dome = new THREE.Mesh(
+          new THREE.SphereGeometry(tankR, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+          concreteLit,
+        );
+        dome.position.set(tx, tankH + 0.4, 0);
+        grp.add(dome);
+        // Equator banding (frost ring)
+        [tankH * 0.30, tankH * 0.65].forEach(yh => {
+          const band = new THREE.Mesh(new THREE.TorusGeometry(tankR + 0.04, 0.08, 4, 20), stencil);
+          band.rotation.x = Math.PI / 2;
+          band.position.set(tx, yh + 0.4, 0);
+          grp.add(band);
+        });
+        // Vent stack on dome
+        const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 2.2, 5), steel);
+        vent.position.set(tx, tankH + 0.4 + tankR + 1.1, 0);
+        grp.add(vent);
+        // Aviation strobe at vent tip
+        const strobe = this._makeRunningLight(0xff3344, 0.30);
+        strobe.position.set(tx, tankH + 0.4 + tankR + 2.4, 0);
+        strobe.userData = { rate: 1.4, phase: i * 0.7 };
+        grp.add(strobe);
+        this.standoff?.strobes.push(strobe);
+        // Hazard placard on south face
+        const placard = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), yellow);
+        placard.position.set(tx, tankH * 0.55 + 0.4, tankR + 0.04);
+        grp.add(placard);
+      }
+      // Gantry catwalk linking dome tops
+      const cat = new THREE.Mesh(new THREE.BoxGeometry(34, 0.20, 1.0), accent);
+      cat.position.set(0, tankH + 0.4 + tankR + 0.12, 0);
+      grp.add(cat);
+      [-0.50, 0.50].forEach(zo => {
+        const railTop = new THREE.Mesh(new THREE.BoxGeometry(34, 0.06, 0.06), steel);
+        railTop.position.set(0, tankH + 0.4 + tankR + 1.1, zo);
+        grp.add(railTop);
+        const railMid = new THREE.Mesh(new THREE.BoxGeometry(34, 0.04, 0.04), steel);
+        railMid.position.set(0, tankH + 0.4 + tankR + 0.6, zo);
+        grp.add(railMid);
+      });
+      // Concrete pad under tanks
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(36, 0.30, 8), concrete);
+      pad.position.set(0, 0.15, 0);
+      grp.add(pad);
+      // Containment berm around the pad
+      [[-1, 0, 0, 8.4], [1, 0, 0, 8.4], [0, 0, -1, 36.4], [0, 0, 1, 36.4]].forEach(([sx, _sy, sz, len]) => {
+        const isLong = sz === 0;
+        const curb = new THREE.Mesh(
+          new THREE.BoxGeometry(isLong ? 0.40 : len, 0.45, isLong ? 8.4 : 0.40),
+          concreteLit,
+        );
+        curb.position.set(sx * 18, 0.22, sz * 4);
+        grp.add(curb);
+      });
+      // Service ladder up the middle tank
+      for (let h = 0.8; h < tankH; h += 0.40) {
+        const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 4), steel);
+        rung.rotation.z = Math.PI / 2;
+        rung.position.set(0, h, tankR + 0.10);
+        grp.add(rung);
+      }
+      // Pumphouse shed at the south end
+      const shed = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3.0, 4.0), concrete);
+      shed.position.set(-19, 1.5, 0);
+      grp.add(shed);
+      const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.20, 4.4), concreteLit);
+      shedRoof.position.set(-19, 3.10, 0);
+      grp.add(shedRoof);
+      const shedDoor = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.7), winMat(0.55));
+      shedDoor.position.set(-19, 0.85, 2.04);
+      shedDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+      grp.add(shedDoor);
+      this.standoff?.windows.push(shedDoor);
+      // 2 service vehicles parked alongside
+      [{ x: 14, z: -5.5, c: olive }, { x: 17, z: -5.5, c: oliveHi }].forEach(v => {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 4.5), v.c);
+        body.position.set(v.x, 0.95, v.z);
+        body.rotation.y = -0.1;
+        grp.add(body);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 1.5), accent);
+        cab.position.set(v.x, 1.5, v.z + 1.6);
+        cab.rotation.y = body.rotation.y;
+        grp.add(cab);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ===== EAST AIRCRAFT MAINTENANCE HANGAR ===== centered (+92, -8, -45) =====
+       Long arch hangar w/ open south door, lit interior, parked silhouette
+       inside, antenna mast on roof, side personnel doors. Reads as a real
+       maintenance hangar from any front POI. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(92, -8, -45);
+      const hW = 18, hH = 9, hD = 28;
+      // Concrete apron
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(hW + 6, 0.25, hD + 8), concrete);
+      apron.position.set(0, 0.12, 0);
+      grp.add(apron);
+      // Hangar shell — box w/ chamfered top suggesting arch
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(hW, hH, hD), oliveHi);
+      shell.position.set(0, hH / 2, 0);
+      grp.add(shell);
+      // Arched roof — half cylinder
+      const roof = new THREE.Mesh(
+        new THREE.CylinderGeometry(hW / 2, hW / 2, hD, 14, 1, true, 0, Math.PI),
+        oliveHi,
+      );
+      roof.rotation.x = Math.PI / 2;
+      roof.rotation.z = Math.PI;  // open side faces +y, capped on bottom by the shell
+      roof.position.set(0, hH, 0);
+      grp.add(roof);
+      // Roof ribs (visual structure)
+      for (let i = -hD / 2 + 2; i <= hD / 2 - 2; i += 4) {
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(hW / 2 + 0.15, 0.10, 4, 16, Math.PI), accent);
+        rib.rotation.y = Math.PI / 2;
+        rib.position.set(0, hH, i);
+        grp.add(rib);
+      }
+      // South-end open hangar door — big lit rectangle showing interior
+      const doorOpen = new THREE.Mesh(new THREE.PlaneGeometry(hW * 0.78, hH * 0.85), winMat(0.55));
+      doorOpen.position.set(0, hH * 0.42, hD / 2 + 0.05);
+      doorOpen.userData = { rate: 3.6, phase: Math.random() * 6, baseOpacity: 0.55 };
+      grp.add(doorOpen);
+      this.standoff?.windows.push(doorOpen);
+      // Door frame
+      const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(hW * 0.82, 0.30, 0.35), steel);
+      doorFrame.position.set(0, hH * 0.85 + 0.15, hD / 2 + 0.10);
+      grp.add(doorFrame);
+      // Parked vehicle silhouette inside (visible through open door)
+      const parkedBody = new THREE.Mesh(new THREE.BoxGeometry(5, 1.2, 8), dark);
+      parkedBody.position.set(-2, 0.85, 4);
+      grp.add(parkedBody);
+      const parkedCab = new THREE.Mesh(new THREE.BoxGeometry(4, 1.0, 2.4), dark);
+      parkedCab.position.set(-2, 1.95, 5.5);
+      grp.add(parkedCab);
+      // Yellow caution chevrons painted on apron in front of door
+      [-3, -1, 1, 3].forEach(off => {
+        const chev = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.04, 1.4), yellow);
+        chev.position.set(off, 0.26, hD / 2 + 2.0);
+        grp.add(chev);
+      });
+      // Side personnel doors w/ warm glow
+      [-hD / 4, hD / 4].forEach(zo => {
+        const sideDoor = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.7), winMat(0.55));
+        sideDoor.position.set(-hW / 2 - 0.05, 0.85, zo);
+        sideDoor.rotation.y = Math.PI / 2;
+        sideDoor.userData = { rate: 4.2, phase: Math.random() * 6, baseOpacity: 0.55 };
+        grp.add(sideDoor);
+        this.standoff?.windows.push(sideDoor);
+      });
+      // Roof antenna mast
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, 6, 5), steel);
+      mast.position.set(hW * 0.3, hH + hW / 2 + 3, -hD * 0.3);
+      grp.add(mast);
+      const mastStrobe = this._makeRunningLight(0xff3344, 0.35);
+      mastStrobe.position.set(hW * 0.3, hH + hW / 2 + 6.5, -hD * 0.3);
+      mastStrobe.userData = { rate: 1.3, phase: Math.random() * 6 };
+      grp.add(mastStrobe);
+      this.standoff?.strobes.push(mastStrobe);
+      // Lit window strip on the long west face
+      for (let zw = -hD / 2 + 4; zw <= hD / 2 - 4; zw += 4) {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.5), winMat(0.65));
+        w.position.set(-hW / 2 - 0.05, hH * 0.65, zw);
+        w.rotation.y = Math.PI / 2;
+        w.userData = { rate: 4.6 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.65 };
+        grp.add(w);
+        this.standoff?.windows.push(w);
+      }
+      // Apron taxi-line lights
+      for (let zw = -hD / 2 + 2; zw <= hD / 2 + 6; zw += 2) {
+        const light = this._makeRunningLight(0x4488ff, 0.10);
+        light.position.set(hW / 2 + 2, 0.15, zw);
+        grp.add(light);
+        const light2 = this._makeRunningLight(0x4488ff, 0.10);
+        light2.position.set(-hW / 2 - 2, 0.15, zw);
+        grp.add(light2);
+      }
+      // Fuel bowser parked beside the hangar
+      const bowser = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.8, 5.5), olive);
+      bowser.position.set(hW / 2 + 4, 1.05, 4);
+      grp.add(bowser);
+      const bowserTank = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.85, 0.85, 4, 14),
+        concreteLit,
+      );
+      bowserTank.rotation.z = Math.PI / 2;
+      bowserTank.position.set(hW / 2 + 4, 2.55, 3.5);
+      grp.add(bowserTank);
+      this.scene.add(grp);
+    }
+
+    /* ===== NW SECONDARY LAUNCH PAD ===== centered (-92, -8, -100) =====
+       Smaller silo (Pad 8 reads as a sister site to the hero Pad 7). Just
+       silo + pad + service gantry + sandbag wrap + warning sign. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-92, -8, -100);
+      // Octagonal pad
+      const padR = 7, padH = 1.0;
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(padR, padR + 0.3, padH, 8), concrete);
+      pad.position.set(0, padH / 2, 0);
+      grp.add(pad);
+      // Painted target ring
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(padR * 0.85 - 0.18, padR * 0.85, 32),
+        stencil,
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(0, padH + 0.05, 0);
+      grp.add(ring);
+      // Silo (smaller than Pad 7's)
+      const siloR = 1.8, siloH = 14;
+      const silo = new THREE.Mesh(new THREE.CylinderGeometry(siloR, siloR + 0.25, siloH, 12), concrete);
+      silo.position.set(0, padH + siloH / 2, 0);
+      grp.add(silo);
+      // Caution chevrons
+      for (let h = padH + 1.5; h < padH + siloH - 1; h += 3) {
+        const chev = new THREE.Mesh(new THREE.TorusGeometry(siloR + 0.05, 0.08, 4, 14), yellow);
+        chev.rotation.x = Math.PI / 2;
+        chev.position.set(0, h, 0);
+        grp.add(chev);
+      }
+      // Number "08" stencil
+      const num = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.2), stencil);
+      num.position.set(0, padH + siloH * 0.5, siloR + 0.04);
+      grp.add(num);
+      // Cap
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(siloR + 0.15, 1.6, 12), concreteLit);
+      cap.position.set(0, padH + siloH + 0.8, 0);
+      grp.add(cap);
+      // Strobe
+      const siloStrobe = this._makeRunningLight(0xff3344, 0.55);
+      siloStrobe.position.set(0, padH + siloH + 1.8, 0);
+      siloStrobe.userData = { rate: 1.5, phase: Math.random() * 6 };
+      grp.add(siloStrobe);
+      this.standoff?.strobes.push(siloStrobe);
+      // 2-leg service mast (no full lattice — secondary site is leaner)
+      [-1, 1].forEach(s => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, siloH + 1, 5), steel);
+        post.position.set(s * (siloR + 1.6), (siloH + 1) / 2 + padH, 0);
+        grp.add(post);
+      });
+      const xbar = new THREE.Mesh(new THREE.BoxGeometry((siloR + 1.6) * 2, 0.14, 0.14), steel);
+      xbar.position.set(0, padH + siloH * 0.55, 0);
+      grp.add(xbar);
+      // Sandbag perimeter
+      const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
+      for (let i = 0; i < 36; i++) {
+        const a = (i / 36) * Math.PI * 2;
+        const r = padR + 1.5;
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.36, 0.55), bagMat);
+        b.position.set(Math.cos(a) * r, padH + 0.18, Math.sin(a) * r);
+        b.rotation.y = a;
+        grp.add(b);
+      }
+      // Small bunker beside it
+      const bcW = 5, bcH = 4, bcD = 5;
+      const bunker = new THREE.Mesh(new THREE.BoxGeometry(bcW, bcH, bcD), concrete);
+      bunker.position.set(padR + 5, bcH / 2, 4);
+      grp.add(bunker);
+      const bunkerRoof = new THREE.Mesh(new THREE.BoxGeometry(bcW + 0.3, 0.22, bcD + 0.3), concreteLit);
+      bunkerRoof.position.set(padR + 5, bcH + 0.11, 4);
+      grp.add(bunkerRoof);
+      const slit = new THREE.Mesh(new THREE.PlaneGeometry(bcW * 0.6, 0.6), winMat(0.78));
+      slit.position.set(padR + 5, bcH * 0.6, 4 + bcD / 2 + 0.04);
+      slit.userData = { rate: 4.4, phase: Math.random() * 6, baseOpacity: 0.78 };
+      grp.add(slit);
+      this.standoff?.windows.push(slit);
+      // 4 corner floodlight pylons (smaller than hero pad)
+      [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => {
+        const px = sx * (padR + 6), pz = sz * (padR + 6);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.20, 8, 5), steel);
+        pole.position.set(px, 4, pz);
+        grp.add(pole);
+        const lampHead = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.25, 0.50), accent);
+        lampHead.position.set(px - sx * 0.6, 7.8, pz - sz * 0.6);
+        grp.add(lampHead);
+        const lens = this._makeRunningLight(0xfff0c8, 0.22);
+        lens.position.set(px - sx * 0.9, 7.6, pz - sz * 0.9);
+        grp.add(lens);
+        const tipS = this._makeRunningLight(0xff3344, 0.30);
+        tipS.position.set(px, 8.5, pz);
+        tipS.userData = { rate: 1.6, phase: Math.random() * 6 };
+        grp.add(tipS);
+        this.standoff?.strobes.push(tipS);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ===== NE SAM BATTERY ===== centered (+92, -8, -100) =====
+       Air defense site: 3 inclined launcher rails, 1 fire-control radar
+       dish, command trailer w/ rotating dish on top. Reads as Patriot/
+       THAAD-style battery. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(92, -8, -100);
+      // Concrete pad
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(20, 0.25, 18), concrete);
+      pad.position.set(0, 0.12, 0);
+      grp.add(pad);
+      // 3 launcher units (inclined box-launchers on swivel base)
+      const launcherPositions = [[-6, -3], [0, -5], [6, -3]];
+      launcherPositions.forEach(([lx, lz]) => {
+        // Swivel base
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 0.8, 10), olive);
+        base.position.set(lx, 0.65, lz);
+        grp.add(base);
+        // Trailer chassis
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 4.5), oliveHi);
+        chassis.position.set(lx, 0.30, lz);
+        grp.add(chassis);
+        // Inclined launcher box (4 missile cells, raised at 65°)
+        const launcherBox = new THREE.Group();
+        launcherBox.position.set(lx, 1.4, lz);
+        launcherBox.rotation.x = -Math.PI * 0.35;  // tilted up toward N
+        const box = new THREE.Mesh(new THREE.BoxGeometry(2.2, 4.0, 1.6), olive);
+        box.position.y = 2.0;
+        launcherBox.add(box);
+        // 4 cell tubes on top of box face
+        [[-0.65, -0.40], [0.65, -0.40], [-0.65, 0.40], [0.65, 0.40]].forEach(([cx, cz]) => {
+          const cell = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.30, 0.30, 4.0, 8),
+            steel,
+          );
+          cell.position.set(cx, 2.0, cz + 0.85);
+          launcherBox.add(cell);
+          // Missile nose poking out
+          const noseTip = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.55, 8), accent);
+          noseTip.position.set(cx, 4.25, cz + 0.85);
+          launcherBox.add(noseTip);
+        });
+        grp.add(launcherBox);
+        // Wheels
+        [[-1.0, -1.6], [1.0, -1.6], [-1.0, 1.6], [1.0, 1.6]].forEach(([wx, wz]) => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.30, 10), dark);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(lx + wx, 0.42, lz + wz);
+          grp.add(wheel);
+        });
+      });
+      // Fire-control radar — large parabolic dish on a tracked mount
+      {
+        const fcX = 0, fcZ = 4;
+        const fcBase = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 4.0), oliveHi);
+        fcBase.position.set(fcX, 0.30, fcZ);
+        grp.add(fcBase);
+        const fcMast = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.40, 2.6, 8), steel);
+        fcMast.position.set(fcX, 1.85, fcZ);
+        grp.add(fcMast);
+        // Pivot
+        const fcPivot = new THREE.Group();
+        fcPivot.position.set(fcX, 3.2, fcZ);
+        grp.add(fcPivot);
+        const fcDish = new THREE.Mesh(
+          new THREE.SphereGeometry(2.4, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.42),
+          accent,
+        );
+        fcDish.rotation.x = -Math.PI * 0.30;
+        fcPivot.add(fcDish);
+        // Feed horn
+        const feedHorn = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.30, 0.95, 6), steel);
+        feedHorn.position.set(0, 1.3, 0.5);
+        feedHorn.rotation.x = Math.PI / 2;
+        fcPivot.add(feedHorn);
+        // Cross-bar struts holding feed
+        [-1, 1].forEach(s => {
+          const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 4), steel);
+          strut.position.set(s * 0.6, 0.7, 0.4);
+          strut.rotation.x = Math.PI / 2;
+          strut.rotation.z = -s * 0.4;
+          fcPivot.add(strut);
+        });
+        // Tracks (visible)
+        [-1.6, 1.6].forEach(tx => {
+          const track = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 4.4), dark);
+          track.position.set(fcX + tx, 0.22, fcZ);
+          grp.add(track);
+        });
+        this._radarBuildingPivots ??= [];
+        this._radarBuildingPivots.push(fcPivot);
+      }
+      // Command trailer w/ small uplink dish on roof
+      {
+        const ctX = -8, ctZ = 4;
+        const ctBody = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.4, 5.2), olive);
+        ctBody.position.set(ctX, 1.20, ctZ);
+        grp.add(ctBody);
+        const ctRoof = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 5.4), oliveHi);
+        ctRoof.position.set(ctX, 2.49, ctZ);
+        grp.add(ctRoof);
+        // Lit window strip
+        const ctWin = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.45), winMat(0.70));
+        ctWin.position.set(ctX, 1.55, ctZ + 2.62);
+        ctWin.userData = { rate: 4.6, phase: Math.random() * 6, baseOpacity: 0.70 };
+        grp.add(ctWin);
+        this.standoff?.windows.push(ctWin);
+        // Small uplink dish
+        const ctDish = new THREE.Mesh(
+          new THREE.SphereGeometry(0.8, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.45),
+          accent,
+        );
+        ctDish.position.set(ctX, 3.4, ctZ - 1.5);
+        ctDish.rotation.x = -Math.PI * 0.40;
+        ctDish.rotation.z = -Math.PI / 2;
+        grp.add(ctDish);
+      }
+      // Ammo / reload pallet stack on the east edge
+      [[8, 4, oliveHi], [8, 6, olive]].forEach(([rx, rz, c]) => {
+        const reload = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.0, 1.6), c);
+        reload.position.set(rx, 0.50, rz);
+        grp.add(reload);
+        // Missile-canister cylinders on top
+        [-0.55, 0.55].forEach(co => {
+          const can = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 1.9, 8), steel);
+          can.rotation.x = Math.PI / 2;
+          can.position.set(rx, 1.12, rz + co);
+          grp.add(can);
+        });
+      });
+      // 2 corner floods
+      [[1, 1], [-1, 1]].forEach(([sx, sz]) => {
+        const px = sx * 8.5, pz = sz * 7.5;
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.20, 7, 5), steel);
+        pole.position.set(px, 3.5, pz);
+        grp.add(pole);
+        const lampH = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.25, 0.50), accent);
+        lampH.position.set(px - sx * 0.5, 6.85, pz - sz * 0.5);
+        grp.add(lampH);
+        const lens = this._makeRunningLight(0xfff0c8, 0.22);
+        lens.position.set(px - sx * 0.8, 6.7, pz - sz * 0.8);
+        grp.add(lens);
+      });
+      this.scene.add(grp);
+    }
+  },
+
   /* ---------- Pelican landing pad behind the camera ----------
      Fills the back direction so when the user turns around there's a
      clear themed feature instead of a void. Big concrete pad with
@@ -4981,8 +7624,8 @@ const ScenesSelector = {
      deck lights. */
   _buildPelicanPad() {
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x242a36 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
 
@@ -5030,10 +7673,16 @@ const ScenesSelector = {
     pelican.rotation.y = Math.PI;  // facing backward (visible from camera)
     grp.add(pelican);
 
-    // Position: forward of the deck, well clear of the south perimeter road
-    // (z=50±4.5). Was z=48 — patrol warthog/scorpion drove straight through it.
-    grp.position.set(-2, -8, 24);
-    grp.rotation.y = -0.2;
+    // b193: relocated from (-2, +24) directly south-of-camera to SE
+    // airfield zone (+50, +30) so a camera-spin reveals a real "active
+    // landing pad" feature instead of just a parked Pelican against the
+    // back perimeter. Still well clear of the south perimeter road
+    // (z=50±4.5) and the new back cross-road at z=+30 (3.5u half-width
+    // — pad sits at z=+30 with 9u radius, so it overlaps the back cross
+    // road; the road shader was extended to make the pad an INTENTIONAL
+    // road-edge feature with the cross-road terminating at the pad).
+    grp.position.set(50, -8, 30);
+    grp.rotation.y = -0.6;  // angled slightly so cockpit faces NE corridor
     this.scene.add(grp);
   },
 
@@ -5042,7 +7691,7 @@ const ScenesSelector = {
     // without the moving hatch / glow / engines on)
     const grp = new THREE.Group();
     const sz = 1.2;
-    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x202028 });
+    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x363640 });
 
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.4 * sz, 1.5 * sz, 6.5 * sz), bodyMat);
     grp.add(body);
@@ -5085,10 +7734,10 @@ const ScenesSelector = {
     // off-axis so it doesn't perfectly bisect the panel layout. Big enough
     // to dominate the skyline and silhouette against the moon/nebula.
     const grp = new THREE.Group();
-    const concrete = new THREE.MeshBasicMaterial({ color: 0x222836 });
-    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x303848 });
-    const steel  = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x1e222b });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x36404f });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const steel  = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
 
     // Massive concrete plinth — 2-tier
     const plinthH = 3.8;
@@ -5130,7 +7779,7 @@ const ScenesSelector = {
     const dishR = 16;
     const tilt = -Math.PI * 0.32;
     const dishGeo = new THREE.SphereGeometry(dishR, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.42);
-    const dishMat = new THREE.MeshBasicMaterial({ color: 0x1a1d24, side: THREE.DoubleSide });
+    const dishMat = new THREE.MeshBasicMaterial({ color: 0x303540, side: THREE.DoubleSide });
     const dish = new THREE.Mesh(dishGeo, dishMat);
     dish.position.set(0, yokeY + 1.6, 0);
     dish.rotation.x = tilt;
@@ -5267,17 +7916,22 @@ const ScenesSelector = {
   _buildPatrolWarthog() {
     const olive   = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
     const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
-    const steel   = new THREE.MeshBasicMaterial({ color: 0x14171e });
-    const dark    = new THREE.MeshBasicMaterial({ color: 0x0c0e14 });
+    const steel   = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const dark    = new THREE.MeshBasicMaterial({ color: 0x1d2230 });
     this._parkedHogs = [];
 
-    // Three parked Warthogs in the motor-pool zone, south of the new
-    // right-flank service road (which terminates at ~(44, -38)). Pulled
-    // back to z=-42…-46 so they don't sit on the asphalt.
+    // b193: motor pool relocated. Old (50,-44)/(40,-47)/(32,-44) sat inside
+    // the new v2 logistics-yard host @ (43,-8,-48) and clipped through the
+    // container stack. Moved south next to the SE airfield (Pelican pad
+    // @ 50,+30) so the vehicles read as airfield ground support.
+    // b214: vehicles were packed within ~13u of each other on the airfield
+    // (user: "tents cars and a tank all packed togehter in a tiny little
+    // space"). Spread along the +X axis with z spans 8→22 so they read as
+    // a real motor pool with breathing room, not a parking-lot pile.
     const parkedSpots = [
-      { x: 50, z: -44, yaw:  Math.PI * 0.10 },
-      { x: 40, z: -47, yaw:  Math.PI * 1.05 },
-      { x: 32, z: -44, yaw: -Math.PI * 0.15 },
+      { x: 32, z:   8, yaw:  Math.PI * 0.10 },
+      { x: 50, z:  12, yaw:  Math.PI * 1.05 },
+      { x: 40, z:  22, yaw: -Math.PI * 0.15 },
     ];
     parkedSpots.forEach(s => {
       const car = this._buildWarthogMesh(olive, oliveHi, steel, dark);
@@ -5298,6 +7952,20 @@ const ScenesSelector = {
         c => c.geometry?.type === 'CylinderGeometry' && c.geometry.parameters.height === 0.55
       );
       car.userData.t = phaseOffset;  // distance along loop (units)
+      // b227: rotating amber security beacon on cab roof — sells "this base
+      // is actively patrolled" from any vantage. Sprite faces camera always,
+      // so we fake the rotating-mirror sweep by pulsing opacity in tick.
+      const beaconBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.10, 0.10, 0.20, 8),
+        steel,
+      );
+      beaconBase.position.set(0, 2.32, 0.60);
+      car.add(beaconBase);
+      const beaconLens = this._makeRunningLight(0xffaa22, 0.70);
+      beaconLens.position.set(0, 2.58, 0.60);
+      beaconLens.userData = { isBeacon: true, phase: Math.random() * 6 };
+      car.add(beaconLens);
+      car.userData.beacon = beaconLens;
       this.scene.add(car);
       this.patrolHogs.push(car);
     });
@@ -5357,6 +8025,12 @@ const ScenesSelector = {
       if (ud.wheels) {
         ud.wheels.forEach(w => { w.rotation.x -= dt * 8; });
       }
+      // b227: amber roof beacon — sharp flash + decay on each rotation pass
+      if (ud.beacon?.material) {
+        const phase = ud.beacon.userData.phase + t * 5.5;
+        const flash = 0.5 + 0.5 * Math.cos(phase);
+        ud.beacon.material.opacity = 0.25 + flash * flash * 0.75;
+      }
       hog.children.forEach(c => {
         if (c.userData?.blinkSeed === 99 && c.material) {
           c.material.opacity = 0.85 + Math.sin(t * 7 + c.position.x) * 0.10;
@@ -5377,13 +8051,16 @@ const ScenesSelector = {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
+    // b216: bright colors RESTORED. The b214 dim-down was wrong — the
+    // huge halos behind panels were _buildStructureUplights, not bloom of
+    // the panel content. Reverting to the original vibrant text.
     // Top kicker — magenta mono
     ctx.font = '600 16px "Space Mono", monospace';
     ctx.fillStyle = '#ff7ec3';
     ctx.textBaseline = 'top';
     ctx.fillText(`EXPERIMENT  ${s.num}`, 32, 28);
 
-    // Title — huge lowercase Space Grotesk
+    // Title — huge lowercase Space Grotesk, white
     ctx.font = '800 84px "Space Grotesk", system-ui, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.fillText(s.title, 28, 78);
@@ -5393,14 +8070,14 @@ const ScenesSelector = {
     ctx.fillStyle = '#cfd5e0';
     this._wrapText(ctx, s.body, 32, 220, W - 64, 24);
 
-    // Bottom bar — caution stripe + ENTER prompt
+    // Bottom bar — caution stripe + ENTER prompt (magenta accent)
     ctx.fillStyle = 'rgba(255,126,195,0.18)';
     ctx.fillRect(0, H - 48, W, 48);
     ctx.fillStyle = '#ff7ec3';
     ctx.font = '600 14px "Space Mono", monospace';
     ctx.fillText('▶ HOVER · CLICK · ENTER →', 32, H - 32);
 
-    // Corner brackets (HUD-style)
+    // Corner brackets (HUD-style) — white
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     const bs = 18;
@@ -5437,6 +8114,111 @@ const ScenesSelector = {
   },
 
   /* ---------- HUD overlay (corner UI) ---------- */
+  /* ---------- b202: POI navigation system ----
+     Discrete waypoints across the base. Camera animates pos + yaw + pitch
+     between POIs over 1.6s with cubic ease. Drag-look continues from
+     each POI. ESC returns to deck. 0-9 hotkeys jump direct. N/P cycle. */
+  _buildPOI() {
+    // b207: pulled all POIs back ~50% further from their target so each
+    // structure reads in context with the surrounding base instead of
+    // filling the frame. Yaw vectors stay aligned (cam→target line is
+    // unchanged); pitches dipped slightly so framing tilts down for a
+    // more "looking across the base" feel.
+    this.poi = {
+      list: [
+        { id: 'deck',     name: 'OBSERVATION DECK', pos: [  0,  0,   0], yaw:  0.000, pitch: -0.05 },
+        { id: 'silo',     name: 'MISSILE SILO',     pos: [  0,  5, -55], yaw:  0.000, pitch:  0.10 },
+        { id: 'broken',   name: 'BROKEN DISH',      pos: [-38,  8, -14], yaw: -0.98,  pitch: -0.05 },
+        { id: 'sigint',   name: 'SIGINT TOWER',     pos: [-20,  5, -25], yaw: -0.79,  pitch:  0.00 },
+        { id: 'logistic', name: 'LOGISTICS YARD',   pos: [ 20,  5, -25], yaw:  0.79,  pitch:  0.00 },
+        { id: 'fwd_ops',  name: 'FORWARD OPS',      pos: [ 10,  5, -45], yaw:  0.61,  pitch: -0.02 },
+        { id: 'comms',    name: 'COMMS ARRAY',      pos: [-10,  5, -45], yaw: -0.61,  pitch: -0.02 },
+        { id: 'airfield', name: 'SE AIRFIELD',      pos: [ 25,  7,  10], yaw:  2.23,  pitch: -0.05 },
+        { id: 'biolab',   name: 'BIOSTATION SW',    pos: [-22,  6,  20], yaw: -2.36,  pitch: -0.05 },
+        { id: 'ridge',    name: 'RIDGE VIEW',       pos: [  0, 26,  72], yaw:  0.000, pitch: -0.18 },
+      ],
+      current: 0,
+      inTransit: false,
+      fromPos: new THREE.Vector3(),
+      toPos:   new THREE.Vector3(),
+      fromYaw: 0, toYaw: 0,
+      fromPitch: 0, toPitch: -0.05,
+      t: 0,
+      duration: 1.6,
+    };
+    // HUD strip: bottom-center, clickable buttons
+    const strip = document.createElement('div');
+    strip.className = 'ss-poi-strip';
+    strip.id = 'ss-poi-strip';
+    strip.innerHTML = '<div class="ss-poi-label">— viewpoint —</div>'
+      + this.poi.list.map((p, i) =>
+          `<button class="ss-poi-btn" data-poi="${i}"><span class="ss-poi-num">${i}</span>${p.name}</button>`
+        ).join('');
+    strip.addEventListener('click', e => {
+      let target = e.target;
+      while (target && !target.dataset?.poi && target !== strip) target = target.parentElement;
+      const idx = target?.dataset?.poi;
+      if (idx != null) this._gotoPOI(parseInt(idx, 10));
+    });
+    this.hudEl.appendChild(strip);
+    this._highlightPOI();
+  },
+
+  _gotoPOI(idx) {
+    if (!this.poi || idx < 0 || idx >= this.poi.list.length) return;
+    if (idx === this.poi.current && !this.poi.inTransit) return;
+    const p = this.poi.list[idx];
+    // Capture current actual camera position (strip out the bob offset)
+    this.poi.fromPos.set(this.camera.position.x, this.poi.list[this.poi.current].pos[1], this.camera.position.z);
+    this.poi.toPos.set(p.pos[0], p.pos[1], p.pos[2]);
+    this.poi.fromYaw   = this.gaze.yaw;
+    this.poi.toYaw     = p.yaw;
+    // Shortest-path yaw lerp (avoid full-circle spin)
+    let dy = this.poi.toYaw - this.poi.fromYaw;
+    if (dy >  Math.PI) this.poi.toYaw -= Math.PI * 2;
+    if (dy < -Math.PI) this.poi.toYaw += Math.PI * 2;
+    this.poi.fromPitch = this.gaze.pitch;
+    this.poi.toPitch   = p.pitch;
+    this.poi.t = 0;
+    this.poi.inTransit = true;
+    this.poi.current = idx;
+    this._highlightPOI();
+  },
+
+  _highlightPOI() {
+    if (!this.poi) return;
+    const strip = document.getElementById('ss-poi-strip');
+    if (!strip) return;
+    strip.querySelectorAll('.ss-poi-btn').forEach((b, i) => {
+      b.classList.toggle('active', i === this.poi.current);
+    });
+  },
+
+  _tickPOI(dt, t) {
+    if (!this.poi) return;
+    if (this.poi.inTransit) {
+      this.poi.t += dt / this.poi.duration;
+      if (this.poi.t >= 1) {
+        this.poi.t = 1;
+        this.poi.inTransit = false;
+      }
+      // Smoothstep ease
+      const k = this.poi.t * this.poi.t * (3 - 2 * this.poi.t);
+      const fp = this.poi.fromPos, tp = this.poi.toPos;
+      this.camera.position.x = fp.x + (tp.x - fp.x) * k;
+      this.camera.position.y = fp.y + (tp.y - fp.y) * k + Math.sin(t * 0.5) * 0.06;
+      this.camera.position.z = fp.z + (tp.z - fp.z) * k;
+      this.gaze.yaw   = this.poi.fromYaw   + (this.poi.toYaw   - this.poi.fromYaw)   * k;
+      this.gaze.pitch = this.poi.fromPitch + (this.poi.toPitch - this.poi.fromPitch) * k;
+    } else {
+      // Parked at current POI — snap pos + add bob
+      const p = this.poi.list[this.poi.current];
+      this.camera.position.x = p.pos[0];
+      this.camera.position.z = p.pos[2];
+      this.camera.position.y = p.pos[1] + (this._camBaseY || 0) + Math.sin(t * 0.5) * 0.10;
+    }
+  },
+
   _buildHud() {
     const root = document.createElement('div');
     root.className = 'ss-hud';
@@ -5477,10 +8259,20 @@ const ScenesSelector = {
   _setupComposer() {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.55, 0.10);
-    bloom.threshold = 0.10;
-    bloom.strength  = 0.65;
-    bloom.radius    = 0.55;
+    // b214: bloom raised to threshold 0.75 so dim panel content (now
+    // gray text on dark bg, max brightness ~0.72) never blooms. Strength
+    // 0.20 keeps an actual screen-glow on the few genuinely bright sources
+    // left in the scene (planet rim, sun strobes, vehicle headlights,
+    // missile-silo strobe). Radius stays tight at 0.25 so even those
+    // glow tightly to source.
+    // b216: bloom restored to a moderate setting now that the dominant
+    // halo source (`_buildStructureUplights`) is gone. Tight radius so
+    // bright pixels (panel text, planet rim, strobes) get a clean
+    // screen-glow, not the wide haze of earlier passes.
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.30, 0.30);
+    bloom.threshold = 0.30;
+    bloom.strength  = 0.45;
+    bloom.radius    = 0.30;
     this.bloom = bloom;
     this.composer.addPass(bloom);
     this.postPass = new ShaderPass({
@@ -5566,7 +8358,28 @@ const ScenesSelector = {
   },
 
   _onKey(e) {
-    if (e.key === 'Escape' && this.focused) this._release();
+    if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
+    // ESC: release focus first, else snap back to deck (POI 0)
+    if (e.key === 'Escape') {
+      if (this.focused) this._release();
+      else if (this.poi && this.poi.current !== 0) this._gotoPOI(0);
+      return;
+    }
+    // Digit hotkeys: jump to POI N (0..9)
+    if (this.poi && /^[0-9]$/.test(e.key)) {
+      const idx = parseInt(e.key, 10);
+      if (idx < this.poi.list.length) this._gotoPOI(idx);
+      return;
+    }
+    // N/P: cycle next/prev
+    if (this.poi && (e.key === 'n' || e.key === 'N')) {
+      this._gotoPOI((this.poi.current + 1) % this.poi.list.length);
+      return;
+    }
+    if (this.poi && (e.key === 'p' || e.key === 'P')) {
+      this._gotoPOI((this.poi.current - 1 + this.poi.list.length) % this.poi.list.length);
+      return;
+    }
   },
 
   _raycast() {
@@ -5622,13 +8435,15 @@ const ScenesSelector = {
     const dt = Math.min(0.05, this.clock.getDelta());
     const t  = this.clock.elapsedTime;
 
-    // Camera orientation from gaze (locked at origin, drag to look)
+    // b202: POI-aware camera positioning. _tickPOI sets camera.position
+    // (lerping mid-transit OR snapping to current POI + bob).
+    this._tickPOI(dt, t);
+
+    // Camera orientation from gaze (drag updates yaw/pitch; POI transit
+    // also lerps yaw/pitch toward target).
     const fwd = this._forwardVec();
     const lookAt = new THREE.Vector3().copy(this.camera.position).add(fwd.multiplyScalar(20));
     this.camera.lookAt(lookAt);
-
-    // Subtle camera bob (offset from portrait/landscape base height)
-    this.camera.position.y = (this._camBaseY || 0) + Math.sin(t * 0.5) * 0.10;
 
     // Floor + dust uniforms
     if (this.floor) this.floor.material.uniforms.uTime.value = t;
@@ -5706,9 +8521,27 @@ const ScenesSelector = {
         s.material.opacity = 0.30 + k * 0.70;
       });
       this.standoff.windows.forEach((w) => {
-        // Subtle warmth flicker on bunker windows
-        const k = 0.85 + Math.sin(t * w.userData.rate + w.userData.phase) * 0.10;
-        w.material.opacity = w.userData.baseOpacity * k;
+        // b202: dialed flicker WAY down — was ±10% which read as
+        // "holographic blinking cards." Now ±2% so windows hold steady
+        // with a near-imperceptible warm shimmer. Welder/spark items
+        // (userData.isWelder / .isSpark) keep their dramatic flicker.
+        let k;
+        if (w.userData.isWelder) {
+          // Welder: sharp bright pulses every ~4s
+          const ph = (t * 0.25 + w.userData.phase) % 1.0;
+          k = ph < 0.06 ? 1.4 + Math.random() * 0.5 : 0.0;
+        } else if (w.userData.isSpark) {
+          // Spark: sustained jitter
+          k = 0.7 + Math.sin(t * w.userData.rate + w.userData.phase) * 0.30 + Math.random() * 0.2;
+        } else if (w.userData.fault) {
+          // Fault windows (broken-dish plinth): irregular skips
+          const ph = (t * w.userData.rate + w.userData.phase) % (Math.PI * 2);
+          k = ph < 0.4 ? 0.30 : 0.95 + Math.sin(ph * 3) * 0.05;
+        } else {
+          // Standard window: ±2% steady warm shimmer
+          k = 0.97 + Math.sin(t * w.userData.rate + w.userData.phase) * 0.02;
+        }
+        w.material.opacity = Math.max(0, w.userData.baseOpacity * k);
       });
     }
 
@@ -5723,36 +8556,30 @@ const ScenesSelector = {
       u.uHover.value += (targetH - u.uHover.value) * Math.min(1, dt * 8);
       u.uFocus.value += (targetF - u.uFocus.value) * Math.min(1, dt * 6);
 
-      // Position: focused → fly forward toward camera; hover → lift forward
-      // along the camera-facing direction (toward viewer) + small upward
-      // bump; otherwise idle drift around the diegetic mount.
+      // b200: panels are billboards mounted on buildings — they DO NOT
+      // bob in idle. Old `sin(t * 0.4) * 0.20` drift made fixed-position
+      // displays float like UI cards. Killed.
+      // Position: focused → fly forward; hover → small forward pop;
+      // otherwise locked to basePos.
       let target;
       if (isFocus) {
         target = this.camera.position.clone().add(this._forwardVec().multiplyScalar(11));
       } else if (isHover) {
-        // Direction from camera (origin) to panel — hover lifts it OUT
-        // (away from camera) … wait no, we want it to come TOWARD the
-        // viewer so it reads as "popping out." Negative direction.
         const toCam = p.basePos.clone().normalize().multiplyScalar(-0.7);
         target = p.basePos.clone().add(toCam).add(new THREE.Vector3(0, 0.30, 0));
       } else {
-        const drift = Math.sin(t * 0.4 + p.basePos.x * 0.3) * 0.20;
-        target = p.basePos.clone().add(new THREE.Vector3(0, drift, 0));
+        target = p.basePos;
       }
       p.mesh.position.lerp(target, Math.min(1, dt * (isFocus ? 6 : 3)));
-      p.halo.position.copy(p.mesh.position);
-      // Halo opacity tracks hover/focus
-      p.halo.material.opacity = 0.28 + u.uHover.value * 0.30 + u.uFocus.value * 0.28;
-      // Scale boost on hover
       const targetScale = isFocus ? 1.18 : (isHover ? 1.05 : 1.0);
       p.mesh.scale.lerp(new THREE.Vector3(targetScale, targetScale, 1), Math.min(1, dt * 5));
-      // Halo is a sprite — scales with panel size
-      const haloW = (p.sizeW * 1.8) * targetScale;
-      const haloH = (p.sizeH * 1.8) * targetScale;
-      p.halo.scale.lerp(new THREE.Vector3(haloW, haloH, 1), Math.min(1, dt * 5));
-      // Re-orient panel to face camera when focused
+      // b200: panels are mounted upright on real buildings. Face the
+      // camera horizontally (no down-tilt to half-altitude). Old code
+      // tilted high panels (galaxy y=8 → looked at y=4) by ~22° down.
       if (isFocus) p.mesh.lookAt(this.camera.position);
-      else if (Math.abs(u.uFocus.value) < 0.02) p.mesh.lookAt(0, p.basePos.y * 0.5, 0);
+      else if (Math.abs(u.uFocus.value) < 0.02) {
+        p.mesh.lookAt(0, p.basePos.y, 0);
+      }
     });
 
     if (this.postPass) this.postPass.uniforms.uTime.value = t;

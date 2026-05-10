@@ -14,6 +14,7 @@ Usage:
 import sys
 import os
 import re
+from urllib.parse import unquote
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -32,6 +33,13 @@ REWRITES = [
 
 
 class RewriteHandler(SimpleHTTPRequestHandler):
+    # b193: Chromium-based browsers (Chrome, Vivaldi, Edge) hang audio playback
+    # when the server doesn't honor HTTP Range requests — `audio.play()` never
+    # resolves and currentTime stays at 0 even though metadata loaded. Python's
+    # built-in handler returns full 200s for everything, so we add Range support
+    # for media-y file types below.
+    RANGE_EXTS = (".mp3", ".m4a", ".ogg", ".wav", ".webm", ".mp4")
+
     def do_GET(self):
         # Strip query string for matching, keep it for the response so client
         # side can still read URLSearchParams.
@@ -44,14 +52,19 @@ class RewriteHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
-        # If a real file exists on disk, serve it as-is.
-        rel = path_only.lstrip("/")
+        # If a real file exists on disk, serve it as-is. URL-decode before the
+        # file-existence check — most audio filenames contain spaces, which
+        # arrive as `%20` in path_only and never match the actual on-disk name.
+        decoded = unquote(path_only)
+        rel = decoded.lstrip("/")
         # Directory-index fallback (e.g. /scenes/ → scenes/index.html)
-        if path_only.endswith("/"):
+        if decoded.endswith("/"):
             candidate = os.path.join(os.getcwd(), rel, "index.html")
         else:
             candidate = os.path.join(os.getcwd(), rel)
         if os.path.isfile(candidate):
+            if candidate.lower().endswith(self.RANGE_EXTS):
+                return self._serve_with_range(candidate)
             return super().do_GET()
 
         # Apply rewrites
@@ -65,6 +78,59 @@ class RewriteHandler(SimpleHTTPRequestHandler):
 
         # No rewrite matched → fall through (will 404 normally)
         return super().do_GET()
+
+    def _serve_with_range(self, path):
+        """Range-aware static file serving for media files."""
+        try:
+            file_size = os.path.getsize(path)
+        except OSError:
+            self.send_error(404, "File not found")
+            return
+
+        ctype = self.guess_type(path)
+        range_header = self.headers.get("Range")
+        start, end = 0, file_size - 1
+        status = 200
+
+        if range_header:
+            # Format: "bytes=START-END" (END optional)
+            m = re.match(r"bytes=(\d+)-(\d*)", range_header)
+            if m:
+                start = int(m.group(1))
+                if m.group(2):
+                    end = min(int(m.group(2)), file_size - 1)
+                if start > end or start >= file_size:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{file_size}")
+                    self.end_headers()
+                    return
+                status = 206
+
+        length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        self.end_headers()
+
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = f.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def do_HEAD(self):
+        # Mirror do_GET's special-cases so HEAD works for media files too.
+        return self.do_GET()
 
     def log_message(self, fmt, *args):
         # Color the 200/30x in a single line, quieter than the default

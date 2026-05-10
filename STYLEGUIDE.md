@@ -229,10 +229,6 @@ Routes that exist and currently DON'T match the current `/` aesthetic:
 **Current state:** "coming soon" placeholders.
 **Target:** Style the placeholder card to match — kicker `RELEASE PENDING`, title from slug, body line. Replace generic placeholder with the void/grain treatment.
 
-### `/galaxy.html` (Text Galaxy Pro)
-**Current state:** sister of `/`, similar aesthetic but standalone.
-**Target:** Already aligned. Spot-check tokens, ensure HUD CSS pulls from the same vars.
-
 ### `/halo.html` (Halo Recon game)
 **Current state:** game UI, distinct visual context.
 **Target:** Out of scope for this rollout. Game UIs deserve their own visual language.

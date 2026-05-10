@@ -198,12 +198,78 @@
     .ss-act.ss-act-dim { color: var(--text-muted); border-color: var(--text-muted); }
     .ss-act.ss-act-dim:hover { color: #fff; border-color: #fff; }
 
+    /* b202: POI navigation strip — bottom-center floating waypoint bar */
+    .ss-poi-strip {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      max-width: min(900px, calc(100vw - 32px));
+      padding: 10px 14px;
+      background: rgba(8, 10, 16, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      backdrop-filter: blur(8px);
+      pointer-events: auto;
+      z-index: 4;
+    }
+    .ss-poi-label {
+      width: 100%;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: .22em;
+      color: var(--accent-debug);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .ss-poi-btn {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-faint);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      padding: 5px 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ss-poi-btn:hover {
+      background: rgba(255, 255, 255, 0.10);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.30);
+    }
+    .ss-poi-btn.active {
+      background: var(--accent-debug);
+      color: #06080d;
+      border-color: var(--accent-debug);
+    }
+    .ss-poi-num {
+      font-size: 9px;
+      opacity: 0.65;
+      padding-right: 4px;
+      border-right: 1px solid currentColor;
+      margin-right: 2px;
+    }
+    .ss-poi-btn.active .ss-poi-num { opacity: 0.85; }
+
     @media (max-width: 760px) {
       .ss-tl, .ss-tr, .ss-bl, .ss-br { padding: 14px 16px; }
       .ss-title { font-size: clamp(32px, 9vw, 52px); }
       .ss-meta { font-size: 10px; max-width: 220px; }
       .ss-focus { padding: 0 0 10vh 6vw; }
       .ss-focus-title { font-size: clamp(36px, 11vw, 72px); }
+      .ss-poi-strip { padding: 8px 10px; gap: 4px; bottom: 8px; }
+      .ss-poi-btn { font-size: 9px; padding: 4px 7px; }
+      .ss-poi-label { font-size: 8px; }
     }
   </style>
 
@@ -221,8 +287,10 @@
   <main id="ss-mount"></main>
 
   <script type="module">
-    import './js/scenes-selector.js';
-    // wait one tick so the module assigns window.ScenesSelector
+    // b220 cache-buster — Vivaldi/Chrome cache ES modules aggressively even
+    // through hard-reload. Timestamp query string forces a fresh fetch every
+    // page load. Production CDN ignores the param so it's dev-only friction.
+    await import(`/js/scenes-selector.js?v=${Date.now()}`);
     requestAnimationFrame(() => {
       const mount = document.getElementById('ss-mount');
       window.ScenesSelector.init(mount);

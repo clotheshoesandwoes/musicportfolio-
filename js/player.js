@@ -1,5 +1,17 @@
 /* =========================================================
    PLAYER.JS — Audio engine, controls, Web Audio API
+
+   *** SHARED ENGINE — DO NOT MODIFY FOR VISUAL CHANGES ***
+   This file is consumed by ALL scenes (galaxy, tracks, scenes).
+   Every view depends on the API surface below: load/play/pause/
+   seek + the analyser cached on `audio.__floorAnalyser` that
+   feeds bass-reactive shaders + spectrum bars across all views.
+   Visual / UI changes belong in the consuming scene file:
+     - galaxy player chip / hover     → js/marathon-world.js
+     - tracks DAW transport / clips   → js/tracks-daw.js
+     - scenes audio overlay           → js/scenes-selector.js
+   Audio-engine changes here need to be tested against ALL THREE
+   scenes before shipping. Coordinate across chats.
    ========================================================= */
 
 const playerAudio = new Audio();
@@ -11,6 +23,19 @@ playerAudio.volume = 0.8;
 // the audio destination since the analyser is wired into the audio path.
 // Must be set BEFORE any src is assigned.
 playerAudio.crossOrigin = 'anonymous';
+
+// b117 — best-effort suppression of the browser's built-in mini-player
+// (Vivaldi/Chrome show a system-wide media-controls popup whenever an audio
+// element plays). Clearing MediaSession metadata + handlers reduces what the
+// browser has to display, but Chromium-family browsers ultimately decide on
+// their own; user may still need to disable "Media Controls" in browser
+// settings. We do what we can from here.
+if ('mediaSession' in navigator) {
+  try { navigator.mediaSession.metadata = null; } catch (e) {}
+  ['play','pause','previoustrack','nexttrack','seekto','seekbackward','seekforward','stop'].forEach(act => {
+    try { navigator.mediaSession.setActionHandler(act, null); } catch (e) {}
+  });
+}
 
 let audioContext = null;
 let analyser = null;

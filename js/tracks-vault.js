@@ -91,6 +91,13 @@ const POST_FRAG = `
   uniform sampler2D tDiffuse;
   uniform float uTime;
   uniform vec2  uResolution;
+  uniform float uCAOn;
+  uniform float uCAAmt;
+  uniform float uFlaresOn;
+  uniform float uGradeOn;
+  uniform float uScanOn;
+  uniform float uGrainOn;
+  uniform float uVignetteOn;
   varying vec2 vUv;
   float rand(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   void main(){
@@ -98,43 +105,49 @@ const POST_FRAG = `
     vec2 dir = uv - 0.5;
 
     // Radial CA (sells lens-feel without smearing detail)
-    float ca = 0.0014;
+    float ca = uCAAmt * uCAOn;
     float r = texture2D(tDiffuse, uv - dir * ca).r;
     float g = texture2D(tDiffuse, uv).g;
     float b = texture2D(tDiffuse, uv + dir * ca).b;
     vec3 col = vec3(r, g, b);
 
     // Anamorphic horizontal streak — wide soft taps, only adds light, never replaces.
-    // Reads like cinematic light flares. Cheap (5 extra texture taps).
-    vec3 streak = vec3(0.0);
-    streak += texture2D(tDiffuse, uv + vec2(-0.014, 0.0)).rgb * 0.8;
-    streak += texture2D(tDiffuse, uv + vec2(-0.007, 0.0)).rgb * 1.0;
-    streak += texture2D(tDiffuse, uv + vec2( 0.007, 0.0)).rgb * 1.0;
-    streak += texture2D(tDiffuse, uv + vec2( 0.014, 0.0)).rgb * 0.8;
-    streak += texture2D(tDiffuse, uv + vec2( 0.024, 0.0)).rgb * 0.5;
-    streak += texture2D(tDiffuse, uv + vec2(-0.024, 0.0)).rgb * 0.5;
-    // Only add the highlight portion of the streak (threshold so dark areas stay dark)
-    vec3 hi = max(streak / 4.6 - 0.35, vec3(0.0));
-    col += hi * vec3(0.9, 0.95, 1.0) * 0.18;
+    if (uFlaresOn > 0.5) {
+      vec3 streak = vec3(0.0);
+      streak += texture2D(tDiffuse, uv + vec2(-0.014, 0.0)).rgb * 0.8;
+      streak += texture2D(tDiffuse, uv + vec2(-0.007, 0.0)).rgb * 1.0;
+      streak += texture2D(tDiffuse, uv + vec2( 0.007, 0.0)).rgb * 1.0;
+      streak += texture2D(tDiffuse, uv + vec2( 0.014, 0.0)).rgb * 0.8;
+      streak += texture2D(tDiffuse, uv + vec2( 0.024, 0.0)).rgb * 0.5;
+      streak += texture2D(tDiffuse, uv + vec2(-0.024, 0.0)).rgb * 0.5;
+      vec3 hi = max(streak / 4.6 - 0.35, vec3(0.0));
+      col += hi * vec3(0.9, 0.95, 1.0) * 0.18;
+    }
 
     // Cinematic split-tone color grade: cool shadows, warm highlights
-    float lum = dot(col, vec3(0.299, 0.587, 0.114));
-    vec3 shadowTint    = vec3(0.86, 0.94, 1.16);
-    vec3 highlightTint = vec3(1.12, 1.00, 0.85);
-    col *= mix(shadowTint, highlightTint, smoothstep(0.0, 0.65, lum));
-
-    // Saturation boost (slight)
-    vec3 gray = vec3(dot(col, vec3(0.299, 0.587, 0.114)));
-    col = mix(gray, col, 1.12);
+    if (uGradeOn > 0.5) {
+      float lum = dot(col, vec3(0.299, 0.587, 0.114));
+      vec3 shadowTint    = vec3(0.86, 0.94, 1.16);
+      vec3 highlightTint = vec3(1.12, 1.00, 0.85);
+      col *= mix(shadowTint, highlightTint, smoothstep(0.0, 0.65, lum));
+      vec3 gray = vec3(dot(col, vec3(0.299, 0.587, 0.114)));
+      col = mix(gray, col, 1.12);
+    }
 
     // Subtle scanlines
-    col *= 0.97 + 0.03 * sin(uv.y * uResolution.y * 1.6);
+    if (uScanOn > 0.5) {
+      col *= 0.97 + 0.03 * sin(uv.y * uResolution.y * 1.6);
+    }
 
     // Film grain — animated, breaks up gradient banding
-    col += (rand(uv + fract(uTime * 0.8)) - 0.5) * 0.035;
+    if (uGrainOn > 0.5) {
+      col += (rand(uv + fract(uTime * 0.8)) - 0.5) * 0.035;
+    }
 
-    // Cinematic vignette — firmer than the over-soft b150 take, but readable
-    col *= smoothstep(1.45, 0.45, length(dir) * 1.42);
+    // Cinematic vignette
+    if (uVignetteOn > 0.5) {
+      col *= smoothstep(1.45, 0.45, length(dir) * 1.42);
+    }
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -339,14 +352,20 @@ const TracksVault = {
   totalH: 100, halfH: 50,
   scroll: 0,
   starfield: null, dust: null, nebula: null, energyStream: null,
-  coreLayers: [],
+  coreLayers: [], backGlows: [],
   audio: null, audioCtx: null, analyser: null, freqArr: null,
   bass: 0, energy: 0,
+  // Admin state
+  adminEl: null, _adminTime: 0,
+  _paused: false, _timeScale: 1,
+  _hudHidden: false,
+  _autoYawOn: true, _autoScrollOn: true, _inertiaOn: true, _bassRotateOn: false,
+  _density: 117,
 
   init(container, ctx) {
     if (this.renderer) return;
     this.destroyed = false;
-    this.panels = []; this.shards = []; this.pulses = []; this.rings = []; this.glints = []; this.coreLayers = [];
+    this.panels = []; this.shards = []; this.pulses = []; this.rings = []; this.glints = []; this.coreLayers = []; this.backGlows = [];
     this.hovered = null; this.focused = null;
     this.ctx = ctx || {};
     this.audio = ctx?.audio || null;
@@ -364,6 +383,8 @@ const TracksVault = {
 
     this.hudEl = this._buildHud();
     container.appendChild(this.hudEl);
+    this.adminEl = this._buildAdminPanel();
+    container.appendChild(this.adminEl);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
@@ -377,6 +398,7 @@ const TracksVault = {
 
     this._buildEnvironment();
     this._buildPanels();
+    this._buildTagIndex();
     this._buildShards();
     this._buildPulses();
     this._setupComposer();
@@ -582,6 +604,7 @@ const TracksVault = {
       s.scale.set(sx, sy, 1);
       s.position.set(x, y, z);
       this.scene.add(s);
+      this.backGlows.push(s);
     };
     // Pulled-back back-glows so they never out-shine the foreground.
     mkGlow('rgba(110, 130, 200, 0.50)', 0,  20, -55, 160, 110, 0.22);
@@ -923,6 +946,13 @@ const TracksVault = {
     ctx.fillText(tierText, W - PAD_R - 4, 28);
     ctx.textAlign = 'left';
 
+    // SC indicator — small orange tag under the tier badge, signals the link is wired.
+    ctx.font = '700 11px "Space Mono", monospace';
+    ctx.fillStyle = '#ff7a3d';
+    ctx.textAlign = 'right';
+    ctx.fillText('↗ SC', W - PAD_R - 4, 64);
+    ctx.textAlign = 'left';
+
     // ---- Title block (the hero) ----
     const title = (track.title || 'untitled').toLowerCase();
     let size = 96;
@@ -1037,6 +1067,10 @@ const TracksVault = {
         <div class="tv-nav">
           <a href="/">← galaxy</a>
           <a href="/scenes">scenes</a>
+          <button type="button" class="tv-admin-link" data-act="admin">[ admin ]</button>
+        </div>
+        <div class="tv-shuffle-hint">
+          <kbd>SPACE</kbd> play  <kbd>R</kbd> shuffle  <kbd>←</kbd><kbd>→</kbd> jump
         </div>
       </div>
       <div class="tv-bl">
@@ -1045,6 +1079,7 @@ const TracksVault = {
       <div class="tv-br">
         <div class="tv-chips" id="tv-chips">
           ${filters.map(f => `<button class="tv-chip ${f === this.filter ? 'on' : ''}" data-filter="${f}">${f}</button>`).join('')}
+          <button class="tv-chip" data-act="shuffle" title="random track (R)">⤬ shuffle</button>
         </div>
       </div>
       <div class="tv-focus" id="tv-focus" style="display:none">
@@ -1053,9 +1088,52 @@ const TracksVault = {
         <div class="tv-focus-body" id="tv-focus-body"></div>
         <div class="tv-focus-actions">
           <button class="tv-act" id="tv-focus-play">▸ play</button>
+          <a class="tv-act tv-act-sc" id="tv-focus-sc" href="#" target="_blank" rel="noopener" title="open on SoundCloud">
+            <svg class="tv-sc-glyph" viewBox="0 0 26 14" aria-hidden="true">
+              <g fill="currentColor">
+                <rect x="0"  y="6" width="1.6" height="6"/>
+                <rect x="2.4" y="4" width="1.6" height="9"/>
+                <rect x="4.8" y="2" width="1.6" height="11"/>
+                <rect x="7.2" y="1" width="1.6" height="12"/>
+                <path d="M11 1.5c.5-.4 1.2-.6 1.9-.5.6.1 1.2.5 1.5 1.1.4-.2.9-.3 1.4-.2.6.1 1.2.5 1.5 1.1.5-.4 1.2-.6 1.9-.4 1 .2 1.7 1 1.8 2 2 .1 3.6 1.7 3.6 3.7s-1.7 3.7-3.7 3.7H11V1.5z"/>
+              </g>
+            </svg>
+            <span>soundcloud</span>
+          </a>
           <a class="tv-act tv-act-dim" id="tv-focus-details" href="#">details</a>
           <button class="tv-act tv-act-dim" id="tv-focus-share">share</button>
           <button class="tv-act tv-act-dim" data-act="release">close</button>
+        </div>
+      </div>
+      <div class="tv-now" id="tv-now">
+        <div class="tv-now-meta">
+          <span class="tv-now-num" id="tv-now-num">— · —</span>
+          <span class="tv-now-title" id="tv-now-title" title="focus the playing track">▸ no signal</span>
+          <span class="tv-now-tags" id="tv-now-tags"></span>
+        </div>
+        <div class="tv-now-bar">
+          <button class="tv-now-btn" data-act="prev" title="previous (←)">⏮</button>
+          <button class="tv-now-btn is-play" data-act="play" id="tv-now-play" title="play / pause (space)">▶</button>
+          <button class="tv-now-btn" data-act="next" title="next (→)">⏭</button>
+          <button class="tv-now-btn" data-act="shuffle" title="random (R)">⤬</button>
+          <div class="tv-now-progress" id="tv-now-progress" title="click to seek">
+            <div class="tv-now-progress-track">
+              <div class="tv-now-fill" id="tv-now-fill"></div>
+            </div>
+            <div class="tv-now-knob" id="tv-now-knob"></div>
+          </div>
+          <span class="tv-now-time" id="tv-now-time">0:00 / 0:00</span>
+          <a class="tv-now-btn is-sc" data-act="sc" id="tv-now-sc" href="#" target="_blank" rel="noopener" title="open on SoundCloud">
+            <svg class="tv-sc-glyph" viewBox="0 0 26 14" aria-hidden="true">
+              <g fill="currentColor">
+                <rect x="0"  y="6" width="1.6" height="6"/>
+                <rect x="2.4" y="4" width="1.6" height="9"/>
+                <rect x="4.8" y="2" width="1.6" height="11"/>
+                <rect x="7.2" y="1" width="1.6" height="12"/>
+                <path d="M11 1.5c.5-.4 1.2-.6 1.9-.5.6.1 1.2.5 1.5 1.1.4-.2.9-.3 1.4-.2.6.1 1.2.5 1.5 1.1.5-.4 1.2-.6 1.9-.4 1 .2 1.7 1 1.8 2 2 .1 3.6 1.7 3.6 3.7s-1.7 3.7-3.7 3.7H11V1.5z"/>
+              </g>
+            </svg>
+          </a>
         </div>
       </div>
     `;
@@ -1083,6 +1161,55 @@ const TracksVault = {
     root.querySelectorAll('[data-act="release"]').forEach(b => {
       b.addEventListener('click', e => { e.stopPropagation(); this._release(); });
     });
+    root.querySelectorAll('[data-act="admin"]').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); this._toggleAdmin(); });
+    });
+    root.querySelectorAll('[data-act="shuffle"]').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); this._shuffle(); });
+    });
+    root.querySelectorAll('[data-act="prev"]').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); this.ctx.onPrev && this.ctx.onPrev(); });
+    });
+    root.querySelectorAll('[data-act="next"]').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); this.ctx.onNext && this.ctx.onNext(); });
+    });
+    root.querySelectorAll('[data-act="play"]').forEach(b => {
+      b.addEventListener('click', e => {
+        e.stopPropagation();
+        if (this.ctx.onTogglePlay) this.ctx.onTogglePlay();
+        if (this.audioCtx?.state === 'suspended') this.audioCtx.resume().catch(()=>{});
+      });
+    });
+    const titleNow = root.querySelector('#tv-now-title');
+    if (titleNow) titleNow.addEventListener('click', e => {
+      e.stopPropagation();
+      const cur = (this.ctx.getCurrent && this.ctx.getCurrent()) ?? -1;
+      if (cur < 0) return;
+      const p = this.panels.find(pp => pp.idx === cur);
+      if (p) this._focus(p);
+    });
+    const prog = root.querySelector('#tv-now-progress');
+    if (prog) {
+      const seekFromEvent = (e) => {
+        const r = prog.getBoundingClientRect();
+        const x = (e.clientX || (e.touches && e.touches[0]?.clientX) || 0) - r.left;
+        const pct = Math.max(0, Math.min(1, x / r.width));
+        if (this.ctx.onSeek) this.ctx.onSeek(pct);
+      };
+      prog.addEventListener('click', e => { e.stopPropagation(); seekFromEvent(e); });
+      prog.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        prog.setPointerCapture?.(e.pointerId);
+        seekFromEvent(e);
+        const move = (ev) => seekFromEvent(ev);
+        const up   = () => {
+          prog.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        };
+        prog.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+    }
     return root;
   },
 
@@ -1142,7 +1269,7 @@ const TracksVault = {
 
   _applyVisibility(initial = false) {
     this.panels.forEach(p => {
-      const want = this._matchesFilter(p);
+      const want = this._matchesFilter(p) && !p.densityHidden;
       p.hidden = !want;
       if (initial) {
         const u = this._panelUniforms(p);
@@ -1206,6 +1333,13 @@ const TracksVault = {
         tDiffuse:    { value: null },
         uTime:       { value: 0 },
         uResolution: { value: new THREE.Vector2(1, 1) },
+        uCAOn:       { value: 1 },
+        uCAAmt:      { value: 0.0014 },
+        uFlaresOn:   { value: 1 },
+        uGradeOn:    { value: 1 },
+        uScanOn:     { value: 1 },
+        uGrainOn:    { value: 1 },
+        uVignetteOn: { value: 1 },
       },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: POST_FRAG,
@@ -1265,7 +1399,24 @@ const TracksVault = {
 
   _onKey(e) {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (e.key === 'Escape' && this.focused) this._release();
+    if (e.key === '`' || e.key === '~') { e.preventDefault(); this._toggleAdmin(); return; }
+    if (e.key === 'Escape' && this.focused) { this._release(); return; }
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (this.ctx.onTogglePlay) this.ctx.onTogglePlay();
+      if (this.audioCtx?.state === 'suspended') this.audioCtx.resume().catch(()=>{});
+      return;
+    }
+    if (e.key === 'r' || e.key === 'R') { this._shuffle(); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); this._focusByOffset(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); this._focusByOffset(+1); return; }
+    if (e.key === 's' || e.key === 'S') {
+      const panel = this.focused || this.panels.find(p => p.idx === ((this.ctx.getCurrent && this.ctx.getCurrent()) ?? -1));
+      if (!panel) return;
+      const url = `${location.origin}/t/${panel.slug}`;
+      if (this.ctx.onCopy) this.ctx.onCopy(url);
+      if (this.ctx.onToast) this.ctx.onToast('link copied');
+    }
   },
 
   _raycast() {
@@ -1293,6 +1444,7 @@ const TracksVault = {
     const playEl  = document.getElementById('tv-focus-play');
     const detEl   = document.getElementById('tv-focus-details');
     const shareEl = document.getElementById('tv-focus-share');
+    const scEl    = document.getElementById('tv-focus-sc');
     if (numEl)   numEl.textContent = `▣ TRACK ${String(panel.idx+1).padStart(3,'0')} / ${this.panels.length}  ·  ${panel.tier.toUpperCase()}`;
     if (titleEl) titleEl.textContent = (panel.track.title || '').toLowerCase();
     if (bodyEl) {
@@ -1301,6 +1453,7 @@ const TracksVault = {
       bodyEl.textContent = `${year}${tags ? '  ·  ' + tags : ''}`;
     }
     if (detEl)  detEl.href = `/t/${panel.slug}`;
+    if (scEl)   scEl.href  = this._scUrlFor(panel.track);
     if (playEl) {
       playEl.onclick = (e) => {
         e.stopPropagation();
@@ -1327,6 +1480,45 @@ const TracksVault = {
     this._updateHudHeader();
   },
 
+  _scUrlFor(track) {
+    const explicit = track && track.links && (track.links.soundcloud || track.links.sc);
+    if (explicit) return explicit;
+    if (this.ctx?.scUrl) return this.ctx.scUrl(track?.title || '');
+    const slug = (track?.title || '').toString().toLowerCase()
+      .replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+    return `https://soundcloud.com/kanisongs/${slug}`;
+  },
+
+  _shuffle() {
+    const visible = this.panels.filter(p => !p.hidden);
+    if (!visible.length) return;
+    const cur = (this.ctx?.getCurrent && this.ctx.getCurrent()) ?? -1;
+    let pick = visible[Math.floor(Math.random() * visible.length)];
+    // avoid re-picking the same currently-playing track if we have alternatives
+    if (visible.length > 1 && pick.idx === cur) {
+      pick = visible[(visible.indexOf(pick) + 1) % visible.length];
+    }
+    if (this.ctx.onPlay) this.ctx.onPlay(pick.idx);
+    this._focus(pick);
+    if (this.audioCtx?.state === 'suspended') this.audioCtx.resume().catch(()=>{});
+  },
+
+  _focusByOffset(offset) {
+    const visible = this.panels.filter(p => !p.hidden);
+    if (!visible.length) return;
+    let i = 0;
+    if (this.focused) {
+      i = visible.indexOf(this.focused);
+      if (i < 0) i = 0;
+    } else {
+      const cur = (this.ctx?.getCurrent && this.ctx.getCurrent()) ?? -1;
+      const ix = visible.findIndex(p => p.idx === cur);
+      if (ix >= 0) i = ix;
+    }
+    const next = visible[((i + offset) % visible.length + visible.length) % visible.length];
+    this._focus(next);
+  },
+
   _release() {
     this.focused = null;
     const f = document.getElementById('tv-focus');
@@ -1337,6 +1529,568 @@ const TracksVault = {
     this._updateHudHeader();
   },
 
+  /* ---------- Admin panel ---------- */
+  _toggleAdmin() {
+    if (!this.adminEl) return;
+    const open = this.adminEl.classList.toggle('on');
+    this.adminEl.style.display = open ? 'flex' : 'none';
+    if (open && this._adminUpdateState) this._adminUpdateState();
+  },
+
+  _buildAdminPanel() {
+    const root = document.createElement('div');
+    root.className = 'tv-admin';
+    root.style.display = 'none';
+    root.innerHTML = `
+      <div class="tv-admin-head">
+        <span class="tv-admin-brand">vault · admin</span>
+        <button class="tv-admin-x" data-act="close" aria-label="Close">×</button>
+      </div>
+      <div class="tv-admin-search">
+        <span>FILTER ▸</span>
+        <input id="tv-admin-q" type="text" autocomplete="off" spellcheck="false" placeholder="filter actions…" />
+      </div>
+      <div class="tv-admin-section" data-cat="preset" data-key="preset">
+        <div class="tv-admin-label">presets</div>
+        <button data-act="preset-default">default</button>
+        <button data-act="preset-minimal">minimal</button>
+        <button data-act="preset-cinematic">cinematic</button>
+        <button data-act="preset-photo">photo · clean</button>
+        <button data-act="preset-party">party · saturated</button>
+      </div>
+      <div class="tv-admin-section" data-cat="event" data-key="event">
+        <div class="tv-admin-label">vault events <span class="tv-admin-soon">soon</span></div>
+        <button disabled>decryption sweep</button>
+        <button disabled>data courier drone</button>
+        <button disabled>archive flythrough</button>
+        <button disabled>panel surge</button>
+        <button disabled>catalog index highlight</button>
+        <button disabled>tier rainbow</button>
+        <button disabled>discovery beacon</button>
+        <button disabled>stack collapse</button>
+        <button disabled>glitch storm</button>
+        <button disabled>track aura · scene-tint to playing</button>
+        <div class="tv-admin-hint">events ship next pass — wiring shell first</div>
+      </div>
+      <div class="tv-admin-section" data-cat="event" data-key="micro">
+        <div class="tv-admin-label">micro fx <span class="tv-admin-soon">soon</span></div>
+        <button disabled>meteor</button>
+        <button disabled>pulsar</button>
+        <button disabled>comm scrap</button>
+        <button disabled>emp flash</button>
+        <button disabled>bit drift on a panel</button>
+        <button disabled>shelf rumble</button>
+      </div>
+      <div class="tv-admin-section" data-cat="camera" data-key="camera">
+        <div class="tv-admin-label">camera</div>
+        <button data-act="cam-reset">reset camera</button>
+        <button data-act="cam-random">🎲 hop to random panel</button>
+        <button data-act="cam-prev">◀ prev panel</button>
+        <button data-act="cam-next">next panel ▶</button>
+        <button data-act="cam-release">release focus</button>
+        <div class="tv-admin-row">
+          <span class="tv-admin-rowlabel">FOV</span>
+          <input type="range" id="tv-fov-slider" min="40" max="100" step="1" value="70" />
+          <span class="tv-admin-rowval" id="tv-fov-val">70°</span>
+        </div>
+        <button data-act="cam-fov-down">FOV −5°</button>
+        <button data-act="cam-fov-up">FOV +5°</button>
+        <button data-act="cam-fov-reset">FOV reset (70°)</button>
+      </div>
+      <div class="tv-admin-section" data-cat="feel" data-key="feel">
+        <div class="tv-admin-label">feel · motion</div>
+        <button data-act="feel-yaw"     id="tv-feel-yaw">auto-yaw drift: <span>ON</span></button>
+        <button data-act="feel-scroll"  id="tv-feel-scroll">auto-scroll: <span>ON</span></button>
+        <button data-act="feel-inertia" id="tv-feel-inertia">drag inertia: <span>ON</span></button>
+        <button data-act="feel-bassrot" id="tv-feel-bassrot">bass-rotate panels: <span>OFF</span></button>
+        <div class="tv-admin-row">
+          <span class="tv-admin-rowlabel">descent</span>
+          <input type="range" id="tv-scroll-slider" min="-180" max="180" step="0.5" value="0" />
+          <span class="tv-admin-rowval" id="tv-scroll-val">0.0</span>
+        </div>
+      </div>
+      <div class="tv-admin-section" data-cat="helix" data-key="helix">
+        <div class="tv-admin-label">helix</div>
+        <button data-act="helix-shuffle">↻ reshuffle slot order</button>
+        <button data-act="helix-density-117" id="tv-density-117">density: 117 <span></span></button>
+        <button data-act="helix-density-60"  id="tv-density-60">density: 60 <span></span></button>
+        <button data-act="helix-density-30"  id="tv-density-30">density: 30 <span></span></button>
+        <button data-act="helix-density-feat" id="tv-density-feat">density: featured only <span></span></button>
+        <div class="tv-admin-hint" id="tv-helix-info"></div>
+      </div>
+      <div class="tv-admin-section" data-cat="filter" data-key="filter">
+        <div class="tv-admin-label">filter · tier</div>
+        <button data-act="filt-all"      id="tv-filt-all">all</button>
+        <button data-act="filt-featured" id="tv-filt-featured">featured</button>
+        <button data-act="filt-new"      id="tv-filt-new">new</button>
+        <button data-act="filt-hard"     id="tv-filt-hard">hard</button>
+        <button data-act="filt-chill"    id="tv-filt-chill">chill</button>
+        <button data-act="filt-grunge"   id="tv-filt-grunge">grunge</button>
+        <button data-act="filt-vibe"     id="tv-filt-vibe">vibe</button>
+      </div>
+      <div class="tv-admin-section" data-cat="elements" data-key="elements">
+        <div class="tv-admin-label">scene elements</div>
+        <div class="tv-admin-row tv-admin-master">
+          <button data-act="el-all-on">all on</button>
+          <button data-act="el-all-off">all off</button>
+        </div>
+        <button data-act="el-nebula"     id="tv-el-nebula">nebula skybox: <span>ON</span></button>
+        <button data-act="el-stars"      id="tv-el-stars">foreground starfield: <span>ON</span></button>
+        <button data-act="el-energy"     id="tv-el-energy">energy stream: <span>ON</span></button>
+        <button data-act="el-dust"       id="tv-el-dust">dust motes: <span>ON</span></button>
+        <button data-act="el-glints"     id="tv-el-glints">glints: <span>ON</span></button>
+        <button data-act="el-shards"     id="tv-el-shards">debris shards: <span>ON</span></button>
+        <button data-act="el-pulses"     id="tv-el-pulses">core pulses: <span>ON</span></button>
+        <button data-act="el-rings"      id="tv-el-rings">saturn rings: <span>ON</span></button>
+        <button data-act="el-glows"      id="tv-el-glows">back-glow sprites: <span>ON</span></button>
+        <button data-act="el-panels"     id="tv-el-panels">helix panels: <span>ON</span></button>
+        <button data-act="el-core"       id="tv-el-core">core beam (master): <span>ON</span></button>
+        <button data-act="el-core-0"     id="tv-el-core-0">core · inner white: <span>ON</span></button>
+        <button data-act="el-core-1"     id="tv-el-core-1">core · blue layer: <span>ON</span></button>
+        <button data-act="el-core-2"     id="tv-el-core-2">core · cyan layer: <span>ON</span></button>
+        <button data-act="el-core-3"     id="tv-el-core-3">core · outer halo: <span>ON</span></button>
+      </div>
+      <div class="tv-admin-section" data-cat="fx" data-key="fx">
+        <div class="tv-admin-label">post fx</div>
+        <button data-act="fx-bloom"    id="tv-fx-bloom">bloom: <span>ON</span></button>
+        <div class="tv-admin-row">
+          <span class="tv-admin-rowlabel">bloom strength</span>
+          <input type="range" id="tv-bloom-slider" min="0" max="2.5" step="0.05" value="0.6" />
+          <span class="tv-admin-rowval" id="tv-bloom-val">0.60</span>
+        </div>
+        <button data-act="fx-ca"       id="tv-fx-ca">chromatic aberration: <span>ON</span></button>
+        <div class="tv-admin-row">
+          <span class="tv-admin-rowlabel">CA amount</span>
+          <input type="range" id="tv-ca-slider" min="0" max="0.012" step="0.0002" value="0.0014" />
+          <span class="tv-admin-rowval" id="tv-ca-val">0.0014</span>
+        </div>
+        <button data-act="fx-flares"   id="tv-fx-flares">anamorphic flares: <span>ON</span></button>
+        <button data-act="fx-grade"    id="tv-fx-grade">color grade: <span>ON</span></button>
+        <button data-act="fx-scan"     id="tv-fx-scan">scanlines: <span>ON</span></button>
+        <button data-act="fx-grain"    id="tv-fx-grain">film grain: <span>ON</span></button>
+        <button data-act="fx-vignette" id="tv-fx-vignette">vignette: <span>ON</span></button>
+      </div>
+      <div class="tv-admin-section" data-cat="time" data-key="time">
+        <div class="tv-admin-label">time</div>
+        <button data-act="time-pause" id="tv-time-pause">⏸ pause</button>
+        <button data-act="time-0.25" id="tv-time-0.25">0.25×</button>
+        <button data-act="time-0.5"  id="tv-time-0.5">0.5×</button>
+        <button data-act="time-1"    id="tv-time-1">1× (normal)</button>
+        <button data-act="time-2"    id="tv-time-2">2×</button>
+      </div>
+      <div class="tv-admin-section" data-cat="capture" data-key="capture">
+        <div class="tv-admin-label">capture</div>
+        <button data-act="cap-png">📸 save canvas as PNG</button>
+        <button data-act="cap-hud" id="tv-cap-hud">hide HUD: <span>OFF</span></button>
+        <button data-act="cap-random">🎲 hop to random panel</button>
+      </div>
+      <div class="tv-admin-section" data-cat="stage" data-key="stage">
+        <div class="tv-admin-label">stage</div>
+        <button data-act="stage-clear">clear all events</button>
+        <button data-act="stage-resetfocus">reset focus</button>
+        <button data-act="stage-resetfilter">reset filter (= all)</button>
+        <button data-act="stage-resetcam">reset camera</button>
+      </div>
+      <div class="tv-admin-foot">~ to toggle · build <span id="tv-admin-build"></span></div>
+    `;
+
+    // Wiring
+    root.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn || btn.disabled) return;
+      e.stopPropagation();
+      const act = btn.dataset.act;
+      try { this._adminDispatch(act); }
+      catch (err) { console.warn('[tv-admin]', act, err); }
+    });
+
+    // Sliders
+    root.addEventListener('input', e => {
+      const t = e.target;
+      if (!t || t.tagName !== 'INPUT') return;
+      if (t.id === 'tv-fov-slider')    this._adminSetFov(parseFloat(t.value));
+      if (t.id === 'tv-bloom-slider')  this._adminSetBloom(parseFloat(t.value));
+      if (t.id === 'tv-ca-slider')     this._adminSetCA(parseFloat(t.value));
+      if (t.id === 'tv-scroll-slider') { this.scroll = parseFloat(t.value); this._adminUpdateState(); }
+    });
+    // Search filter — hides any button whose label doesn't include the query.
+    const q = root.querySelector('#tv-admin-q');
+    if (q) {
+      q.addEventListener('input', e => {
+        const v = e.target.value.trim().toLowerCase();
+        root.querySelectorAll('.tv-admin-section').forEach(sec => {
+          let visible = 0;
+          sec.querySelectorAll('button[data-act]:not(.tv-admin-x)').forEach(b => {
+            const txt = b.textContent.toLowerCase();
+            const match = !v || txt.includes(v);
+            b.style.display = match ? '' : 'none';
+            if (match) visible++;
+          });
+          sec.classList.toggle('tv-admin-empty', visible === 0 && !!v);
+        });
+      });
+      q.addEventListener('keydown', e => e.stopPropagation());
+    }
+
+    const buildSpan = root.querySelector('#tv-admin-build');
+    if (buildSpan) buildSpan.textContent = (window.BUILD_NUMBER || '');
+
+    this._adminUpdateState = () => this._adminRefreshLabels(root);
+    this._adminUpdateState();
+    this._adminInitCollapse(root);
+    return root;
+  },
+
+  _adminInitCollapse(root) {
+    const STORAGE = 'tv-admin-collapse-v1';
+    let state = {};
+    try { state = JSON.parse(localStorage.getItem(STORAGE) || '{}') || {}; } catch (_) { state = {}; }
+    root.querySelectorAll('.tv-admin-section').forEach(sec => {
+      const key = sec.dataset.key;
+      if (!key) return;
+      const label = sec.querySelector('.tv-admin-label');
+      if (!label) return;
+      const body = document.createElement('div');
+      body.className = 'tv-admin-body';
+      while (label.nextSibling) body.appendChild(label.nextSibling);
+      sec.appendChild(body);
+      label.classList.add('tv-collapsible');
+      const setOpen = (open) => {
+        sec.classList.toggle('tv-collapsed', !open);
+        body.classList.toggle('is-hidden', !open);
+      };
+      // Default open for control sections, collapsed for "soon" event sections
+      const defaultOpen = (key === 'event' || key === 'micro') ? false : true;
+      setOpen(state[key] ?? defaultOpen);
+      label.addEventListener('click', e => {
+        e.stopPropagation();
+        const isOpen = !sec.classList.contains('tv-collapsed');
+        setOpen(!isOpen);
+        state[key] = !isOpen;
+        try { localStorage.setItem(STORAGE, JSON.stringify(state)); } catch (_) {}
+      });
+    });
+  },
+
+  _adminDispatch(act) {
+    if (!act) return;
+    if (act === 'close') return this._toggleAdmin();
+    // Presets
+    if (act === 'preset-default')   return this._adminApplyPreset('default');
+    if (act === 'preset-minimal')   return this._adminApplyPreset('minimal');
+    if (act === 'preset-cinematic') return this._adminApplyPreset('cinematic');
+    if (act === 'preset-photo')     return this._adminApplyPreset('photo');
+    if (act === 'preset-party')     return this._adminApplyPreset('party');
+    // Camera
+    if (act === 'cam-reset')      { this.cam.yaw = 0; this.scroll = 0; this._adminUpdateState(); return; }
+    if (act === 'cam-random')     return this._shuffle();
+    if (act === 'cam-prev')       return this._focusByOffset(-1);
+    if (act === 'cam-next')       return this._focusByOffset(+1);
+    if (act === 'cam-release')    return this._release();
+    if (act === 'cam-fov-down')   return this._adminSetFov(this.camera.fov - 5);
+    if (act === 'cam-fov-up')     return this._adminSetFov(this.camera.fov + 5);
+    if (act === 'cam-fov-reset')  return this._adminSetFov(70);
+    // Feel
+    if (act === 'feel-yaw')      { this._autoYawOn = !this._autoYawOn; this._adminUpdateState(); return; }
+    if (act === 'feel-scroll')   { this._autoScrollOn = !this._autoScrollOn; this._adminUpdateState(); return; }
+    if (act === 'feel-inertia')  { this._inertiaOn = !this._inertiaOn; this._adminUpdateState(); return; }
+    if (act === 'feel-bassrot')  { this._bassRotateOn = !this._bassRotateOn; this._adminUpdateState(); return; }
+    // Helix
+    if (act === 'helix-shuffle')  return this._adminReshuffleSlots();
+    if (act && act.startsWith('helix-density-')) return this._adminSetDensity(act.slice('helix-density-'.length));
+    // Filter
+    if (act && act.startsWith('filt-')) {
+      this.setFilter(act.slice('filt-'.length));
+      this._adminUpdateState();
+      return;
+    }
+    // Elements
+    if (act === 'el-all-on')      return this._adminAllElements(true);
+    if (act === 'el-all-off')     return this._adminAllElements(false);
+    if (act && act.startsWith('el-core-')) {
+      const i = parseInt(act.slice('el-core-'.length), 10);
+      if (this.coreLayers[i]) this.coreLayers[i].visible = !this.coreLayers[i].visible;
+      this._adminUpdateState();
+      return;
+    }
+    if (act && act.startsWith('el-')) return this._adminToggleElement(act.slice(3));
+    // FX
+    if (act === 'fx-bloom')    { if (this.bloom) this.bloom.enabled = !this.bloom.enabled; this._adminUpdateState(); return; }
+    if (act === 'fx-ca')       return this._adminToggleFx('uCAOn');
+    if (act === 'fx-flares')   return this._adminToggleFx('uFlaresOn');
+    if (act === 'fx-grade')    return this._adminToggleFx('uGradeOn');
+    if (act === 'fx-scan')     return this._adminToggleFx('uScanOn');
+    if (act === 'fx-grain')    return this._adminToggleFx('uGrainOn');
+    if (act === 'fx-vignette') return this._adminToggleFx('uVignetteOn');
+    // Time
+    if (act === 'time-pause')  { this._paused = !this._paused; this._adminUpdateState(); return; }
+    if (act && act.startsWith('time-')) {
+      this._timeScale = parseFloat(act.slice(5));
+      this._paused = false;
+      this._adminUpdateState();
+      return;
+    }
+    // Capture
+    if (act === 'cap-png')    return this._adminSavePng();
+    if (act === 'cap-hud')    { this._hudHidden = !this._hudHidden; if (this.hudEl) this.hudEl.style.visibility = this._hudHidden ? 'hidden' : 'visible'; this._adminUpdateState(); return; }
+    if (act === 'cap-random') return this._shuffle();
+    // Stage
+    if (act === 'stage-clear')        { /* events not implemented yet */ return; }
+    if (act === 'stage-resetfocus')   return this._release();
+    if (act === 'stage-resetfilter')  { this.setFilter('all'); this.setQuery(''); const inp = document.getElementById('tv-search-input'); if (inp) inp.value = ''; this._adminUpdateState(); return; }
+    if (act === 'stage-resetcam')     { this.cam.yaw = 0; this.scroll = 0; this._adminSetFov(70); this._adminUpdateState(); return; }
+  },
+
+  _adminToggleElement(key) {
+    const map = {
+      nebula: () => this.nebula,
+      stars:  () => this.starfield,
+      energy: () => this.energyStream,
+      dust:   () => this.dust,
+      glints: () => this.glints,        // array of sprites
+      shards: () => this.shards,        // array of meshes
+      pulses: () => this.pulses,        // array of sprites
+      rings:  () => this.rings,         // array of meshes
+      glows:  () => this.backGlows,     // array of sprites
+      panels: () => this.panels.map(p => p.mesh).concat(this.panels.map(p => p.halo)),
+      core:   () => this.coreLayers,    // array of meshes
+    };
+    const get = map[key];
+    if (!get) return;
+    const target = get();
+    if (!target) return;
+    if (Array.isArray(target)) {
+      const cur = target.length > 0 && target[0].visible;
+      target.forEach(t => { if (t) t.visible = !cur; });
+    } else {
+      target.visible = !target.visible;
+    }
+    this._adminUpdateState();
+  },
+
+  _adminAllElements(on) {
+    [this.nebula, this.starfield, this.energyStream, this.dust].forEach(o => { if (o) o.visible = on; });
+    [this.glints, this.shards, this.pulses, this.rings, this.backGlows, this.coreLayers].forEach(arr => {
+      if (Array.isArray(arr)) arr.forEach(o => { if (o) o.visible = on; });
+    });
+    this.panels.forEach(p => { if (p.mesh) p.mesh.visible = on; if (p.halo) p.halo.visible = on; });
+    this._adminUpdateState();
+  },
+
+  _adminToggleFx(name) {
+    const u = this.postPass && this.postPass.uniforms[name];
+    if (!u) return;
+    u.value = u.value > 0.5 ? 0 : 1;
+    this._adminUpdateState();
+  },
+
+  _adminSetFov(v) {
+    const fov = Math.max(30, Math.min(120, v));
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+    this._adminUpdateState();
+  },
+
+  _adminSetBloom(v) {
+    if (!this.bloom) return;
+    this.bloom._adminBase = v;
+    // The animate loop overrides strength every frame; stash a base override.
+    this.bloom.strength = v;
+    this._adminUpdateState();
+  },
+
+  _adminSetCA(v) {
+    const u = this.postPass && this.postPass.uniforms.uCAAmt;
+    if (u) u.value = v;
+    this._adminUpdateState();
+  },
+
+  _adminReshuffleSlots() {
+    // Re-pick layerY for each panel by reshuffling slot order, keeping helix structure.
+    const N = this.panels.length;
+    if (!N) return;
+    const order = this.panels.map((_, i) => i);
+    shuffleInPlace(order);
+    const halfStrand = Math.ceil(N / 2);
+    this.panels.forEach((p, i) => {
+      const slotIdx = order[i];
+      const strand  = slotIdx % 2;
+      const turn    = Math.floor(slotIdx / 2);
+      const angle   = (turn / HELIX.panelsPerTurn) * Math.PI * 2 + (strand ? Math.PI : 0);
+      const y       = -turn * HELIX.yStep + halfStrand * HELIX.yStep * 0.5;
+      p.layerY = y;
+      p.basePos.set(Math.cos(angle) * HELIX.radius, y, Math.sin(angle) * HELIX.radius);
+    });
+  },
+
+  _adminSetDensity(key) {
+    this._density = key;
+    const featuredOnly = (key === 'feat');
+    const cap = featuredOnly ? Infinity : parseInt(key, 10);
+    this.panels.forEach((p, i) => {
+      let want;
+      if (featuredOnly) want = !!p.track.isFeatured;
+      else              want = i < cap;
+      p.densityHidden = !want;
+    });
+    this.panels.forEach(p => {
+      const matchesFilter = this._matchesFilter(p);
+      p.hidden = !matchesFilter || p.densityHidden;
+    });
+    this._adminUpdateState();
+  },
+
+  _adminSavePng() {
+    try {
+      const w = this.renderer.domElement;
+      const url = w.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tracks-vault-${(window.BUILD_NUMBER || 'b000')}-${Date.now()}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { console.warn('[tv-admin] PNG save failed', e); }
+  },
+
+  _adminApplyPreset(name) {
+    const u = this.postPass && this.postPass.uniforms;
+    const setVis = (target, vis) => {
+      if (!target) return;
+      if (Array.isArray(target)) target.forEach(t => { if (t) t.visible = vis; });
+      else target.visible = vis;
+    };
+    // Reset to a known baseline
+    if (u) {
+      u.uCAOn.value = 1; u.uFlaresOn.value = 1; u.uGradeOn.value = 1;
+      u.uScanOn.value = 1; u.uGrainOn.value = 1; u.uVignetteOn.value = 1;
+      u.uCAAmt.value = 0.0014;
+    }
+    if (this.bloom) { this.bloom.enabled = true; this.bloom.strength = 0.60; this.bloom._adminBase = 0.60; }
+    if (this.camera) { this.camera.fov = 70; this.camera.updateProjectionMatrix(); }
+    setVis(this.nebula, true); setVis(this.starfield, true); setVis(this.energyStream, true);
+    setVis(this.dust, true); setVis(this.glints, true); setVis(this.shards, true);
+    setVis(this.pulses, true); setVis(this.rings, true); setVis(this.backGlows, true);
+    setVis(this.coreLayers, true);
+    this.panels.forEach(p => { if (p.mesh) p.mesh.visible = true; if (p.halo) p.halo.visible = true; });
+    this._timeScale = 1; this._paused = false;
+
+    if (name === 'minimal') {
+      // Strip everything ambient. Just panels + core beam + dust.
+      setVis(this.nebula, false); setVis(this.starfield, false);
+      setVis(this.glints, false); setVis(this.shards, false); setVis(this.pulses, false);
+      setVis(this.rings, false); setVis(this.backGlows, false);
+      if (u) { u.uFlaresOn.value = 0; u.uGradeOn.value = 0; u.uScanOn.value = 0; u.uGrainOn.value = 0; }
+      if (this.bloom) { this.bloom.strength = 0.30; this.bloom._adminBase = 0.30; }
+    } else if (name === 'cinematic') {
+      if (this.bloom) { this.bloom.strength = 1.10; this.bloom._adminBase = 1.10; }
+      if (u) u.uCAAmt.value = 0.0028;
+      this._timeScale = 0.5;
+    } else if (name === 'photo') {
+      if (u) { u.uGrainOn.value = 0; u.uScanOn.value = 0; u.uCAAmt.value = 0.0006; }
+      if (this.bloom) { this.bloom.strength = 0.45; this.bloom._adminBase = 0.45; }
+      this._hudHidden = true; if (this.hudEl) this.hudEl.style.visibility = 'hidden';
+    } else if (name === 'party') {
+      if (u) u.uCAAmt.value = 0.0048;
+      if (this.bloom) { this.bloom.strength = 1.45; this.bloom._adminBase = 1.45; }
+      this._timeScale = 1.5;
+    } else {
+      this._hudHidden = false; if (this.hudEl) this.hudEl.style.visibility = 'visible';
+    }
+    this._adminUpdateState();
+  },
+
+  _adminRefreshLabels(root) {
+    const setOn = (id, on) => {
+      const el = root.querySelector('#' + id);
+      if (!el) return;
+      const sp = el.querySelector('span');
+      if (sp) sp.textContent = on ? 'ON' : 'OFF';
+      el.classList.toggle('tv-on', !!on);
+    };
+    // Feel
+    setOn('tv-feel-yaw', this._autoYawOn);
+    setOn('tv-feel-scroll', this._autoScrollOn);
+    setOn('tv-feel-inertia', this._inertiaOn);
+    setOn('tv-feel-bassrot', this._bassRotateOn);
+    // Capture
+    setOn('tv-cap-hud', this._hudHidden);
+    // Pause label
+    const pauseBtn = root.querySelector('#tv-time-pause');
+    if (pauseBtn) {
+      pauseBtn.textContent = this._paused ? '▶ resume' : '⏸ pause';
+      pauseBtn.classList.toggle('tv-on', !!this._paused);
+    }
+    // Time scale highlight
+    ['tv-time-0.25','tv-time-0.5','tv-time-1','tv-time-2'].forEach(id => {
+      const el = root.querySelector('#' + id);
+      if (!el) return;
+      const v = parseFloat(id.slice('tv-time-'.length));
+      el.classList.toggle('tv-on', !this._paused && Math.abs(v - (this._timeScale ?? 1)) < 0.001);
+    });
+    // Density highlight
+    ['117','60','30','feat'].forEach(k => {
+      const el = root.querySelector('#tv-density-' + k);
+      if (el) el.classList.toggle('tv-on', this._density == k);
+    });
+    // Filter highlight
+    ['all','featured','new','hard','chill','grunge','vibe'].forEach(f => {
+      const el = root.querySelector('#tv-filt-' + f);
+      if (el) el.classList.toggle('tv-on', this.filter === f);
+    });
+    // Elements
+    const visOf = (target) => {
+      if (!target) return false;
+      if (Array.isArray(target)) return target.length > 0 && target[0].visible;
+      return target.visible;
+    };
+    setOn('tv-el-nebula', visOf(this.nebula));
+    setOn('tv-el-stars',  visOf(this.starfield));
+    setOn('tv-el-energy', visOf(this.energyStream));
+    setOn('tv-el-dust',   visOf(this.dust));
+    setOn('tv-el-glints', visOf(this.glints));
+    setOn('tv-el-shards', visOf(this.shards));
+    setOn('tv-el-pulses', visOf(this.pulses));
+    setOn('tv-el-rings',  visOf(this.rings));
+    setOn('tv-el-glows',  visOf(this.backGlows));
+    setOn('tv-el-panels', this.panels.length > 0 && this.panels[0].mesh.visible);
+    setOn('tv-el-core',   visOf(this.coreLayers));
+    for (let i = 0; i < 4; i++) setOn('tv-el-core-' + i, this.coreLayers[i] && this.coreLayers[i].visible);
+    // FX
+    const u = this.postPass && this.postPass.uniforms;
+    if (u) {
+      setOn('tv-fx-ca',       u.uCAOn.value > 0.5);
+      setOn('tv-fx-flares',   u.uFlaresOn.value > 0.5);
+      setOn('tv-fx-grade',    u.uGradeOn.value > 0.5);
+      setOn('tv-fx-scan',     u.uScanOn.value > 0.5);
+      setOn('tv-fx-grain',    u.uGrainOn.value > 0.5);
+      setOn('tv-fx-vignette', u.uVignetteOn.value > 0.5);
+      const caSlider = root.querySelector('#tv-ca-slider');
+      const caVal    = root.querySelector('#tv-ca-val');
+      if (caSlider) caSlider.value = u.uCAAmt.value;
+      if (caVal)    caVal.textContent = u.uCAAmt.value.toFixed(4);
+    }
+    setOn('tv-fx-bloom', this.bloom ? this.bloom.enabled : false);
+    const bSlider = root.querySelector('#tv-bloom-slider');
+    const bVal    = root.querySelector('#tv-bloom-val');
+    if (this.bloom && bSlider) bSlider.value = this.bloom.strength;
+    if (this.bloom && bVal)    bVal.textContent = this.bloom.strength.toFixed(2);
+    // FOV slider
+    const fovSlider = root.querySelector('#tv-fov-slider');
+    const fovVal    = root.querySelector('#tv-fov-val');
+    if (this.camera && fovSlider) fovSlider.value = this.camera.fov;
+    if (this.camera && fovVal)    fovVal.textContent = Math.round(this.camera.fov) + '°';
+    // Scroll slider
+    const scSlider = root.querySelector('#tv-scroll-slider');
+    const scVal    = root.querySelector('#tv-scroll-val');
+    if (scSlider) scSlider.value = this.scroll || 0;
+    if (scVal)    scVal.textContent = (this.scroll || 0).toFixed(1);
+    // Helix info
+    const info = root.querySelector('#tv-helix-info');
+    if (info) {
+      const visible = this.panels.filter(p => !p.hidden).length;
+      info.textContent = `${visible} / ${this.panels.length} panels visible · density ${this._density}`;
+    }
+  },
+
   /* ---------- Track-change hook ---------- */
   onTrackChange() {
     const cur = (this.ctx?.getCurrent && this.ctx.getCurrent()) ?? -1;
@@ -1344,6 +2098,8 @@ const TracksVault = {
       const u = this._panelUniforms(p);
       if (u) u.uPlaying.value = (p.idx === cur) ? 1 : 0;
     });
+    this.playingPanel = this.panels.find(p => p.idx === cur) || null;
+    this._rebuildConstellation();
     this._ensureAnalyser();
     if (this.audioCtx?.state === 'suspended') this.audioCtx.resume().catch(()=>{});
     this._updateHudHeader();
@@ -1355,6 +2111,144 @@ const TracksVault = {
     const m = p.mesh.material;
     if (Array.isArray(m)) return m[4]?.uniforms || null;
     return m?.uniforms || null;
+  },
+
+  /* ---------- Tag-constellation: lines from the playing panel to its tag-siblings ---------- */
+  _buildTagIndex() {
+    this._tagIndex = new Map();
+    this.panels.forEach(p => {
+      (p.track.tags || []).forEach(tagRaw => {
+        const tag = String(tagRaw).toLowerCase();
+        if (!this._tagIndex.has(tag)) this._tagIndex.set(tag, new Set());
+        this._tagIndex.get(tag).add(p);
+      });
+    });
+    this.constellationGroup = new THREE.Group();
+    this.constellationGroup.frustumCulled = false;
+    this.scene.add(this.constellationGroup);
+    this.constellationLines = [];   // {line, peer, phase}
+    this.playingPanel = null;
+  },
+
+  _rebuildConstellation() {
+    // Wipe existing
+    if (!this.constellationGroup) return;
+    this.constellationLines.forEach(({ line }) => {
+      this.constellationGroup.remove(line);
+      line.geometry.dispose();
+      line.material.dispose();
+    });
+    this.constellationLines = [];
+
+    const pp = this.playingPanel;
+    if (!pp) return;
+
+    // Tag-based peers (excluding self)
+    const tags = (pp.track.tags || []).map(s => String(s).toLowerCase());
+    const peers = new Set();
+    tags.forEach(tag => {
+      const set = this._tagIndex.get(tag);
+      if (set) set.forEach(p => { if (p !== pp) peers.add(p); });
+    });
+
+    // Tier fallback so untagged tracks still get a constellation: nearest 6 tier-mates.
+    if (peers.size === 0) {
+      const sameTier = this.panels.filter(p => p !== pp && p.tier === pp.tier);
+      sameTier.sort((a, b) =>
+        a.basePos.distanceToSquared(pp.basePos) - b.basePos.distanceToSquared(pp.basePos)
+      );
+      sameTier.slice(0, 6).forEach(p => peers.add(p));
+    }
+
+    const tint = pp.tint;
+    const baseCol = new THREE.Color(tint[0], tint[1], tint[2]);
+
+    [...peers].forEach((peer, i) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      geo.frustumCulled = false;
+      const mat = new THREE.LineBasicMaterial({
+        color: baseCol.clone(),
+        transparent: true, opacity: 0.0,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const line = new THREE.Line(geo, mat);
+      line.frustumCulled = false;
+      this.constellationGroup.add(line);
+      this.constellationLines.push({ line, peer, phase: Math.random() * Math.PI * 2 });
+    });
+  },
+
+  _tickConstellation(t, bass) {
+    const pp = this.playingPanel;
+    if (!pp || !this.constellationLines.length) return;
+    const a = pp.mesh.position;
+    for (let i = 0; i < this.constellationLines.length; i++) {
+      const { line, peer, phase } = this.constellationLines[i];
+      const arr = line.geometry.attributes.position.array;
+      const b = peer.mesh.position;
+      arr[0] = a.x; arr[1] = a.y; arr[2] = a.z;
+      arr[3] = b.x; arr[4] = b.y; arr[5] = b.z;
+      line.geometry.attributes.position.needsUpdate = true;
+      // Each line breathes on its own phase; bass thumps lift them all.
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.9 + phase);
+      const peerHover = peer === this.hovered ? 0.45 : 0;
+      line.material.opacity = (0.10 + 0.30 * pulse + peerHover) * (0.7 + bass * 0.6);
+    }
+  },
+
+  _updateNowPlaying(t) {
+    const nowEl = document.getElementById('tv-now');
+    if (!nowEl) return;
+    const cur = (this.ctx?.getCurrent && this.ctx.getCurrent()) ?? -1;
+    const tracks = this.ctx?.tracks || [];
+    const audio  = this.ctx?.audio;
+    const track  = (cur >= 0 && tracks[cur]) ? tracks[cur] : null;
+
+    if (!track) {
+      nowEl.classList.remove('on');
+      return;
+    }
+    nowEl.classList.add('on');
+
+    const numEl   = document.getElementById('tv-now-num');
+    const titleEl = document.getElementById('tv-now-title');
+    const tagsEl  = document.getElementById('tv-now-tags');
+    const playEl  = document.getElementById('tv-now-play');
+    const fillEl  = document.getElementById('tv-now-fill');
+    const knobEl  = document.getElementById('tv-now-knob');
+    const timeEl  = document.getElementById('tv-now-time');
+    const scEl    = document.getElementById('tv-now-sc');
+
+    if (numEl)   numEl.textContent = `TRK.${String(cur + 1).padStart(3, '0')}`;
+    if (titleEl) titleEl.textContent = `▸ ${(track.title || '').toLowerCase()}`;
+    if (tagsEl) {
+      const tags = (track.tags || []).slice(0, 3).join(' · ');
+      tagsEl.textContent = tags || '';
+    }
+    if (scEl) scEl.href = this._scUrlFor(track);
+
+    let pct = 0, dur = 0, cTime = 0, paused = true;
+    if (audio) {
+      cTime = audio.currentTime || 0;
+      dur   = isFinite(audio.duration) ? audio.duration : 0;
+      paused = !!audio.paused;
+      pct = dur > 0 ? cTime / dur : 0;
+    }
+    if (fillEl) fillEl.style.width = (pct * 100).toFixed(2) + '%';
+    if (knobEl) knobEl.style.left  = (pct * 100).toFixed(2) + '%';
+    if (timeEl) timeEl.textContent = `${this._fmtTime(cTime)} / ${this._fmtTime(dur)}`;
+    if (playEl) {
+      const wantTxt = paused ? '▶' : '❚❚';
+      if (playEl.textContent !== wantTxt) playEl.textContent = wantTxt;
+    }
+  },
+
+  _fmtTime(s) {
+    if (!isFinite(s) || s < 0) return '0:00';
+    const m = Math.floor(s / 60);
+    const ss = Math.floor(s % 60);
+    return `${m}:${ss < 10 ? '0' : ''}${ss}`;
   },
 
   /* ---------- Wrap helper for continuous scroll ---------- */
@@ -1371,22 +2265,25 @@ const TracksVault = {
   animate() {
     if (this.destroyed) return;
     this.raf = requestAnimationFrame(this.animate);
-    const dt = Math.min(0.05, this.clock.getDelta());
-    const t  = this.clock.elapsedTime;
+    const rawDt = Math.min(0.05, this.clock.getDelta());
+    const scale = this._paused ? 0 : (this._timeScale ?? 1);
+    const dt = rawDt * scale;
+    this._adminTime = (this._adminTime ?? 0) + dt;
+    const t  = this._adminTime;
 
     // Audio
     this._readAudio();
     const bass = this.bass, energy = this.energy;
 
-    // Camera orbit (slow auto-yaw drift) — fixed y, fixed radius
-    const camYaw = this.cam.yaw + t * 0.012;
+    // Camera orbit — fixed y, fixed radius. Auto-yaw drifts when enabled.
+    const camYaw = this.cam.yaw + (this._autoYawOn === false ? 0 : t * 0.012);
     const cx = Math.cos(camYaw) * HELIX.camRadius;
     const cz = Math.sin(camYaw) * HELIX.camRadius;
     this.camera.position.set(cx, 0, cz);
     this.camera.lookAt(0, -0.3, 0);
 
     // Auto-scroll component — slow continuous descent so it's never frozen
-    this.scroll += dt * 1.2;
+    if (this._autoScrollOn !== false) this.scroll += dt * 1.2;
 
     // Env uniforms
     if (this.nebula)    this.nebula.material.uniforms.uTime.value = t;
@@ -1413,7 +2310,11 @@ const TracksVault = {
     });
 
     // Bloom strength reacts to bass (capped — never above 0.95 so foreground reads)
-    if (this.bloom) this.bloom.strength = 0.60 + bass * 0.35;
+    // Admin can pin a base via _adminBase; otherwise the default 0.60 baseline applies.
+    if (this.bloom) {
+      const base = (this.bloom._adminBase != null) ? this.bloom._adminBase : 0.60;
+      this.bloom.strength = base + bass * 0.35;
+    }
 
     // Glint sprites — short, sharp pulses on each one (sells "light catching glass")
     this.glints.forEach(s => {
@@ -1506,6 +2407,10 @@ const TracksVault = {
       }
     });
 
+    // Constellation lines + now-playing transport
+    this._tickConstellation(t, bass);
+    this._updateNowPlaying(t);
+
     if (this.postPass) this.postPass.uniforms.uTime.value = t;
     this.composer.render();
   },
@@ -1540,6 +2445,8 @@ const TracksVault = {
     this.scene = null; this.camera = null; this.renderer = null;
     this.composer = null; this.panels = []; this.shards = []; this.pulses = [];
     this.rings = []; this.glints = []; this.coreLayers = [];
+    this.constellationGroup = null; this.constellationLines = [];
+    this.playingPanel = null; this._tagIndex = null;
     this.ctx = null;
     document.body.style.cursor = '';
   },

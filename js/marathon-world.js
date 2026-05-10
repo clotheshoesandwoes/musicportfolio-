@@ -231,6 +231,8 @@ const TITLE_FRAGMENT = `
   uniform float uOpacity;
   uniform vec3  uTint;
   uniform float uHueShift;
+  uniform float uBreath;    // b192: ±~0.05 brightness offset for slow per-title breathing
+  uniform float uTwinkle;   // b192: 0..1 brief brightness flash for one-at-a-time twinkles
   varying vec2 vUv;
   float rand(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   // Rodrigues hue rotation around the (1,1,1) luminance axis.
@@ -262,7 +264,11 @@ const TITLE_FRAGMENT = `
     if (dropoutSeed > 1.0 - 0.05 * gAmt) a *= 0.0;
     vec3 tint = clamp(hueShift(uTint, uHueShift), 0.0, 1.5);
     col *= tint;
-    a *= uOpacity;
+    // b192: gentle breath + rare twinkle. Breath gives every title a slow,
+    // randomized brightness wobble (fights the "frozen wall" feel); twinkle
+    // is a brief one-at-a-time flash from the scheduler.
+    col *= (1.0 + uBreath + uTwinkle * 0.85);
+    a *= uOpacity * (1.0 + uBreath * 0.6 + uTwinkle * 0.25);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -377,10 +383,11 @@ const MarathonWorld = {
     // Mild fog to give depth without obscuring far titles
     this.scene.fog = new THREE.FogExp2(0x040406, 0.0035);
 
-    this.camera = new THREE.PerspectiveCamera(80, 1, 0.1, 800);
+    this.camera = new THREE.PerspectiveCamera(80, 1, 0.1, 2400);
     this.camera.position.copy(this.cam.pos);
 
     this._buildNebula();
+    this._buildStarfield();
     this._buildCore();
     this._buildHaze();
     this._buildFogPatches();
@@ -392,6 +399,8 @@ const MarathonWorld = {
     this._buildFlyby();
     this._buildBolts();
     this._buildMarathonShip();
+    this._buildHaloRing();
+    this._buildTraveler();
     this._buildNavBuoys();
 
     this.clock = new THREE.Clock();
@@ -656,13 +665,16 @@ const MarathonWorld = {
       const h = w / aspect;
       const mat = new THREE.ShaderMaterial({
         uniforms: {
-          uTex:     { value: tex },
-          uTime:    { value: Math.random() * 100 },
-          uHover:   { value: 0 },
-          uFocus:   { value: 0 },
-          uBass:    { value: 0 },
-          uOpacity: { value: 0.18 + Math.random() * 0.18 },
-          uTint:    { value: new THREE.Vector3(0.55, 0.62, 0.72) },
+          uTex:      { value: tex },
+          uTime:     { value: Math.random() * 100 },
+          uHover:    { value: 0 },
+          uFocus:    { value: 0 },
+          uBass:     { value: 0 },
+          uOpacity:  { value: 0.18 + Math.random() * 0.18 },
+          uTint:     { value: new THREE.Vector3(0.55, 0.62, 0.72) },
+          uHueShift: { value: 0 },
+          uBreath:   { value: 0 },   // b192 (kept zero on fragments; TITLE_FRAGMENT shader expects it)
+          uTwinkle:  { value: 0 },   // b192
         },
         vertexShader: TITLE_VERTEX,
         fragmentShader: TITLE_FRAGMENT,
@@ -770,6 +782,97 @@ const MarathonWorld = {
     }
     const lerpRate = (f.phase === 'glitch_out') ? 30 : 4;
     u.uOpacity.value += (targetOp - u.uOpacity.value) * Math.min(1, dt * lerpRate);
+  },
+
+  /* ---------- Starfield (b192) ---------- */
+  // Far-distance twinkling point cloud BEHIND the titles. Each star carries
+  // its own phase + rate so the field reads as scintillating, never in lockstep.
+  // Goal: kill the "frozen wall of titles in dead space" feeling without
+  // pulling the eye away from the song titles themselves.
+  _buildStarfield(){
+    const COUNT = 2200;
+    const positions = new Float32Array(COUNT * 3);
+    const phases    = new Float32Array(COUNT);
+    const rates     = new Float32Array(COUNT);
+    const sizes     = new Float32Array(COUNT);
+    const tones     = new Float32Array(COUNT);  // 0 = cool blue-white, 1 = warm peach
+    for (let i = 0; i < COUNT; i++) {
+      // Uniform-on-sphere distribution
+      const u  = Math.random() * 2 - 1;
+      const th = Math.random() * Math.PI * 2;
+      const rr = Math.sqrt(1 - u * u);
+      const r  = 380 + Math.random() * 70;
+      positions[i*3 + 0] = Math.cos(th) * rr * r;
+      positions[i*3 + 1] = u * r;
+      positions[i*3 + 2] = Math.sin(th) * rr * r;
+      phases[i]  = Math.random() * Math.PI * 2;
+      rates[i]   = 0.4 + Math.random() * 2.1;       // Hz-ish per-star twinkle
+      // Size — pareto-ish so most stars are tiny, a few are noticeably bright.
+      const s = Math.random();
+      sizes[i]   = (s < 0.85) ? (0.6 + s * 1.0) : (1.7 + (s - 0.85) * 6.0);
+      tones[i]   = Math.random();
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aPhase',   new THREE.BufferAttribute(phases, 1));
+    geo.setAttribute('aRate',    new THREE.BufferAttribute(rates, 1));
+    geo.setAttribute('aSize',    new THREE.BufferAttribute(sizes, 1));
+    geo.setAttribute('aTone',    new THREE.BufferAttribute(tones, 1));
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPxr:  { value: this.renderer ? this.renderer.getPixelRatio() : 1 },
+      },
+      vertexShader: `
+        attribute float aPhase;
+        attribute float aRate;
+        attribute float aSize;
+        attribute float aTone;
+        uniform float uTime;
+        uniform float uPxr;
+        varying float vTwinkle;
+        varying float vTone;
+        void main(){
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          // Smooth oscillation 0.25..1.0 — never goes fully off, just dim/bright
+          float t = 0.625 + 0.375 * sin(uTime * aRate + aPhase);
+          vTwinkle = t;
+          vTone    = aTone;
+          // Far-distance scaling so points read at a stable angular size
+          gl_PointSize = uPxr * aSize * (0.85 + t * 0.7) * (90.0 / max(-mv.z, 1.0));
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        varying float vTwinkle;
+        varying float vTone;
+        void main(){
+          vec2 d = gl_PointCoord - vec2(0.5);
+          float r2 = dot(d, d) * 4.0;
+          if (r2 > 1.0) discard;
+          float a = pow(1.0 - r2, 1.5) * vTwinkle;
+          // Cool blue-white ↔ warm peach mix for color variety
+          vec3 cool = vec3(0.82, 0.92, 1.00);
+          vec3 warm = vec3(1.00, 0.93, 0.80);
+          vec3 col  = mix(cool, warm, smoothstep(0.55, 0.95, vTone));
+          gl_FragColor = vec4(col, a * 0.95);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+    });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    points.renderOrder = -1;            // paint before titles
+    this.scene.add(points);
+    this.starfield = { points, mat, geo };
+  },
+
+  _tickStarfield(t){
+    if (this.starfield) this.starfield.mat.uniforms.uTime.value = t;
   },
 
   /* ---------- Nebula skybox (slow-drifting fbm cloud field, visible 360°) ---------- */
@@ -1103,6 +1206,10 @@ const MarathonWorld = {
   _makeLongsword(){
     const outer = new THREE.Group();
     const inner = new THREE.Group();
+    // three.js Object3D.lookAt aims the +Z axis at the target (NOT -Z — that's
+    // the camera/light convention). Ship models are built with nose at local -Z,
+    // so flipping inner 180° around Y puts the nose at outer's +Z and lookAt
+    // aims the nose along velocity. Removing this flip makes ships fly tail-first.
     inner.rotation.y = Math.PI;
     outer.add(inner);
 
@@ -1180,6 +1287,10 @@ const MarathonWorld = {
   _makeBanshee(){
     const outer = new THREE.Group();
     const inner = new THREE.Group();
+    // three.js Object3D.lookAt aims the +Z axis at the target (NOT -Z — that's
+    // the camera/light convention). Ship models are built with nose at local -Z,
+    // so flipping inner 180° around Y puts the nose at outer's +Z and lookAt
+    // aims the nose along velocity. Removing this flip makes ships fly tail-first.
     inner.rotation.y = Math.PI;
     outer.add(inner);
 
@@ -1265,6 +1376,10 @@ const MarathonWorld = {
   _makePelican(){
     const outer = new THREE.Group();
     const inner = new THREE.Group();
+    // three.js Object3D.lookAt aims the +Z axis at the target (NOT -Z — that's
+    // the camera/light convention). Ship models are built with nose at local -Z,
+    // so flipping inner 180° around Y puts the nose at outer's +Z and lookAt
+    // aims the nose along velocity. Removing this flip makes ships fly tail-first.
     inner.rotation.y = Math.PI;
     outer.add(inner);
 
@@ -1488,6 +1603,10 @@ const MarathonWorld = {
   _makeForerunner(){
     const outer = new THREE.Group();
     const inner = new THREE.Group();
+    // three.js Object3D.lookAt aims the +Z axis at the target (NOT -Z — that's
+    // the camera/light convention). Ship models are built with nose at local -Z,
+    // so flipping inner 180° around Y puts the nose at outer's +Z and lookAt
+    // aims the nose along velocity. Removing this flip makes ships fly tail-first.
     inner.rotation.y = Math.PI;
     outer.add(inner);
 
@@ -2068,7 +2187,14 @@ const MarathonWorld = {
     grp.position.copy(fwd.clone().multiplyScalar(180))
       .addScaledVector(right, sideSign * 220)
       .addScaledVector(up, 30);
-    grp.rotation.y = Math.PI * 0.10 * -sideSign;
+    // Mothership model's bridge (front) sits at local +X, engine glow at -X
+    // — non-standard for this codebase (flyby ships use -Z forward). Compute
+    // the Y rotation that aligns local +X with the velocity direction, then
+    // add a small cinematic yaw tilt for asymmetry. Pre-g7 was just the tilt
+    // term, leaving the bridge ~165° off velocity → mothership flew engine-
+    // first ("flying backward toward the exhaust flame").
+    const velDir = right.clone().multiplyScalar(-sideSign);
+    grp.rotation.y = Math.atan2(-velDir.z, velDir.x) + Math.PI * 0.10 * -sideSign;
     this.scene.add(grp);
 
     const fake = {
@@ -2221,7 +2347,10 @@ const MarathonWorld = {
 
   // ----- 7. INTERCEPTION — Covenant pursuit: 1 lead banshee + 2 chasers -----
   _spawnInterception(){
-    const lead    = this._acquireShip('banshee');
+    // b218: lead is now a pelican (UNSC dropship being intercepted by 2 banshee
+    // chasers). Heavier, slower, lumbering — no barrel roll, smaller evasive
+    // sway. Reads as "transport caught in the open" instead of "fighter duel".
+    const lead    = this._acquireShip('pelican');
     const chase1  = this._acquireShip('banshee', { forceMint: true });
     const chase2  = this._acquireShip('banshee', { forceMint: true });
     if (!lead || !chase1 || !chase2) return;
@@ -2235,10 +2364,10 @@ const MarathonWorld = {
     lead.outer.position.copy(start);
     lead.outer.lookAt(start.clone().add(dir));
     lead.inner.rotation.set(0, Math.PI, 0);
-    lead.velocity.copy(dir).multiplyScalar(48);
+    lead.velocity.copy(dir).multiplyScalar(42);
     lead.life = 0; lead.maxLife = 14; lead.active = true; lead.outer.visible = true;
     lead.scenario = 'interception_target'; lead.scenarioTime = 0;
-    lead.scenarioBase = { dir: dir.clone(), perp1: up.clone(), perp2: perp.clone(), speed: 48, seedA: Math.random()*6.28, seedB: Math.random()*6.28 };
+    lead.scenarioBase = { dir: dir.clone(), perp1: up.clone(), perp2: perp.clone(), speed: 42, seedA: Math.random()*6.28, seedB: Math.random()*6.28 };
     // Chasers: properly spread BEHIND + LATERAL + VERTICAL so they read as 3
     // distinct ships, not a single blob.
     [chase1, chase2].forEach((c, i) => {
@@ -2249,11 +2378,11 @@ const MarathonWorld = {
       c.outer.position.copy(slot);
       c.outer.lookAt(slot.clone().add(dir));
       c.inner.rotation.set(0, Math.PI, 0);
-      c.velocity.copy(dir).multiplyScalar(60);
+      c.velocity.copy(dir).multiplyScalar(56);
       c.life = 0; c.maxLife = 14; c.active = true; c.outer.visible = true;
       c.scenario = 'interception_chaser'; c.scenarioTime = 0;
       c.scenarioTargetRef = lead;
-      c.scenarioBase = { perp1: up.clone(), perp2: perp.clone(), speed: 60, fireCooldown: 1.0 + i * 0.4, seedA: Math.random()*6.28 };
+      c.scenarioBase = { perp1: up.clone(), perp2: perp.clone(), speed: 56, fireCooldown: 1.0 + i * 0.4, seedA: Math.random()*6.28 };
     });
     if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [lead, chase1, chase2] };
     if (this._flashHint) this._flashHint('spawned: interception', 'info');
@@ -2273,24 +2402,312 @@ const MarathonWorld = {
     p.outer.lookAt(pos.clone().add(fwd));
     p.inner.rotation.set(0, Math.PI, 0);
     p.velocity.set(0, 0, 0);
-    p.life = 0; p.maxLife = 14; p.active = true; p.outer.visible = true;
+    p.life = 0; p.maxLife = 18; p.active = true; p.outer.visible = true;
     p.scenario = 'distress_beacon'; p.scenarioTime = 0;
-    const tex = this._makeSatLightTexture();
-    const beacon = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, color: 0xff3a48, transparent: true,
-      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
-    }));
-    beacon.scale.set(2.4, 2.4, 1);
-    beacon.position.set(0, 1.4, 0);
-    p.outer.add(beacon);
-    p.scenarioBase = { beacon, drift: pos.clone() };
+
+    const lightTex = this._makeSatLightTexture();
+    const flameTex = this._makeFlameTexture({
+      stops: [
+        [0.00, 'rgba(255,250,210,1.00)'],
+        [0.18, 'rgba(255,200, 80,0.95)'],
+        [0.45, 'rgba(255,110, 40,0.65)'],
+        [0.75, 'rgba(160, 30, 20,0.25)'],
+        [1.00, 'rgba( 40,  6,  4,0.00)'],
+      ],
+    });
+
+    // Three beacons blinking out of phase: red SOS strobe (top), amber rotating
+    // (port wing), white emergency strobe (tail). Reads as multiple-system
+    // failure rather than a single broadcaster.
+    const mkBeacon = (color, scale, x, y, z) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: lightTex, color, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      }));
+      sp.scale.set(scale, scale, 1);
+      sp.position.set(x, y, z);
+      p.outer.add(sp);
+      return sp;
+    };
+    const beaconRed   = mkBeacon(0xff3a48, 2.6,  0,    1.4,  0);     // top
+    const beaconAmber = mkBeacon(0xffaa30, 1.6, -2.5,  0.2,  0.4);   // port wing
+    const beaconWhite = mkBeacon(0xffffff, 1.8,  2.5,  0.2,  0.4);   // starboard wing strobe
+
+    // Two persistent fires anchored to "damaged" hull spots: starboard engine
+    // pod and port wing root. Each fire is a small flame quad billboarded as a
+    // sprite — flickers in scale + opacity so it never sits still.
+    const mkFire = (x, y, z) => {
+      const mat = new THREE.SpriteMaterial({
+        map: flameTex, color: 0xffffff, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.9,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(1.4, 2.0, 1);
+      sp.position.set(x, y, z);
+      p.outer.add(sp);
+      return sp;
+    };
+    const fireA = mkFire( 3.05, -0.10, 0.5);   // starboard engine
+    const fireB = mkFire(-2.20,  0.40, 1.2);   // port wing root
+
+    // Smoke trail: pool of gray puff sprites that periodically launch from
+    // the damaged spots and drift backward, fading out. Stored on outer so
+    // movements (and the slow listing rotation) carry them naturally — but
+    // we want them to drift in WORLD space, so we use scene-space sprites
+    // and update positions per-frame from anchor world positions.
+    const smokeTex = this._makeFlameTexture({
+      stops: [
+        [0.00, 'rgba(220,220,220,0.85)'],
+        [0.40, 'rgba(110,110,110,0.50)'],
+        [0.80, 'rgba( 40, 40, 40,0.20)'],
+        [1.00, 'rgba( 20, 20, 20,0.00)'],
+      ],
+    });
+    const smokes = [];
+    const SMOKE_POOL = 18;
+    for (let i = 0; i < SMOKE_POOL; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: smokeTex, color: 0x999999, transparent: true,
+        blending: THREE.NormalBlending, depthWrite: false, opacity: 0,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(0.001, 0.001, 1);
+      this.scene.add(sp);
+      smokes.push({ sprite: sp, mat, life: 0, maxLife: 0,
+                    pos: new THREE.Vector3(), vel: new THREE.Vector3(),
+                    seedSize: 1, originIdx: 0 });
+    }
+
+    // Sparks: short-lived bright flecks that pop from the damaged spots
+    // every ~0.4–0.9s, falling slightly with a subtle drift.
+    const sparks = [];
+    const SPARK_POOL = 14;
+    for (let i = 0; i < SPARK_POOL; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: lightTex, color: 0xffe0a0, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(0.001, 0.001, 1);
+      this.scene.add(sp);
+      sparks.push({ sprite: sp, mat, life: 0, maxLife: 0,
+                    pos: new THREE.Vector3(), vel: new THREE.Vector3() });
+    }
+
+    p.scenarioBase = {
+      beaconRed, beaconAmber, beaconWhite,
+      fireA, fireB,
+      smokes, sparks,
+      smokeNext: 0, sparkNext: 0,
+      drift: pos.clone(),
+      // Listing tumble — ship slowly rolls/yaws as if attitude control failed.
+      listRollV: (Math.random() < 0.5 ? -1 : 1) * (0.08 + Math.random() * 0.06),
+      listYawV:  (Math.random() < 0.5 ? -1 : 1) * (0.04 + Math.random() * 0.04),
+      hullSeed: Math.random() * 10,
+    };
     p.scenarioCleanup = () => {
-      if (beacon.parent) beacon.parent.remove(beacon);
-      if (beacon.material.map) beacon.material.map.dispose();
-      beacon.material.dispose();
+      [beaconRed, beaconAmber, beaconWhite, fireA, fireB].forEach(s => {
+        if (s.parent) s.parent.remove(s);
+        if (s.material.map) s.material.map.dispose();
+        s.material.dispose();
+      });
+      smokes.forEach(({ sprite, mat }) => {
+        this.scene.remove(sprite);
+        if (mat.map) mat.map.dispose();
+        mat.dispose();
+      });
+      sparks.forEach(({ sprite, mat }) => {
+        this.scene.remove(sprite);
+        if (mat.map) mat.map.dispose();
+        mat.dispose();
+      });
     };
     if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [p] };
     if (this._flashHint) this._flashHint('spawned: distress beacon', 'info');
+  },
+
+  // ----- 8b. DISTRESS BOMBING RUN — distressed pelican + enemy bomber kills it -----
+  // Same parked, smoking, beaconing pelican as `_spawnDistressBeacon`, but a
+  // banshee or longsword strafes in from one side, fires a bolt at the wreck,
+  // and the impact triggers a flash + ring shockwave + spark burst, vaporizing
+  // the pelican. The bomber peels out and exits frame.
+  _spawnDistressBombing(){
+    const p = this._acquireShip('pelican');
+    if (!p) return;
+    const bomberType = Math.random() < 0.5 ? 'banshee' : 'longsword';
+    const bomber = this._acquireShip(bomberType, { forceMint: true });
+    if (!bomber) { this._resetShip(p); return; }
+
+    const center = this._scenarioAnchor();
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const pos = center.clone()
+      .addScaledVector(right, (Math.random() < 0.5 ? -1 : 1) * 8)
+      .addScaledVector(up, -1);
+    p.outer.position.copy(pos);
+    p.outer.lookAt(pos.clone().add(fwd));
+    p.inner.rotation.set(0, Math.PI, 0);
+    p.velocity.set(0, 0, 0);
+    p.life = 0; p.maxLife = 9; p.active = true; p.outer.visible = true;
+    p.scenario = 'distress_bombed_victim'; p.scenarioTime = 0;
+
+    const lightTex = this._makeSatLightTexture();
+    const flameTex = this._makeFlameTexture({
+      stops: [
+        [0.00, 'rgba(255,250,210,1.00)'],
+        [0.18, 'rgba(255,200, 80,0.95)'],
+        [0.45, 'rgba(255,110, 40,0.65)'],
+        [0.75, 'rgba(160, 30, 20,0.25)'],
+        [1.00, 'rgba( 40,  6,  4,0.00)'],
+      ],
+    });
+
+    const mkBeacon = (color, scale, x, y, z) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: lightTex, color, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      }));
+      sp.scale.set(scale, scale, 1);
+      sp.position.set(x, y, z);
+      p.outer.add(sp);
+      return sp;
+    };
+    const beaconRed   = mkBeacon(0xff3a48, 2.6,  0,    1.4,  0);
+    const beaconAmber = mkBeacon(0xffaa30, 1.6, -2.5,  0.2,  0.4);
+    const beaconWhite = mkBeacon(0xffffff, 1.8,  2.5,  0.2,  0.4);
+
+    const mkFire = (x, y, z) => {
+      const mat = new THREE.SpriteMaterial({
+        map: flameTex, color: 0xffffff, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.9,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(1.4, 2.0, 1);
+      sp.position.set(x, y, z);
+      p.outer.add(sp);
+      return sp;
+    };
+    const fireA = mkFire( 3.05, -0.10, 0.5);
+    const fireB = mkFire(-2.20,  0.40, 1.2);
+
+    const smokeTex = this._makeFlameTexture({
+      stops: [
+        [0.00, 'rgba(220,220,220,0.85)'],
+        [0.40, 'rgba(110,110,110,0.50)'],
+        [0.80, 'rgba( 40, 40, 40,0.20)'],
+        [1.00, 'rgba( 20, 20, 20,0.00)'],
+      ],
+    });
+    const smokes = [];
+    const SMOKE_POOL = 18;
+    for (let i = 0; i < SMOKE_POOL; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: smokeTex, color: 0x999999, transparent: true,
+        blending: THREE.NormalBlending, depthWrite: false, opacity: 0,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(0.001, 0.001, 1);
+      this.scene.add(sp);
+      smokes.push({ sprite: sp, mat, life: 0, maxLife: 0,
+                    pos: new THREE.Vector3(), vel: new THREE.Vector3(),
+                    seedSize: 1, originIdx: 0 });
+    }
+
+    // Bigger spark pool than `_spawnDistressBeacon` (24 vs 14) — the explosion
+    // burst pumps a lot of flecks at once.
+    const sparks = [];
+    const SPARK_POOL = 24;
+    for (let i = 0; i < SPARK_POOL; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: lightTex, color: 0xffe0a0, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(0.001, 0.001, 1);
+      this.scene.add(sp);
+      sparks.push({ sprite: sp, mat, life: 0, maxLife: 0,
+                    pos: new THREE.Vector3(), vel: new THREE.Vector3() });
+    }
+
+    // Big explosion flash sprite (hidden until detonation)
+    const flashMat = new THREE.SpriteMaterial({
+      map: lightTex, color: 0xffd07a, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+    });
+    const flash = new THREE.Sprite(flashMat);
+    flash.scale.set(0.001, 0.001, 1);
+    this.scene.add(flash);
+
+    // Shockwave ring — billboarded toward camera at detonation
+    const ringGeo = new THREE.RingGeometry(1.0, 1.08, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffe09a, transparent: true, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    this.scene.add(ring);
+
+    p.scenarioBase = {
+      beaconRed, beaconAmber, beaconWhite,
+      fireA, fireB,
+      smokes, sparks,
+      smokeNext: 0, sparkNext: 0,
+      drift: pos.clone(),
+      listRollV: (Math.random() < 0.5 ? -1 : 1) * (0.08 + Math.random() * 0.06),
+      listYawV:  (Math.random() < 0.5 ? -1 : 1) * (0.04 + Math.random() * 0.04),
+      hullSeed: Math.random() * 10,
+      detonated: false,
+      detonateK: 0,
+      flash, flashMat, ring, ringGeo, ringMat,
+    };
+    p.scenarioCleanup = () => {
+      [beaconRed, beaconAmber, beaconWhite, fireA, fireB].forEach(s => {
+        if (s.parent) s.parent.remove(s);
+        if (s.material.map) s.material.map.dispose();
+        s.material.dispose();
+      });
+      smokes.forEach(({ sprite, mat }) => {
+        this.scene.remove(sprite);
+        if (mat.map) mat.map.dispose();
+        mat.dispose();
+      });
+      sparks.forEach(({ sprite, mat }) => {
+        this.scene.remove(sprite);
+        if (mat.map) mat.map.dispose();
+        mat.dispose();
+      });
+      this.scene.remove(flash);
+      if (flashMat.map) flashMat.map.dispose();
+      flashMat.dispose();
+      this.scene.remove(ring);
+      ringGeo.dispose();
+      ringMat.dispose();
+    };
+
+    // === Bomber strafes in from a side, fires once near closest approach ===
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    const dir = right.clone().multiplyScalar(sideSign).normalize();
+    const bomberStart = pos.clone()
+      .addScaledVector(dir, -90)
+      .addScaledVector(up, 5);
+    bomber.outer.position.copy(bomberStart);
+    bomber.outer.lookAt(bomberStart.clone().add(dir));
+    bomber.inner.rotation.set(0, Math.PI, 0);
+    bomber.velocity.copy(dir).multiplyScalar(58);
+    bomber.life = 0; bomber.maxLife = 8; bomber.active = true; bomber.outer.visible = true;
+    bomber.scenario = 'distress_bomber'; bomber.scenarioTime = 0;
+    bomber.scenarioTargetRef = p;
+    bomber.scenarioBase = {
+      dir: dir.clone(),
+      speed: 58,
+      fireAt: 1.3,           // banshee/longsword fires when it's ~~30u out
+      fired: false,
+      detonateAt: 99,        // overwritten when fired (based on bolt travel time)
+      detonationFired: false,
+    };
+
+    if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [p, bomber] };
+    if (this._flashHint) this._flashHint('spawned: distress · bombing run', 'info');
   },
 
   // ----- 9. DEBRIS FIELD CROSS — ship weaves through 30 shards -----
@@ -2510,6 +2927,265 @@ const MarathonWorld = {
     p.hatchAngle = 0; p.hatchTarget = 0;
     if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [p, ls1, ls2] };
     if (this._flashHint) this._flashHint('spawned: escort run', 'info');
+  },
+
+  // ============================================================
+  // b192 MID SCENARIOS — added on top of the 18 existing scenarios.
+  // ============================================================
+
+  // ----- PIRATE AMBUSH — 3 banshees chase 1 pelican target -----
+  _spawnPirateAmbush(){
+    const target = this._acquireShip('pelican');
+    const c1 = this._acquireShip('banshee');
+    const c2 = this._acquireShip('banshee', { forceMint: true });
+    const c3 = this._acquireShip('banshee', { forceMint: true });
+    if (!target || !c1 || !c2 || !c3) return;
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    const dir = right.clone().multiplyScalar(sideSign).normalize();
+    const perp = new THREE.Vector3().crossVectors(dir, up).normalize();
+    const start = fwd.clone().multiplyScalar(38).addScaledVector(dir, -85).addScaledVector(up, 1);
+
+    const targetSpeed = 44;
+    target.outer.position.copy(start);
+    target.outer.lookAt(start.clone().add(dir));
+    target.inner.rotation.set(0, Math.PI, 0);
+    target.velocity.copy(dir).multiplyScalar(targetSpeed);
+    target.life = 0;
+    target.maxLife = 14;
+    target.active = true;
+    target.outer.visible = true;
+    target.scenario = 'pirate_target';
+    target.scenarioTime = 0;
+    target.scenarioBase = { dir: dir.clone(), perp1: up.clone(), perp2: perp.clone(), speed: targetSpeed, seedA: Math.random() * 6.28 };
+
+    const chasers = [c1, c2, c3];
+    chasers.forEach((c, i) => {
+      const slot = start.clone()
+        .addScaledVector(dir,   -28 - i * 7)
+        .addScaledVector(perp,  (i === 0 ? 0 : (i === 1 ? -9 : 9)))
+        .addScaledVector(up,    (i === 0 ? -3 : (i === 1 ? 3 : -1)));
+      c.outer.position.copy(slot);
+      c.outer.lookAt(slot.clone().add(dir));
+      c.inner.rotation.set(0, Math.PI, 0);
+      c.velocity.copy(dir).multiplyScalar(56);
+      c.life = 0;
+      c.maxLife = 14;
+      c.active = true;
+      c.outer.visible = true;
+      c.scenario = 'pirate_chaser';
+      c.scenarioTime = 0;
+      c.scenarioTargetRef = target;
+      c.scenarioBase = { perp1: up.clone(), perp2: perp.clone(), speed: 56, fireCooldown: 0.8 + i * 0.35, seedA: Math.random() * 6.28 };
+    });
+    if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [target, c1, c2, c3] };
+    if (this._flashHint) this._flashHint('spawned: pirate ambush', 'info');
+  },
+
+  // ----- PATROL PAIR — 2 pelicans painted as emergency response, blue/red strobes -----
+  _spawnPatrolPair(){
+    const p1 = this._acquireShip('pelican');
+    const p2 = this._acquireShip('pelican', { forceMint: true });
+    if (!p1 || !p2) return;
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    const dir = right.clone().multiplyScalar(sideSign).addScaledVector(up, (Math.random() - 0.5) * 0.15).normalize();
+    const speed = 30;
+    const formCenter = fwd.clone().multiplyScalar(45).addScaledVector(dir, -100);
+
+    // Strobe sprite factory
+    const tex = this._makeSatLightTexture();
+    const buildStrobe = (color, parent, offset) => {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, color, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      }));
+      sprite.scale.set(2.4, 2.4, 1);
+      sprite.position.copy(offset);
+      parent.add(sprite);
+      return sprite;
+    };
+    // Each pelican gets a red + blue strobe on its dorsal hull, offset phases
+    // so the two ships strobe in alternating sync.
+    const strobes = [];
+    [p1, p2].forEach((p, i) => {
+      const slot = formCenter.clone().addScaledVector(right, (i === 0 ? -5 : 5)).addScaledVector(up, (i === 0 ? 1 : -1));
+      p.outer.position.copy(slot);
+      p.outer.lookAt(slot.clone().add(dir));
+      p.inner.rotation.set(0, Math.PI, 0);
+      p.velocity.copy(dir).multiplyScalar(speed);
+      p.life = 0;
+      p.maxLife = (260 / speed) + 1.5;
+      p.active = true;
+      p.outer.visible = true;
+      p.scenario = 'patrol_pair';
+      p.scenarioTime = 0;
+      const sR = buildStrobe(0xff3a48, p.outer, new THREE.Vector3(-0.7, 1.6,  0.2));
+      const sB = buildStrobe(0x3a8cff, p.outer, new THREE.Vector3( 0.7, 1.6,  0.2));
+      const sR2 = buildStrobe(0xff3a48, p.outer, new THREE.Vector3( 0.7, 1.6, -0.4));
+      const sB2 = buildStrobe(0x3a8cff, p.outer, new THREE.Vector3(-0.7, 1.6, -0.4));
+      strobes.push({ ship: p, sR, sB, sR2, sB2, phaseOffset: i * 0.5 });
+      p.scenarioBase = { dir: dir.clone(), perp1: up.clone(), speed, strobes: strobes.length === 1 ? null : strobes };
+      p.scenarioCleanup = () => {
+        [sR, sB, sR2, sB2].forEach(sp => {
+          if (sp.parent) sp.parent.remove(sp);
+          sp.material.dispose();
+        });
+      };
+    });
+    if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [p1, p2] };
+    if (this._flashHint) this._flashHint('spawned: patrol pair (emergency response)', 'info');
+  },
+
+  // ----- COMET — bright nucleus + long ion-trail crossing the 360° void -----
+  _spawnComet(){
+    // Choose a great-circle path through the visible cone so the comet enters
+    // and exits opposite sides of the camera's 360° dome.
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    // Random axis ~ tangent to camera-forward so the path crosses near the eye.
+    const axis = right.clone().multiplyScalar(Math.random() < 0.5 ? 1 : -1)
+      .addScaledVector(up, (Math.random() - 0.5) * 0.4)
+      .normalize();
+    // Side-step to randomize which great circle
+    const sideAxis = new THREE.Vector3().crossVectors(axis, fwd).normalize();
+    sideAxis.applyAxisAngle(axis, Math.random() * Math.PI * 2);
+    const startDir = sideAxis.clone();
+    const startPos = startDir.clone().multiplyScalar(220);
+    const travel   = startDir.clone().negate().multiplyScalar(440); // straight across
+    const speed    = 38 + Math.random() * 8;
+
+    // Nucleus — bright sprite
+    const nucleusTex = this._makeSatLightTexture();
+    const nucleus = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: nucleusTex, color: 0xfff3e0, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+    }));
+    nucleus.scale.set(8, 8, 1);
+    nucleus.position.copy(startPos);
+    this.scene.add(nucleus);
+
+    // Trail — chain of fading sprites spaced behind the nucleus
+    const TRAIL_N = 22;
+    const trailTex = this._makeSatLightTexture();
+    const trail = [];
+    for (let i = 0; i < TRAIL_N; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: trailTex,
+        color: i < 4 ? 0xfff3e0 : (i < 12 ? 0xb4d4ff : 0x4a6ab8),
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      }));
+      const k = i / (TRAIL_N - 1);
+      sp.scale.setScalar(7 - k * 5);
+      this.scene.add(sp);
+      trail.push(sp);
+    }
+    const dirNorm = travel.clone().normalize();
+    const totalDist = travel.length();
+    const totalLife = totalDist / speed;
+    let life = 0;
+
+    this._addMicroFx({
+      tick(_t, dt){
+        life += dt;
+        if (life > totalLife + 1.0) return false;
+        const lf = Math.min(1, life / totalLife);
+        nucleus.position.copy(startPos).addScaledVector(dirNorm, totalDist * lf);
+        // Fade-in 0.0..0.08, fade-out 0.92..1.0
+        const env = lf < 0.08 ? lf / 0.08 : (lf > 0.92 ? (1 - lf) / 0.08 : 1);
+        nucleus.material.opacity = 1.4 * env;
+        for (let i = 0; i < TRAIL_N; i++) {
+          const lag = 1.4 + i * 1.6;
+          const trailPos = nucleus.position.clone().addScaledVector(dirNorm, -lag);
+          trail[i].position.copy(trailPos);
+          const k = i / (TRAIL_N - 1);
+          trail[i].material.opacity = (1.0 - k) * 0.85 * env;
+        }
+        return true;
+      },
+      cleanup: () => {
+        if (nucleus.parent) nucleus.parent.remove(nucleus);
+        nucleus.material.map && nucleus.material.map.dispose();
+        nucleus.material.dispose();
+        trail.forEach(sp => {
+          if (sp.parent) sp.parent.remove(sp);
+          sp.material.dispose();
+        });
+        trailTex.dispose();
+      },
+    });
+    if (this._flashHint) this._flashHint('spawned: comet', 'info');
+  },
+
+  // ----- EVA TETHER — tiny figure on a slack tether to a stationary pelican -----
+  _spawnEvaTether(){
+    const p = this._acquireShip('pelican');
+    if (!p) return;
+    const center = this._scenarioAnchor();
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const pos = center.clone()
+      .addScaledVector(right, (Math.random() < 0.5 ? -1 : 1) * 6)
+      .addScaledVector(up, 1);
+    p.outer.position.copy(pos);
+    p.outer.lookAt(pos.clone().add(fwd));
+    p.inner.rotation.set(0, Math.PI, 0);
+    p.velocity.set(0, 0, 0);
+    p.life = 0;
+    p.maxLife = 13;
+    p.active = true;
+    p.outer.visible = true;
+    p.scenario = 'eva_tether';
+    p.scenarioTime = 0;
+
+    // Astronaut figure: small capsule + helmet sphere, attached to a Group
+    // we add to the pelican.outer so it travels with the ship's frame.
+    const figGroup = new THREE.Group();
+    const suitMat = new THREE.MeshBasicMaterial({ color: 0xeae6dc });
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0x2a5fa8 });
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.36, 4, 8), suitMat);
+    torso.rotation.z = Math.PI / 2;
+    figGroup.add(torso);
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.20, 12, 10), visorMat);
+    helmet.position.set(0.30, 0, 0);
+    figGroup.add(helmet);
+    // Backpack
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.30, 0.25), new THREE.MeshBasicMaterial({ color: 0x9aa0a8 }));
+    pack.position.set(-0.12, 0, 0);
+    figGroup.add(pack);
+    figGroup.position.set(0, -0.6, 3.0);  // hang off the back of the pelican
+    p.outer.add(figGroup);
+
+    // Tether line — single Line geometry, updated each tick.
+    const lineGeo = new THREE.BufferGeometry();
+    const linePts = new Float32Array(6);
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(linePts, 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xaab0b4, transparent: true, opacity: 0.55 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    p.outer.add(line);
+
+    p.scenarioBase = {
+      figGroup,
+      line,
+      lineGeo,
+      seedA: Math.random() * 6.28,
+      seedB: Math.random() * 6.28,
+      anchorLocal: new THREE.Vector3(0, -0.85, 2.6),  // attaches to underside of pelican
+    };
+    p.scenarioCleanup = () => {
+      if (figGroup.parent) figGroup.parent.remove(figGroup);
+      figGroup.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+      if (line.parent) line.parent.remove(line);
+      lineGeo.dispose();
+      lineMat.dispose();
+    };
+    if (!this._followDisabled && !this.focused) this._scenarioFollow = { ships: [p] };
+    if (this._flashHint) this._flashHint('spawned: EVA tether', 'info');
   },
 
   // ----- 15. SILENT OBSERVER — forerunner materializes near camera, holds -----
@@ -2878,16 +3554,18 @@ const MarathonWorld = {
       return;
     }
 
-    if (s.scenario === 'interception_target' && s.type === 'banshee') {
+    if (s.scenario === 'interception_target' && s.type === 'pelican') {
+      // b218: pelican lead — heavier sway envelope (no barrel roll). Smaller
+      // amps than the previous banshee version; the dropship lumbers across
+      // the field while the two chasers close from behind.
       const tt = s.scenarioTime;
       const base = s.scenarioBase;
       const baseVel = base.dir.clone().multiplyScalar(base.speed);
-      const lateral = base.perp1.clone().multiplyScalar(Math.sin(tt * 1.4 + base.seedA) * 14);
-      const vert = base.perp2.clone().multiplyScalar(Math.cos(tt * 1.0 + base.seedB) * 6);
-      s.velocity.lerp(baseVel.add(lateral).add(vert), Math.min(1, dt * 2.5));
+      const lateral = base.perp1.clone().multiplyScalar(Math.sin(tt * 1.0 + base.seedA) * 8);
+      const vert = base.perp2.clone().multiplyScalar(Math.cos(tt * 0.7 + base.seedB) * 3.5);
+      s.velocity.lerp(baseVel.add(lateral).add(vert), Math.min(1, dt * 2.0));
       const fwd = s.velocity.clone().normalize();
       s.outer.lookAt(s.outer.position.clone().add(fwd));
-      s.inner.rotation.z += dt * 4;
       return;
     }
 
@@ -2927,18 +3605,231 @@ const MarathonWorld = {
       return;
     }
 
-    if (s.scenario === 'distress_beacon' && s.type === 'pelican') {
+    if ((s.scenario === 'distress_beacon' || s.scenario === 'distress_bombed_victim') && s.type === 'pelican') {
       const tt = s.scenarioTime;
       const base = s.scenarioBase;
-      // SOS-ish blink rhythm (3 short, 1 long, repeating)
+
+      // b218: bombing-run variant — once `detonated` flips, switch to explosion
+      // FX (flash sprite, shockwave ring, spark burst, hide ship). Beacons /
+      // listing tumble / fires stop here.
+      if (s.scenario === 'distress_bombed_victim' && base.detonated) {
+        base.detonateK += dt;
+        const k = base.detonateK;
+        // Hide the hull after the first ~0.18s — vaporized.
+        if (k > 0.18) s.outer.visible = false;
+        // Flash: fast scale-up + fade
+        const ft = Math.min(1, k / 0.85);
+        base.flash.position.copy(s.outer.position);
+        const fSize = 0.5 + ft * 14;
+        base.flash.scale.set(fSize, fSize, 1);
+        base.flashMat.opacity = (1 - ft) * 1.4;
+        // Shockwave ring billboarded to camera
+        base.ring.position.copy(s.outer.position);
+        base.ring.lookAt(this.camera.position);
+        const rSize = 0.4 + ft * 16;
+        base.ring.scale.set(rSize, rSize, 1);
+        base.ringMat.opacity = (1 - ft) * 0.9;
+        // Pump sparks for the first 0.6s
+        if (k < 0.6) {
+          for (let i = 0; i < 3; i++) {
+            const slot = base.sparks.find(p => p.life >= p.maxLife);
+            if (!slot) break;
+            slot.pos.copy(s.outer.position);
+            slot.vel.set(
+              (Math.random() - 0.5) * 14,
+              (Math.random() - 0.4) * 9,
+              (Math.random() - 0.5) * 14,
+            );
+            slot.life = 0;
+            slot.maxLife = 0.7 + Math.random() * 0.6;
+            slot.sprite.position.copy(slot.pos);
+          }
+        }
+        // Tick existing smoke + spark sprites so they continue to evolve.
+        base.smokes.forEach(slot => {
+          if (slot.life >= slot.maxLife) { slot.mat.opacity = 0; return; }
+          slot.life += dt;
+          const k2 = slot.life / slot.maxLife;
+          slot.pos.addScaledVector(slot.vel, dt);
+          slot.sprite.position.copy(slot.pos);
+          const sz = slot.seedSize * (0.6 + k2 * 1.6);
+          slot.sprite.scale.set(sz, sz, 1);
+          slot.mat.opacity = 0.55 * (1 - k2 * k2);
+        });
+        base.sparks.forEach(slot => {
+          if (slot.life >= slot.maxLife) { slot.mat.opacity = 0; return; }
+          slot.life += dt;
+          const k2 = slot.life / slot.maxLife;
+          slot.pos.addScaledVector(slot.vel, dt);
+          slot.sprite.position.copy(slot.pos);
+          const sz = 0.42 * (1 - k2 * 0.6);
+          slot.sprite.scale.set(sz, sz, 1);
+          slot.mat.opacity = (1 - k2) * 0.95;
+        });
+        return;
+      }
+
+
+      // ── Red SOS strobe — 3 short, 1 long, repeating ──
       const phase = (tt * 1.4) % 2.4;
-      let on = 0;
-      if (phase < 0.10) on = 1;
-      else if (phase >= 0.30 && phase < 0.40) on = 1;
-      else if (phase >= 0.60 && phase < 0.70) on = 1;
-      else if (phase >= 1.0  && phase < 1.5)  on = 1;
-      base.beacon.material.opacity = on ? 1.0 : 0.05;
+      let redOn = 0;
+      if (phase < 0.10) redOn = 1;
+      else if (phase >= 0.30 && phase < 0.40) redOn = 1;
+      else if (phase >= 0.60 && phase < 0.70) redOn = 1;
+      else if (phase >= 1.0  && phase < 1.5)  redOn = 1;
+      base.beaconRed.material.opacity = redOn ? 1.0 : 0.05;
+
+      // ── Amber rotating beacon — slower, smooth sin ──
+      const amberCycle = (Math.sin(tt * 2.8) + 1) * 0.5;
+      base.beaconAmber.material.opacity = 0.15 + Math.pow(amberCycle, 4) * 0.85;
+
+      // ── White emergency strobe — sharp, fast, off-phase from red ──
+      const wPhase = (tt * 2.2 + 0.7) % 1.0;
+      base.beaconWhite.material.opacity = wPhase < 0.06 ? 1.0 : 0.04;
+
+      // ── Fire flicker — sub-second wobble in scale + opacity. Two fires
+      //    on different seeds so they don't pulse in lockstep. ──
+      const flick = (seed) => 0.65 + 0.35 * Math.sin(tt * 14 + seed) * Math.sin(tt * 7.3 + seed * 2.1);
+      const fA = flick(base.hullSeed);
+      const fB = flick(base.hullSeed + 3.7);
+      base.fireA.material.opacity = 0.55 + 0.40 * fA;
+      base.fireB.material.opacity = 0.50 + 0.40 * fB;
+      base.fireA.scale.set(1.2 + fA * 0.6, 1.6 + fA * 1.0, 1);
+      base.fireB.scale.set(1.0 + fB * 0.5, 1.4 + fB * 0.9, 1);
+
+      // ── Hull power flicker — listless ship, lights stutter. Multiplied
+      //    on top of running lights so the whole frame feels powerless. ──
+      const hullPow = (Math.sin(tt * 9.1 + base.hullSeed) > 0.6) ? 0.18 : 1.0;
+      if (s.runningLights) s.runningLights.forEach(rl => {
+        rl.material.opacity = (rl.userData.baseOpacity ?? 0.7) * hullPow;
+      });
+
+      // ── Listless drift — slow tumble (roll + yaw) as if attitude
+      //    control failed. Engine is dead, so velocity stays zero. ──
+      s.outer.rotation.z += base.listRollV * dt;
+      s.outer.rotation.y += base.listYawV  * dt;
       s.outer.position.y = base.drift.y + Math.sin(tt * 0.8) * 0.18;
+
+      // ── Smoke trail — periodically launch a puff from a damaged spot.
+      //    Gray normal-blended sprite drifts up-and-back, scales up while
+      //    fading out. Pool-recycled. ──
+      base.smokeNext -= dt;
+      if (base.smokeNext <= 0) {
+        base.smokeNext = 0.06 + Math.random() * 0.05;
+        const slot = base.smokes.find(p => p.life >= p.maxLife);
+        if (slot) {
+          const originIdx = Math.random() < 0.5 ? 0 : 1;
+          const anchor = originIdx === 0 ? base.fireA : base.fireB;
+          anchor.getWorldPosition(slot.pos);
+          slot.vel.set(
+            (Math.random() - 0.5) * 0.6,
+             0.35 + Math.random() * 0.35,
+            (Math.random() - 0.5) * 0.6,
+          );
+          slot.life = 0;
+          slot.maxLife = 1.6 + Math.random() * 0.8;
+          slot.seedSize = 0.7 + Math.random() * 0.6;
+          slot.originIdx = originIdx;
+          slot.sprite.position.copy(slot.pos);
+        }
+      }
+      base.smokes.forEach(slot => {
+        if (slot.life >= slot.maxLife) {
+          slot.mat.opacity = 0;
+          return;
+        }
+        slot.life += dt;
+        const k = slot.life / slot.maxLife;
+        slot.pos.addScaledVector(slot.vel, dt);
+        slot.sprite.position.copy(slot.pos);
+        const sz = slot.seedSize * (0.6 + k * 1.6);
+        slot.sprite.scale.set(sz, sz, 1);
+        slot.mat.opacity = 0.55 * (1 - k * k);
+      });
+
+      // ── Sparks — brief flecks ejected from the same damaged spots.
+      //    Fewer, brighter, shorter-lived than smoke. ──
+      base.sparkNext -= dt;
+      if (base.sparkNext <= 0) {
+        base.sparkNext = 0.35 + Math.random() * 0.55;
+        const slot = base.sparks.find(p => p.life >= p.maxLife);
+        if (slot) {
+          const originIdx = Math.random() < 0.5 ? 0 : 1;
+          const anchor = originIdx === 0 ? base.fireA : base.fireB;
+          anchor.getWorldPosition(slot.pos);
+          slot.vel.set(
+            (Math.random() - 0.5) * 2.4,
+             0.2 - Math.random() * 1.2,        // mostly fall + a few rise
+            (Math.random() - 0.5) * 2.4,
+          );
+          slot.life = 0;
+          slot.maxLife = 0.4 + Math.random() * 0.3;
+          slot.sprite.position.copy(slot.pos);
+        }
+      }
+      base.sparks.forEach(slot => {
+        if (slot.life >= slot.maxLife) {
+          slot.mat.opacity = 0;
+          return;
+        }
+        slot.life += dt;
+        const k = slot.life / slot.maxLife;
+        slot.pos.addScaledVector(slot.vel, dt);
+        slot.sprite.position.copy(slot.pos);
+        const sz = 0.30 * (1 - k * 0.7);
+        slot.sprite.scale.set(sz, sz, 1);
+        slot.mat.opacity = (1 - k) * 0.95;
+      });
+
+      return;
+    }
+
+    // b218: bomber straight-flies past the distressed pelican, fires once at
+    // closest approach, schedules the victim's detonation based on bolt travel
+    // time. Type-agnostic: works as banshee or longsword.
+    if (s.scenario === 'distress_bomber') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const baseVel = base.dir.clone().multiplyScalar(base.speed);
+      s.velocity.lerp(baseVel, Math.min(1, dt * 2));
+      const fwdN = s.velocity.clone().normalize();
+      s.outer.lookAt(s.outer.position.clone().add(fwdN));
+      // Type-specific roll
+      if (s.type === 'banshee') {
+        s.inner.rotation.x = Math.sin(s.rollPhase * 0.7) * 0.20;
+        s.inner.rotation.y = Math.PI;
+        s.inner.rotation.z += dt * 4.0;
+      } else if (s.type === 'longsword') {
+        s.inner.rotation.z = Math.sin(s.rollPhase * 0.5) * 0.30;
+      }
+
+      // Fire the bomb
+      if (!base.fired && tt >= base.fireAt) {
+        base.fired = true;
+        const tgt = s.scenarioTargetRef;
+        if (tgt && tgt.active) {
+          const muzzle = new THREE.Vector3(); s.outer.getWorldPosition(muzzle);
+          const aim    = new THREE.Vector3(); tgt.outer.getWorldPosition(aim);
+          // Fat slow bolt reads as a bomb / heavy ordnance.
+          const boltColor = (s.type === 'banshee') ? 0xff3ad8 : 0xffaa30;
+          const boltSpeed = 95;
+          this._fireBolt(muzzle, aim, boltColor, {
+            speed: boltSpeed, spread: 0.0, life: 1.4, scale: 1.4, opacity: 1.0,
+          });
+          const dist = muzzle.distanceTo(aim);
+          base.detonateAt = tt + dist / boltSpeed + 0.04;
+        }
+      }
+
+      // Trigger detonation on the victim when the bolt would arrive
+      if (base.fired && !base.detonationFired && tt >= base.detonateAt) {
+        base.detonationFired = true;
+        const tgt = s.scenarioTargetRef;
+        if (tgt && tgt.active && tgt.scenarioBase) {
+          tgt.scenarioBase.detonated = true;
+          tgt.scenarioBase.detonateK = 0;
+        }
+      }
       return;
     }
 
@@ -3059,6 +3950,123 @@ const MarathonWorld = {
         r.mat.uniforms.uTime.value = t;
       });
       if (s.orbMat) s.orbMat.uniforms.uTime.value = t;
+      return;
+    }
+
+    // ---- b192: PIRATE AMBUSH — target weaves; chasers home + fire ----
+    if (s.scenario === 'pirate_target' && s.type === 'pelican') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const baseVel = base.dir.clone().multiplyScalar(base.speed);
+      const weave = base.perp1.clone().multiplyScalar(Math.sin(tt * 1.7 + base.seedA) * 7)
+        .add(base.perp2.clone().multiplyScalar(Math.cos(tt * 1.3 + base.seedA * 1.4) * 5));
+      s.velocity.lerp(baseVel.add(weave), Math.min(1, dt * 2.4));
+      const fwd = s.velocity.clone().normalize();
+      s.outer.lookAt(s.outer.position.clone().add(fwd));
+      return;
+    }
+    if (s.scenario === 'pirate_chaser' && s.type === 'banshee') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const tgt = s.scenarioTargetRef;
+      // Steer toward target with a slight side-bias so all 3 don't converge to a point.
+      let desiredDir;
+      if (tgt && tgt.active) {
+        desiredDir = tgt.outer.position.clone().sub(s.outer.position).normalize();
+      } else {
+        desiredDir = s.velocity.clone().normalize();
+      }
+      const baseVel = desiredDir.multiplyScalar(base.speed);
+      const wob = base.perp1.clone().multiplyScalar(Math.sin(tt * 2.2 + base.seedA) * 3);
+      s.velocity.lerp(baseVel.add(wob), Math.min(1, dt * 2.0));
+      const fwd = s.velocity.clone().normalize();
+      s.outer.lookAt(s.outer.position.clone().add(fwd));
+      // Continuous barrel roll
+      s.inner.rotation.x = Math.sin(s.rollPhase * 0.7) * 0.18;
+      s.inner.rotation.y = Math.PI;
+      s.inner.rotation.z += dt * 4.5;
+
+      // Fire bolts opportunistically
+      base.fireCooldown -= dt;
+      if (base.fireCooldown <= 0 && tgt && tgt.active) {
+        base.fireCooldown = 0.55 + Math.random() * 0.5;
+        if (this._fireBolt) {
+          const muzzlePos = s.outer.position.clone();
+          this._fireBolt(muzzlePos, tgt.outer.position, 0xff5060, { speed: 95, life: 0.9, scale: 0.6, spread: 0.08 });
+        }
+      }
+      return;
+    }
+
+    // ---- b192: PATROL PAIR — slow forward drift + alternating red/blue strobes ----
+    if (s.scenario === 'patrol_pair' && s.type === 'pelican') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const baseVel = base.dir.clone().multiplyScalar(base.speed);
+      const sway = base.perp1.clone().multiplyScalar(Math.sin(tt * 0.7) * 0.6);
+      s.velocity.lerp(baseVel.add(sway), Math.min(1, dt * 1.8));
+      // g6: was missing the outer.lookAt re-orient after the velocity lerp,
+      // so the pelican's nose stayed locked on the spawn-time direction even
+      // as its body swayed laterally — read as flying sideways. Now aligned.
+      const fwd = s.velocity.clone().normalize();
+      s.outer.lookAt(s.outer.position.clone().add(fwd));
+      // Lumbering wobble
+      s.inner.rotation.x = Math.sin(s.rollPhase * 0.5) * 0.07;
+      s.inner.rotation.y = Math.PI + Math.sin(s.rollPhase * 0.4 + 1.0) * 0.10;
+      s.inner.rotation.z = Math.sin(s.rollPhase * 0.6 + 0.5) * 0.04;
+      // Strobe drive — square-ish pulse at ~3.2 Hz, red/blue alternate.
+      // Stash the four sprites on the ship via scenarioCleanup's closure;
+      // we walked the children when scenario started, but easier: re-find by traversing.
+      let red = 0, blue = 0;
+      if (s.outer.children) {
+        // Strobes are sprites. We tagged them via material color; pulse by phase.
+        const f = (phase) => {
+          const sq = Math.max(0, Math.sin(t * Math.PI * 2 * 1.6 + phase));
+          return Math.pow(sq, 6) * 1.0;  // sharp peaks
+        };
+        red  = f(0);
+        blue = f(Math.PI);
+        s.outer.children.forEach(c => {
+          if (c.isSprite && c.material && c.material.color) {
+            const r = c.material.color.r, b = c.material.color.b;
+            // Identify red vs blue by which channel dominates
+            if (r > b) c.material.opacity = 0.05 + red * 1.0;
+            else       c.material.opacity = 0.05 + blue * 1.0;
+          }
+        });
+      }
+      return;
+    }
+
+    // ---- b192: EVA TETHER — figure drifts on slack tether, tether line follows ----
+    if (s.scenario === 'eva_tether' && s.type === 'pelican') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      // Pelican holds station with tiny breathing drift
+      s.velocity.set(
+        Math.sin(tt * 0.4 + base.seedA) * 0.3,
+        Math.cos(tt * 0.35 + base.seedB) * 0.2,
+        Math.sin(tt * 0.5 + base.seedB) * 0.3
+      );
+      // Astronaut drift relative to pelican (in pelican-local space)
+      const fig = base.figGroup;
+      const reelIn = tt > 9.5;       // last ~3.5s reel back to anchor
+      const targetLocal = reelIn
+        ? base.anchorLocal.clone()
+        : new THREE.Vector3(
+            Math.sin(tt * 0.6 + base.seedA) * 1.4,
+            -0.6 + Math.sin(tt * 0.45) * 0.5,
+            3.0 + Math.cos(tt * 0.5 + base.seedB) * 0.8,
+          );
+      fig.position.lerp(targetLocal, Math.min(1, dt * (reelIn ? 1.8 : 0.9)));
+      // Figure rotates lazily on its own axis
+      fig.rotation.y += dt * 0.7;
+      fig.rotation.x = Math.sin(tt * 0.8) * 0.25;
+      // Update tether line (anchor → figure, both in pelican-local space)
+      const arr = base.lineGeo.attributes.position.array;
+      arr[0] = base.anchorLocal.x; arr[1] = base.anchorLocal.y; arr[2] = base.anchorLocal.z;
+      arr[3] = fig.position.x;     arr[4] = fig.position.y;     arr[5] = fig.position.z;
+      base.lineGeo.attributes.position.needsUpdate = true;
       return;
     }
   },
@@ -3285,12 +4293,18 @@ const MarathonWorld = {
       ['derelict',     () => this._spawnDerelictDrift()],
       ['interception', () => this._spawnInterception()],
       ['distress',     () => this._spawnDistressBeacon()],
+      ['bombing',      () => this._spawnDistressBombing()],
       ['debris',       () => this._spawnDebrisCross()],
       ['ghost',        () => this._spawnGhostContact()],
       ['carrier',      () => this._spawnCarrierLaunch()],
       ['escort',       () => this._spawnEscortRun()],
       ['observer',     () => this._spawnSilentObserver()],
       ['strafe',       () => this._spawnLongswordStrafe()],
+      // b192 additions
+      ['pirate',       () => this._spawnPirateAmbush()],
+      ['patrol',       () => this._spawnPatrolPair()],
+      ['comet',        () => this._spawnComet()],
+      ['eva',          () => this._spawnEvaTether()],
     ];
     // Focus-required scenarios — only included when a title is locked
     if (this.focused) {
@@ -3306,6 +4320,342 @@ const MarathonWorld = {
     try { fn(); } catch (e) { console.warn('[scenario] fire failed', name, e); return; }
     this._recentScenarios.push(name);
     if (this._recentScenarios.length > 5) this._recentScenarios.shift();
+  },
+
+  /* ============================================================
+     b192 MICRO TIER — ambient one-shot effects firing every 5–12s.
+     Goal: kill the 5–10s "nothing's happening" gaps between scripted
+     scenarios. Each micro fx is cheap, short-lived, and self-cleans.
+     ============================================================ */
+
+  _tickMicroScheduler(t){
+    if (this._nextMicroAt == null) this._nextMicroAt = t + 4 + Math.random() * 4;
+    if (t < this._nextMicroAt) return;
+    this._fireRandomMicro();
+    this._nextMicroAt = t + 5 + Math.random() * 7;   // 5–12s gap
+  },
+
+  _fireRandomMicro(){
+    const pool = [
+      ['meteor',   () => this._spawnMeteorMicro()],
+      ['pulsar',   () => this._spawnPulsarMicro()],
+      ['buzz',     () => this._spawnCloseFighterMicro()],
+      ['comm',     () => this._spawnCommStaticMicro()],
+      ['emp',      () => this._spawnEmpFlashMicro()],
+      ['drone',    () => this._spawnDroneDartMicro()],
+    ];
+    this._recentMicros = this._recentMicros || [];
+    const fresh = pool.filter(([n]) => !this._recentMicros.includes(n));
+    const eligible = fresh.length ? fresh : pool;
+    const [name, fn] = eligible[Math.floor(Math.random() * eligible.length)];
+    try { fn(); } catch (e) { console.warn('[micro] fire failed', name, e); return; }
+    this._recentMicros.push(name);
+    if (this._recentMicros.length > 3) this._recentMicros.shift();
+  },
+
+  _addMicroFx(fx){
+    this.microFx = this.microFx || [];
+    this.microFx.push(fx);
+  },
+
+  _tickMicroFx(t, dt){
+    if (!this.microFx || !this.microFx.length) return;
+    for (let i = this.microFx.length - 1; i >= 0; i--) {
+      const fx = this.microFx[i];
+      let alive = true;
+      try { alive = fx.tick(t, dt) !== false; } catch (e) { console.warn('[micro] tick failed', e); alive = false; }
+      if (!alive) {
+        try { fx.cleanup && fx.cleanup(); } catch (_) {}
+        this.microFx.splice(i, 1);
+      }
+    }
+  },
+
+  // 1. METEOR — single fat streak across one quadrant in ~1.8s.
+  _spawnMeteorMicro(){
+    const u  = Math.random() * 2 - 1;
+    const th = Math.random() * Math.PI * 2;
+    const rr = Math.sqrt(1 - u * u);
+    const radial = new THREE.Vector3(Math.cos(th) * rr, u, Math.sin(th) * rr);
+    const dist = 180 + Math.random() * 100;
+    const pos = radial.clone().multiplyScalar(dist);
+    const helper = Math.abs(radial.y) > 0.95 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0);
+    const tangent = new THREE.Vector3().crossVectors(radial, helper).normalize();
+    tangent.applyAxisAngle(radial, Math.random() * Math.PI * 2);
+    const speed = 110 + Math.random() * 50;
+
+    const tex = (this.streaks && this.streaks[0]) ? this.streaks[0].mat.map : this._makeStreakTexture();
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+      color: new THREE.Color(0xfff0d6),
+    });
+    const geo = new THREE.PlaneGeometry(110, 9);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    mesh.lookAt(pos.clone().add(tangent));
+    mesh.rotateZ(Math.PI / 2);
+    this.scene.add(mesh);
+
+    const vel = tangent.clone().multiplyScalar(speed);
+    let life = 0;
+    const maxLife = 1.8;
+    this._addMicroFx({
+      tick(_t, dt){
+        life += dt;
+        if (life >= maxLife) return false;
+        mesh.position.addScaledVector(vel, dt);
+        const lf = life / maxLife;
+        mat.opacity = (lf < 0.18 ? lf / 0.18 : (1 - (lf - 0.18) / 0.82)) * 1.4;
+        return true;
+      },
+      cleanup: () => {
+        if (mesh.parent) mesh.parent.remove(mesh);
+        geo.dispose();
+        mat.dispose();
+      },
+    });
+  },
+
+  // 2. PULSAR — fixed-position blinker, ~12s lifespan, rhythmic 1.6 Hz.
+  _spawnPulsarMicro(){
+    const u  = Math.random() * 2 - 1;
+    const th = Math.random() * Math.PI * 2;
+    const rr = Math.sqrt(1 - u * u);
+    const dist = 320 + Math.random() * 80;
+    const pos = new THREE.Vector3(Math.cos(th) * rr, u, Math.sin(th) * rr).multiplyScalar(dist);
+
+    const tex = this._makeSatLightTexture ? this._makeSatLightTexture() : this._makeStreakTexture();
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, color: 0x9ad8ff, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+    }));
+    sprite.scale.set(11, 11, 1);
+    sprite.position.copy(pos);
+    this.scene.add(sprite);
+
+    const freq = 1.4 + Math.random() * 0.5;
+    const phase = Math.random() * Math.PI * 2;
+    let life = 0;
+    const maxLife = 11 + Math.random() * 4;
+    this._addMicroFx({
+      tick(t, dt){
+        life += dt;
+        if (life >= maxLife) return false;
+        // Tight pulse: sharp peak, dim tail. Squared sine gives that vibe.
+        const s = Math.sin(t * freq * Math.PI * 2 + phase);
+        const beat = Math.max(0, s) * Math.max(0, s);
+        // Fade in first 1.2s, fade out last 1.5s
+        const env = Math.min(1, life / 1.2) * Math.min(1, (maxLife - life) / 1.5);
+        sprite.material.opacity = (0.10 + beat * 0.85) * env;
+        sprite.scale.setScalar(8 + beat * 6);
+        return true;
+      },
+      cleanup: () => {
+        if (sprite.parent) sprite.parent.remove(sprite);
+        sprite.material.map && sprite.material.map.dispose();
+        sprite.material.dispose();
+      },
+    });
+  },
+
+  // 3. CLOSE FIGHTER BUZZ — single banshee tearing past camera in ~2s.
+  _spawnCloseFighterMicro(){
+    const ship = this._acquireShip('banshee');
+    if (!ship) return;
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    // Pass close to camera, off-axis so it actually crosses the visible cone.
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    const dir = right.clone().multiplyScalar(sideSign).addScaledVector(fwd, 0.20).normalize();
+    const sweepCenter = fwd.clone().multiplyScalar(18 + Math.random() * 10)
+      .addScaledVector(up, (Math.random() - 0.5) * 4);
+    const start = sweepCenter.clone().addScaledVector(dir, -90);
+    ship.outer.position.copy(start);
+    ship.outer.lookAt(start.clone().add(dir));
+    ship.inner.rotation.set(0, Math.PI, 0);
+    ship.velocity.copy(dir).multiplyScalar(170);   // way faster than the 80–120 standard banshee speed
+    ship.life = 0;
+    ship.maxLife = 1.6;                             // brief
+    ship.active = true;
+    ship.outer.visible = true;
+    // No scenario flag — let _tickFlyby do its normal banshee animation (barrel rolls).
+  },
+
+  // 4. COMM STATIC — short text scrap fading in/out near a random title.
+  _spawnCommStaticMicro(){
+    const titles = this.titles || [];
+    if (!titles.length) return;
+    const anchor = titles[Math.floor(Math.random() * titles.length)];
+    if (!anchor || !anchor.mesh) return;
+
+    const SAMPLES = [
+      '...CONTACT BEARING 2-7-9...',
+      '...UPLINK NOMINAL...',
+      '...PACKET LOSS / 0xCAFE...',
+      '...SIGNAL: KANI/CH3...',
+      '...IDENT: UNKNOWN...',
+      '...RX BUFFER OVERRUN...',
+      '...ETA TO TARGET 0:42...',
+      '...HANDSHAKE FAILED...',
+      '...FALLBACK ROUTE LOCKED...',
+      '...NAV PING 0xDEAD...',
+      '...HEADSET CHATTER//STATIC...',
+    ];
+    const text = SAMPLES[Math.floor(Math.random() * SAMPLES.length)];
+    const tex = this._makeTitleTexture(text, 64);
+    const aspect = tex.image.width / tex.image.height;
+    const w = 9;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTex:      { value: tex },
+        uTime:     { value: Math.random() * 100 },
+        uHover:    { value: 0.85 },
+        uFocus:    { value: 0 },
+        uBass:     { value: 0 },
+        uOpacity:  { value: 0 },
+        uTint:     { value: new THREE.Vector3(0.55, 0.95, 0.75) },
+        uHueShift: { value: 0 },
+        uBreath:   { value: 0 },
+        uTwinkle:  { value: 0 },
+      },
+      vertexShader: TITLE_VERTEX,
+      fragmentShader: TITLE_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+    });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w / aspect), mat);
+    // Drop it next to the title in world-space (small lateral nudge so it's not on top of it).
+    const titlePos = anchor.mesh.position.clone();
+    const off = new THREE.Vector3(
+      (Math.random() - 0.5) * 14,
+      (Math.random() - 0.5) * 6 - 3,
+      (Math.random() - 0.5) * 14,
+    );
+    plane.position.copy(titlePos).add(off);
+    plane.onBeforeRender = (renderer, scene, camera) => { plane.quaternion.copy(camera.quaternion); };
+    this.scene.add(plane);
+
+    let life = 0;
+    const maxLife = 1.6;
+    this._addMicroFx({
+      tick(t, dt){
+        life += dt;
+        if (life >= maxLife) return false;
+        mat.uniforms.uTime.value = t;
+        const lf = life / maxLife;
+        // Triangle envelope, max around 35% through life
+        const env = lf < 0.35 ? lf / 0.35 : (1 - (lf - 0.35) / 0.65);
+        mat.uniforms.uOpacity.value = env * 0.85;
+        return true;
+      },
+      cleanup: () => {
+        if (plane.parent) plane.parent.remove(plane);
+        plane.geometry.dispose();
+        if (mat.uniforms.uTex.value) mat.uniforms.uTex.value.dispose();
+        mat.dispose();
+      },
+    });
+  },
+
+  // 5. EMP FLASH — bright spherical flash from a far point, ~0.55s.
+  _spawnEmpFlashMicro(){
+    const u  = Math.random() * 2 - 1;
+    const th = Math.random() * Math.PI * 2;
+    const rr = Math.sqrt(1 - u * u);
+    const dist = 220 + Math.random() * 100;
+    const pos = new THREE.Vector3(Math.cos(th) * rr, u, Math.sin(th) * rr).multiplyScalar(dist);
+
+    const tex = this._makeSatLightTexture ? this._makeSatLightTexture() : this._makeStreakTexture();
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, color: 0xeaf6ff, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
+    }));
+    sprite.position.copy(pos);
+    sprite.scale.set(2, 2, 1);
+    this.scene.add(sprite);
+
+    let life = 0;
+    const maxLife = 0.55;
+    this._addMicroFx({
+      tick(_t, dt){
+        life += dt;
+        if (life >= maxLife) return false;
+        const lf = life / maxLife;
+        // Sharp rise, longer fall
+        const env = lf < 0.12 ? Math.pow(lf / 0.12, 0.5) : Math.pow(1 - (lf - 0.12) / 0.88, 1.6);
+        sprite.material.opacity = env * 1.3;
+        sprite.scale.setScalar(2 + lf * 18);
+        return true;
+      },
+      cleanup: () => {
+        if (sprite.parent) sprite.parent.remove(sprite);
+        sprite.material.map && sprite.material.map.dispose();
+        sprite.material.dispose();
+      },
+    });
+  },
+
+  // 6. DRONE DART — tiny mesh flicking from one title's neighborhood to another.
+  _spawnDroneDartMicro(){
+    const titles = this.titles || [];
+    if (titles.length < 2) return;
+    const aIdx = Math.floor(Math.random() * titles.length);
+    let bIdx = Math.floor(Math.random() * titles.length);
+    if (bIdx === aIdx) bIdx = (bIdx + 1) % titles.length;
+    const a = titles[aIdx].mesh.position.clone();
+    const b = titles[bIdx].mesh.position.clone();
+
+    const geo = new THREE.OctahedronGeometry(0.7, 0);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xc8f0ff, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const drone = new THREE.Mesh(geo, mat);
+    drone.position.copy(a);
+    this.scene.add(drone);
+
+    // Trailing sprite for a tiny head-glow
+    const headTex = this._makeSatLightTexture ? this._makeSatLightTexture() : null;
+    let head = null;
+    if (headTex) {
+      head = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: headTex, color: 0xc8f0ff, transparent: true, opacity: 0.7,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      head.scale.set(2.4, 2.4, 1);
+      drone.add(head);
+    }
+
+    let life = 0;
+    const maxLife = 1.4 + Math.random() * 0.5;
+    const arcOffset = new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12);
+    this._addMicroFx({
+      tick(_t, dt){
+        life += dt;
+        if (life >= maxLife) return false;
+        const lf = life / maxLife;
+        // Arc: lerp(a,b) + perpendicular bump that peaks mid-flight
+        const lerp = a.clone().lerp(b, lf);
+        const arc  = arcOffset.clone().multiplyScalar(Math.sin(lf * Math.PI));
+        drone.position.copy(lerp).add(arc);
+        drone.rotation.x += dt * 4.2;
+        drone.rotation.y += dt * 3.1;
+        // Fade in/out edges
+        const env = lf < 0.12 ? lf / 0.12 : (lf > 0.85 ? (1 - lf) / 0.15 : 1);
+        mat.opacity = 0.85 * env;
+        if (head) head.material.opacity = 0.65 * env;
+        return true;
+      },
+      cleanup: () => {
+        if (drone.parent) drone.parent.remove(drone);
+        geo.dispose(); mat.dispose();
+        if (head) {
+          head.material.map && head.material.map.dispose();
+          head.material.dispose();
+        }
+      },
+    });
   },
 
   /* ---------- Mech-fragment shards — drifting low-poly glass debris ---------- */
@@ -3425,7 +4775,14 @@ const MarathonWorld = {
   // distant gravitational gyroscope / observatory anchor.
   _buildCore(){
     this.coreGroup = new THREE.Group();
-    this.coreGroup.position.set(0, 0, -440);
+    // b239: moved BEHIND the camera spawn and far out, per user request. Sits
+    // deeper in +Z than the Halo ring (which is at z=+1050) — when the user
+    // turns 180° to discover the ring, the core appears as a distant Saturn-
+    // observatory landmark visible through/past the ring's interior. Offset
+    // to (-200, -80) so it's not dead-center behind the ring (avoids stacking
+    // it on the ring's central axis). Distance from origin ≈ 1664u, well
+    // within the b238 camera far plane of 1800.
+    this.coreGroup.position.set(-200, -80, 1650);
 
     const fresnelVS = `
       varying vec3 vNormal;
@@ -3698,6 +5055,11 @@ const MarathonWorld = {
         groupSpinZ: (Math.random() - 0.5) * 0.20,
       };
 
+      // b238: hidden by default — these orbiting gyros pass through every
+      // viewpoint (orbit radius 240-340, but the Halo ring's interior reaches
+      // out to 1700u from origin) and the user called them out as "in the way
+      // of the halo ring." `el-satellites` admin toggle still re-enables them.
+      grp.visible = false;
       this.scene.add(grp);
       this.satellites.push({ grp, rings, orb, orbMat, haloMat, navLights, orbit });
     }
@@ -3777,7 +5139,15 @@ const MarathonWorld = {
     const grp = new THREE.Group();
     // Far placement so the silhouette reads as a landmark, not a flyby.
     grp.position.set(-340, 36, -120);
-    grp.rotation.y = Math.PI * 0.18;     // angled slightly toward camera
+    // b235: was rotation.y = π × 0.18, which placed the engine block (at local
+    // -X = world (-0.85, 0, +0.54) → CLOSER to camera) and head (at local +X
+    // → INTO the screen). The engine block is 28×22×22 + bright thruster
+    // cones, the head is just a tiny 11u icosa with spires — visually the
+    // engines dominated and read as "the front," making the ship look like
+    // it was flying backwards. Flipped 180° (added π) so the head is now the
+    // camera-facing end and the engines trail into the screen behind it.
+    // Memory: feedback_ships_face_forward.md.
+    grp.rotation.y = Math.PI * 1.18;
     grp.rotation.z = -0.06;
     grp.scale.set(1.0, 1.0, 1.0);
 
@@ -4011,7 +5381,319 @@ const MarathonWorld = {
       }
     }
     // Very slow yaw drift to feel "alive but station-keeping"
-    m.grp.rotation.y = Math.PI * 0.18 + Math.sin(t * 0.04) * 0.012;
+    m.grp.rotation.y = Math.PI * 1.18 + Math.sin(t * 0.04) * 0.012;
+  },
+
+  /* ---------- Halo ringworld — far landmark, curving plate with inner-face terrain ---------- */
+  // Big TorusGeometry placed at (-60, 5, -380) with major axis along world-X so the
+  // plate arcs from the upper-left horizon up across the sky and off into the far
+  // depth — the iconic Halo screenshots. Inner face renders a procedural terrain
+  // shader (oceans / continents / ice caps / drifting clouds), outer face renders
+  // dark Forerunner alloy with subtle plate seams + cyan power trim. Slowly spins
+  // around its symmetry axis (the canonical gravity-providing rotation). Material
+  // opts out of scene fog so the ring stays crisp at ~600u distance.
+  _buildHaloRing(){
+    const grp = new THREE.Group();
+    // b240: "fucking huge" pass. User wanted the ring much bigger and at a
+    // dramatic angle that shows the inside (the curving inner-face plate with
+    // ocean/land/clouds, the part they loved seeing). Bumped R 680 → 900,
+    // pushed center 1050 → 1300 deeper, and steepened the tilt so the off-
+    // axis viewing angle moves from 41.6° (still close to face-on) to 50.5°
+    // (proper Halo-Infinite-cover 3/4 view of the curving inhabited surface).
+    // Camera far plane 1800 → 2400 to fit the new far edge.
+    //   Position (60, 50, +1300): behind camera, slightly up-and-right.
+    //   rotation.x = 0.85 (was 0.65) — more forward tilt = inner face
+    //     opens toward the camera.
+    //   rotation.y = 0.45 + π retained for the bearing flip (ring is at +Z).
+    //   rotation.z = -0.10 retained for cinematic asymmetry.
+    //   Computed axis ≈ (-0.361, -0.719, -0.594) dot camera-dir-from-ring
+    //     (-0.046, -0.038, -0.999) ≈ 0.637 → acos ≈ 50.5°.
+    grp.position.set(60, 50, 1300);
+    grp.rotation.y = 0.45 + Math.PI;
+    grp.rotation.x = 0.85;
+    grp.rotation.z = -0.10;
+
+    const RING_R = 900.0;   // b240: 680 → 900 — user: "fucking huge"; planet-class megastructure scale
+    const RING_r = 48.0;    // b240: 36 → 48 — proportional thickening (r/R ratio kept) so the terrain band scales with the ring
+    const RADIAL_SEGS = 22;
+    const TUBULAR_SEGS = 600;
+
+    const geo = new THREE.TorusGeometry(RING_R, RING_r, RADIAL_SEGS, TUBULAR_SEGS);
+
+    const vert = `
+      varying vec2 vUv;
+      varying float vInnerFace;
+      varying float vRimMix;
+      void main(){
+        vUv = uv;
+        // Object-space tube center for this vertex (default torus has axis Z,
+        // tube center for vertex at (px,py,pz) is normalize(px,py)*R, z=0).
+        // R hardcoded to match RING_R above; if you bump RING_R, bump this too.
+        vec2 cXY = normalize(position.xy) * 900.0;
+        vec3 tubeCenter = vec3(cXY, 0.0);
+        vec3 nObj = normalize(position - tubeCenter);
+        vec3 radialOut = vec3(normalize(cXY), 0.0);
+        // dot < 0 means vertex normal points toward the torus center axis
+        // → that's the INNER (inhabited) face.
+        float facing = dot(nObj, radialOut);
+        vInnerFace = step(facing, 0.0);   // 1.0 if inner, 0.0 if outer
+        vRimMix    = 1.0 - abs(facing);    // peaks on the side rims
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const frag = `
+      precision highp float;
+      uniform float uTime;
+      uniform float uBass;
+      varying vec2 vUv;
+      varying float vInnerFace;
+      varying float vRimMix;
+
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise2(vec2 p){
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                   mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+      float fbm(vec2 p){
+        float v = 0.0; float a = 0.5;
+        for (int i = 0; i < 5; i++){ v += a * noise2(p); p *= 2.07; a *= 0.5; }
+        return v;
+      }
+
+      void main(){
+        // ----- OUTER FACE: dark Forerunner alloy + structural plate seams -----
+        // b240: outer cyan trim pulled even further (0.30 → 0.18, 0.18 → 0.10)
+        // — the bright outline was dominating the silhouette and outshining
+        // the inner terrain that the user explicitly wanted to see better.
+        if (vInnerFace < 0.5) {
+          float seam = step(0.985, fract(vUv.x * 60.0));
+          float ridge = fbm(vec2(vUv.x * 14.0, vUv.y * 3.0));
+          vec3 base = vec3(0.085, 0.092, 0.110) * (0.55 + 0.45 * ridge);
+          base += vec3(0.18, 0.45, 0.62) * seam * 0.18;
+          base += vec3(0.16, 0.36, 0.56) * smoothstep(0.55, 0.95, vRimMix) * 0.10;
+          base *= (1.0 + uBass * 0.08);
+          gl_FragColor = vec4(base, 1.0);
+          return;
+        }
+
+        // ----- INNER FACE: terrain band (oceans, continents, ice, clouds) -----
+        // b240 vibrancy pass: user said they "loved seeing the blue water and
+        // green land" but wanted to see it BETTER. Saturated ocean + forest +
+        // desert palette, thinned the cloud layer so the land/ocean mosaic
+        // shows through, dropped the rim haze further, and bumped the overall
+        // surface brightness ×1.08 → ×1.30 so the inner face reads sun-lit.
+        float lat = (vUv.y - 0.5) * 2.0;
+
+        float cont = fbm(vec2(vUv.x * 4.5, lat * 1.2));
+        cont += 0.40 * fbm(vec2(vUv.x * 11.0 + 13.0, lat * 3.0));
+        cont *= 0.71;
+
+        float landMask = smoothstep(0.40, 0.49, cont);
+        float ice = smoothstep(0.82, 0.97, abs(lat));
+
+        // Brighter, more saturated ocean (richer royal-blue → cyan-blue gradient).
+        vec3 oceanDeep = vec3(0.040, 0.18, 0.45);
+        vec3 oceanSh   = vec3(0.18,  0.50, 0.85);
+        vec3 ocean = mix(oceanDeep, oceanSh, smoothstep(0.16, 0.40, cont));
+
+        // Brighter forest + warmer desert for clearer land contrast.
+        vec3 forest = vec3(0.22, 0.58, 0.24);
+        vec3 desert = vec3(0.65, 0.52, 0.24);
+        vec3 land   = mix(forest, desert, smoothstep(0.55, 0.78, cont));
+
+        vec3 surface = mix(ocean, land, landMask);
+        surface = mix(surface, vec3(0.92, 0.96, 1.00), ice);
+
+        // Cloud cover thinned so terrain shows through.
+        float clouds = fbm(vec2(vUv.x * 16.0 + uTime * 0.020, lat * 4.5 + uTime * 0.006));
+        clouds = smoothstep(0.60, 0.90, clouds);
+        // g3: cloud-mix dropped 0.32 → 0.20. The bright cloud pixels were
+        // dominating the post-fx bloom feedback and smearing into a halation
+        // ring around the silhouette that obscured the terrain underneath.
+        surface = mix(surface, vec3(0.95, 0.96, 1.00), clouds * 0.20);
+
+        // Atmosphere rim — kept low so it doesn't smear over the terrain.
+        // g3: 0.12 → 0.05.
+        float rim = smoothstep(0.88, 1.00, abs(lat));
+        surface += vec3(0.42, 0.58, 0.92) * rim * 0.05;
+
+        // Bass-driven cyan energy on the inner face.
+        // g3: 0.40 → 0.18 — same bloom-feedback reason.
+        surface += vec3(0.05, 0.18, 0.30) * uBass * 0.18;
+
+        // g3: removed the *1.30 sun-lit multiplier. It was pushing cloud +
+        // ice highlights well above 1.0, which the bloom pass then exploded
+        // into a giant halation crescent obscuring everything inside the
+        // ring. Surface now sits firmly in LDR so terrain reads cleanly.
+
+        gl_FragColor = vec4(surface, 1.0);
+      }
+    `;
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uBass: { value: 0 },
+      },
+      vertexShader: vert,
+      fragmentShader: frag,
+      transparent: false,
+      depthWrite: true,
+      side: THREE.DoubleSide,
+      // Intentionally NOT setting `fog: true` — this is a far landmark and
+      // FogExp2 at density 0.0035 would swallow it past ~400u.
+    });
+
+    const ring = new THREE.Mesh(geo, mat);
+    grp.add(ring);
+
+    this.scene.add(grp);
+    this.haloRing = { grp, mesh: ring, mat };
+  },
+
+  _tickHaloRing(t, bass){
+    if (!this.haloRing || !this.haloRing.grp.visible) return;
+    const r = this.haloRing;
+    r.mat.uniforms.uTime.value = t;
+    r.mat.uniforms.uBass.value = bass;
+    // b232: spin rate dropped from 0.0035 → 0.0007 rad/frame (~5×slower).
+    // g3: still read "too fast" — dropped again 0.0007 → 0.00015 (another
+    // ~4.7×slower). At 60fps this is one full revolution per ~12 minutes,
+    // closer to the canonical "monumental gravity-providing" feel where
+    // motion is barely perceptible across a normal viewing.
+    r.mesh.rotation.z += 0.00015;
+  },
+
+  /* ---------- The Traveler — paneled white sphere overhead, Destiny landmark ---------- */
+  // g2: fills the empty overhead bearing — Marathon is front-low-left, Halo
+  // ring is behind-up-right, distant core is deep-behind-low-left, so the only
+  // way users discover this one is by drag-looking up. Icosahedron at detail=4
+  // so the silhouette reads as a faceted machine rather than a smooth moon;
+  // shader hashes object-space normals into per-panel IDs, paints most panels
+  // milk-white, sparse warm "exposed innards" panels concentrated on the
+  // lower hemisphere (canon: Traveler's underside is mechanically scarred).
+  // Fresnel rim + sprite halo so the sphere reads luminous against the void.
+  // Material opts out of fog (far landmark, same as Halo ring).
+  _buildTraveler(){
+    const grp = new THREE.Group();
+    // Position: high overhead, slightly forward + lateral offset so a
+    // comfortable upward gaze catches it rather than requiring a dead-zenith
+    // tilt. Distance from origin ≈ 807u — well inside far plane 2400.
+    grp.position.set(80, 760, -260);
+
+    const TRAV_R = 130.0;
+
+    const geo = new THREE.IcosahedronGeometry(TRAV_R, 4);
+
+    const vert = `
+      varying vec3 vNormalObj;
+      varying vec3 vNormalView;
+      varying float vUpDot;
+      void main(){
+        vNormalObj = normalize(normal);
+        vec3 nWorld = normalize(mat3(modelMatrix) * normal);
+        vUpDot = nWorld.y;
+        vNormalView = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const frag = `
+      precision highp float;
+      uniform float uTime;
+      uniform float uBass;
+      varying vec3 vNormalObj;
+      varying vec3 vNormalView;
+      varying float vUpDot;
+
+      float hash3(vec3 p){
+        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+      }
+
+      void main(){
+        // Quantize object-space normal so each polyhedron facet collapses
+        // to one stable hash → one panel ID. Stable under the slow yaw drift.
+        vec3 q = floor(vNormalObj * 10.0 + 0.5);
+        float pid = hash3(q);
+
+        // Bottom hemisphere reads warmer + dirtier (the exposed innards).
+        float bottomBias = smoothstep(0.30, -0.40, vUpDot);
+
+        vec3 white = vec3(0.92, 0.91, 0.88);
+        vec3 cream = vec3(0.78, 0.74, 0.68);
+        vec3 baseTone = mix(white, cream, pid * 0.45);
+        baseTone *= mix(1.0, 0.78, bottomBias * 0.35);
+
+        // Sparse warm panels — denser as we move toward the bottom pole.
+        float warmThresh = mix(0.93, 0.62, bottomBias);
+        float isWarm = step(warmThresh, pid);
+        vec3 warmGlow = vec3(1.00, 0.62, 0.28);
+        float warmPulse = 0.85 + 0.45 * sin(uTime * 0.7 + pid * 17.0) + uBass * 0.5;
+        vec3 col = mix(baseTone, warmGlow * warmPulse, isWarm * 0.85);
+
+        // Fixed top-key shading via world-Y of normal — the sphere reads
+        // bright on top and shaded underneath regardless of camera angle.
+        float kd = clamp(vUpDot * 0.95 + 0.20, 0.0, 1.0);
+        float ambient = 0.40;
+        col *= ambient + (1.0 - ambient) * (0.55 + 0.45 * kd);
+
+        // Fresnel rim — silhouette glow that reads luminous against the void.
+        float fres = pow(1.0 - abs(vNormalView.z), 2.5);
+        col += vec3(0.85, 0.78, 0.62) * fres * 0.45;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uBass: { value: 0 },
+      },
+      vertexShader: vert,
+      fragmentShader: frag,
+      transparent: false,
+      depthWrite: true,
+      side: THREE.FrontSide,
+    });
+
+    const sphere = new THREE.Mesh(geo, mat);
+    grp.add(sphere);
+
+    // Outer halo sprite — soft luminous bloom so the silhouette reads even
+    // when the bare polyhedral edge would otherwise blend into the starfield.
+    const haloTex = this._makeSatLightTexture();
+    const haloMat = new THREE.SpriteMaterial({
+      map: haloTex,
+      color: 0xfff2d8,
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    });
+    const halo = new THREE.Sprite(haloMat);
+    halo.scale.set(TRAV_R * 3.4, TRAV_R * 3.4, 1);
+    grp.add(halo);
+
+    this.scene.add(grp);
+    this.traveler = { grp, mesh: sphere, mat, haloMat };
+  },
+
+  _tickTraveler(t, bass){
+    if (!this.traveler || !this.traveler.grp.visible) return;
+    const tr = this.traveler;
+    tr.mat.uniforms.uTime.value = t;
+    tr.mat.uniforms.uBass.value = bass;
+    // Barely-perceptible yaw — Traveler in canon is functionally motionless,
+    // so the rotation is well under the Halo ring's spin (~0.0007). 0.00018
+    // rad/frame ≈ one full revolution per ~6 minutes at 60fps.
+    tr.grp.rotation.y += 0.00018;
+    // Gentle halo breathe with bass.
+    tr.haloMat.opacity = 0.30 + bass * 0.18;
   },
 
   /* ---------- Nav buoys (b174) — small drifting blinking beacons ---------- */
@@ -4295,6 +5977,8 @@ const MarathonWorld = {
           uOpacity:   { value: baseOpacity },
           uTint:      { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
           uHueShift:  { value: 0 },
+          uBreath:    { value: 0 },   // b192
+          uTwinkle:   { value: 0 },   // b192
         },
         vertexShader: TITLE_VERTEX,
         fragmentShader: TITLE_FRAGMENT,
@@ -4461,7 +6145,15 @@ const MarathonWorld = {
     this.analyser.getByteFrequencyData(this.freqArr);
     let s = 0;
     for (let i = 2; i < 10; i++) s += this.freqArr[i];
-    return Math.min(1, s / (8 * 255));
+    const raw = Math.min(1, s / (8 * 255));
+    // g5: ~30 shader terms read this value (bloom strength, CA, title
+    // glitch, halo ring inner-face, marathon neon, traveler panels, etc.)
+    // and the cumulative silent→playing jump was jarring. Compressing the
+    // effective swing globally tames all reactivity together — silent stays
+    // at 0 (no dead-state shift), peaks land at GAIN instead of 1.0.
+    // Reactivity preserved, delta is gentler.
+    const GAIN = 0.45;
+    return raw * GAIN;
   },
 
   /* ---------- Input ---------- */
@@ -4597,73 +6289,33 @@ const MarathonWorld = {
       <div class="mw-admin-head">
         <button class="mw-admin-x" data-act="close" aria-label="Close">×</button>
       </div>
-      <div class="mw-admin-section" data-cat="combat" data-key="dogfight">
-        <div class="mw-admin-label">dogfight</div>
-        <button data-act="combat">pelican vs banshee</button>
-      </div>
-      <div class="mw-admin-section" data-cat="combat" data-key="dogfight-patterns">
-        <div class="mw-admin-label">dogfight pattern</div>
-        <button data-act="combat-across_behind">across · behind title</button>
-        <button data-act="combat-fly_toward">fly toward camera</button>
-        <button data-act="combat-fly_over">fly over title</button>
-        <button data-act="combat-cross_in_front">cross in front</button>
-        <button data-act="combat-weave_near">weave near title</button>
-        <div class="mw-admin-hint" id="mw-admin-focus-hint"></div>
-      </div>
-      <div class="mw-admin-section" data-cat="scripted" data-key="cinematic">
-        <div class="mw-admin-label">cinematic</div>
-        <button data-act="scen-observer">silent observer</button>
-        <button data-act="scen-ghost">ghost contact</button>
-        <button data-act="scen-orbit">forerunner orbit</button>
-        <button data-act="scen-distress">distress beacon</button>
-        <button data-act="scen-slipspace">slipspace jump</button>
-        <button data-act="scen-mothership">mothership reveal</button>
-      </div>
-      <div class="mw-admin-section" data-cat="scripted" data-key="fleet">
-        <div class="mw-admin-label">fleet ops</div>
-        <button data-act="scen-escort">escort run · V-formation</button>
-        <button data-act="scen-convoy">convoy · 3 pelicans + cargo</button>
-        <button data-act="scen-carrier">carrier launch · 3 longswords</button>
-        <button data-act="scen-strafe">longsword strafing run</button>
-        <button data-act="scen-interception">interception · 2 vs 1</button>
-        <button data-act="scen-fleet">fleet jump-in · 6 ships</button>
-      </div>
-      <div class="mw-admin-section" data-cat="scripted" data-key="action">
-        <div class="mw-admin-label">action · debris</div>
-        <button data-act="scen-scanner">scanner sweep</button>
-        <button data-act="scen-landing">emergency landing</button>
-        <button data-act="scen-derelict">derelict drift · sparking</button>
-        <button data-act="scen-debris">debris field cross</button>
-        <button data-act="scen-crash">crash dive · smoke trail</button>
-        <button data-act="scen-storm">plasma storm</button>
-      </div>
-      <div class="mw-admin-section" data-cat="camera" data-key="camera">
-        <div class="mw-admin-label">camera</div>
-        <button data-act="follow-toggle" id="mw-admin-follow-btn">scenario follow-cam: <span id="mw-admin-follow-state">auto</span></button>
+
+      <!-- TOP: most-used utilities + camera state in one place -->
+      <div class="mw-admin-section" data-cat="stage" data-key="stage">
+        <div class="mw-admin-label">stage</div>
+        <button data-act="clear">clear all flybys</button>
+        <button data-act="cap-random">🎲 hop to random title</button>
         <button data-act="reset-cam">reset camera</button>
-      </div>
-      <div class="mw-admin-section" data-cat="spawn" data-key="spawn">
-        <div class="mw-admin-label">spawn ship</div>
-        <button data-act="spawn-longsword">longsword (solo)</button>
-        <button data-act="spawn-longsword-v">longsword (V-formation)</button>
-        <button data-act="spawn-banshee">banshee</button>
-        <button data-act="spawn-pelican">pelican (no combat)</button>
-        <button data-act="spawn-forerunner">forerunner</button>
-      </div>
-      <div class="mw-admin-section" data-cat="fx" data-key="fx"><div class="mw-admin-label">post fx</div>
-        <button data-act="fx-flares"   id="mw-fx-flares">anamorphic flares: <span>ON</span></button>
-        <button data-act="fx-dirt"     id="mw-fx-dirt">lens dirt: <span>ON</span></button>
-        <button data-act="fx-godrays"  id="mw-fx-godrays">god rays (core): <span>ON</span></button>
-        <button data-act="fx-dof"      id="mw-fx-dof">soft DoF: <span>OFF</span></button>
-        <button data-act="fx-halation" id="mw-fx-halation">halation: <span>OFF</span></button>
-        <button data-act="fx-halo-auto" id="mw-fx-halo-auto">↻ halation auto: <span>OFF</span></button>
-        <button data-act="fx-grade"    id="mw-fx-grade">color grade: <span>OFF</span></button>
-        <button data-act="fx-grade-auto" id="mw-fx-grade-auto">↻ grade auto: <span>OFF</span></button>
-      </div>
-      <div class="mw-admin-section" data-cat="camera" data-key="feel">
-        <div class="mw-admin-label">feel</div>
+        <button data-act="cap-png">📸 save canvas as PNG</button>
+        <button data-act="cap-hud" id="mw-cap-hud">hide HUD: <span>OFF</span></button>
+        <button data-act="follow-toggle" id="mw-admin-follow-btn">follow-cam: <span id="mw-admin-follow-state">auto</span></button>
         <button data-act="inertia-toggle" id="mw-inertia">drag inertia: <span>ON</span></button>
       </div>
+
+      <!-- TIME + FOV grouped together (both about playback-pace and view-frame) -->
+      <div class="mw-admin-section" data-cat="time" data-key="time">
+        <div class="mw-admin-label">time &amp; fov</div>
+        <button data-act="time-pause" id="mw-time-pause">⏸ pause</button>
+        <button data-act="time-0.25">0.25×</button>
+        <button data-act="time-0.5">0.5×</button>
+        <button data-act="time-1">1× (normal)</button>
+        <button data-act="time-2">2×</button>
+        <button data-act="cap-fov-down">FOV −5° (zoom in)</button>
+        <button data-act="cap-fov-up">FOV +5° (zoom out)</button>
+        <button data-act="cap-fov-reset">FOV reset (80°)</button>
+      </div>
+
+      <!-- WORLD: what's visible in the scene -->
       <div class="mw-admin-section" data-cat="elements" data-key="elements">
         <div class="mw-admin-label">scene elements</div>
         <button data-act="el-nebula"    id="mw-el-nebula">nebula: <span>ON</span></button>
@@ -4675,31 +6327,94 @@ const MarathonWorld = {
         <button data-act="el-fog"       id="mw-el-fog">fog patches: <span>ON</span></button>
         <button data-act="el-core"      id="mw-el-core">distant core: <span>ON</span></button>
         <button data-act="el-marathon"  id="mw-el-marathon">marathon ship: <span>ON</span></button>
+        <button data-act="el-haloring"  id="mw-el-haloring">halo ring: <span>ON</span></button>
+        <button data-act="el-traveler"  id="mw-el-traveler" data-since="g2">traveler: <span>ON</span></button>
         <button data-act="el-buoys"     id="mw-el-buoys">nav buoys: <span>ON</span></button>
       </div>
-      <div class="mw-admin-section" data-cat="time" data-key="time">
-        <div class="mw-admin-label">time</div>
-        <button data-act="time-pause" id="mw-time-pause">⏸ pause</button>
-        <button data-act="time-0.25">0.25×</button>
-        <button data-act="time-0.5">0.5×</button>
-        <button data-act="time-1">1× (normal)</button>
-        <button data-act="time-2">2×</button>
-      </div>
-      <div class="mw-admin-section" data-cat="capture" data-key="capture">
-        <div class="mw-admin-label">capture</div>
-        <button data-act="cap-png">📸 save canvas as PNG</button>
-        <button data-act="cap-hud" id="mw-cap-hud">hide HUD: <span>OFF</span></button>
-        <button data-act="cap-random">🎲 hop to random title</button>
-        <button data-act="cap-fov-down">FOV −5° (zoom in)</button>
-        <button data-act="cap-fov-up">FOV +5° (zoom out)</button>
-        <button data-act="cap-fov-reset">FOV reset (80°)</button>
-      </div>
-      <div class="mw-admin-section" data-cat="stage" data-key="stage">
-        <div class="mw-admin-label">stage</div>
-        <button data-act="clear">clear all flybys</button>
-        <button data-act="hue-toggle">toggle hue auto-flow</button>
+
+      <!-- IMAGE: post-process pipeline + global hue -->
+      <div class="mw-admin-section" data-cat="fx" data-key="fx">
+        <div class="mw-admin-label">post fx</div>
+        <button data-act="fx-flares"   id="mw-fx-flares">anamorphic flares: <span>ON</span></button>
+        <button data-act="fx-dirt"     id="mw-fx-dirt">lens dirt: <span>ON</span></button>
+        <button data-act="fx-godrays"  id="mw-fx-godrays">god rays (core): <span>ON</span></button>
+        <button data-act="fx-dof"      id="mw-fx-dof">soft DoF: <span>OFF</span></button>
+        <button data-act="fx-halation" id="mw-fx-halation">halation: <span>OFF</span></button>
+        <button data-act="fx-halo-auto" id="mw-fx-halo-auto">↻ halation auto: <span>OFF</span></button>
+        <button data-act="fx-grade"    id="mw-fx-grade">color grade: <span>OFF</span></button>
+        <button data-act="fx-grade-auto" id="mw-fx-grade-auto">↻ grade auto: <span>OFF</span></button>
+        <button data-act="hue-toggle">↻ hue auto-flow</button>
         <button data-act="hue-bump">bump hue +0.1</button>
       </div>
+
+      <!-- TRIGGERS: one-off ship spawns -->
+      <div class="mw-admin-section" data-cat="spawn" data-key="spawn">
+        <div class="mw-admin-label">spawn ship</div>
+        <button data-act="spawn-longsword">longsword (solo)</button>
+        <button data-act="spawn-longsword-v">longsword (V-formation)</button>
+        <button data-act="spawn-banshee">banshee</button>
+        <button data-act="spawn-pelican">pelican (no combat)</button>
+        <button data-act="spawn-forerunner">forerunner</button>
+      </div>
+
+      <!-- DOGFIGHT (combat focused on a title — base + 5 patterns) -->
+      <div class="mw-admin-section" data-cat="combat" data-key="dogfight">
+        <div class="mw-admin-label">dogfight</div>
+        <button data-act="combat">pelican vs banshee</button>
+        <button data-act="combat-across_behind">across · behind title</button>
+        <button data-act="combat-fly_toward">fly toward camera</button>
+        <button data-act="combat-fly_over">fly over title</button>
+        <button data-act="combat-cross_in_front">cross in front</button>
+        <button data-act="combat-weave_near">weave near title</button>
+        <div class="mw-admin-hint" id="mw-admin-focus-hint"></div>
+      </div>
+
+      <!-- SCENARIOS — split by feel: ambient / combat / fleet / micro -->
+      <div class="mw-admin-section" data-cat="scripted" data-key="ambient">
+        <div class="mw-admin-label">ambient</div>
+        <button data-act="scen-observer">silent observer</button>
+        <button data-act="scen-ghost">ghost contact</button>
+        <button data-act="scen-orbit">forerunner orbit</button>
+        <button data-act="scen-mothership">mothership reveal</button>
+        <button data-act="scen-distress">distress beacon</button>
+        <button data-act="scen-eva">eva tether</button>
+        <button data-act="scen-comet">comet pass</button>
+        <button data-act="scen-scanner">scanner sweep</button>
+        <button data-act="scen-landing">emergency landing</button>
+        <button data-act="scen-derelict">derelict drift · sparking</button>
+        <button data-act="scen-debris">debris field cross</button>
+      </div>
+
+      <div class="mw-admin-section" data-cat="combat" data-key="combat-scenarios">
+        <div class="mw-admin-label">combat</div>
+        <button data-act="scen-strafe">longsword strafing run</button>
+        <button data-act="scen-interception">interception · 2 vs 1</button>
+        <button data-act="scen-bombing">distress · bombing run</button>
+        <button data-act="scen-storm">plasma storm</button>
+        <button data-act="scen-pirate">pirate ambush</button>
+        <button data-act="scen-crash">crash dive · smoke trail</button>
+        <button data-act="scen-slipspace">slipspace jump</button>
+      </div>
+
+      <div class="mw-admin-section" data-cat="scripted" data-key="fleet">
+        <div class="mw-admin-label">fleet</div>
+        <button data-act="scen-escort">escort run · V-formation</button>
+        <button data-act="scen-convoy">convoy · 3 pelicans + cargo</button>
+        <button data-act="scen-carrier">carrier launch · 3 longswords</button>
+        <button data-act="scen-fleet">fleet jump-in · 6 ships</button>
+        <button data-act="scen-patrol">patrol pair</button>
+      </div>
+
+      <div class="mw-admin-section" data-cat="scripted" data-key="micro">
+        <div class="mw-admin-label">micro</div>
+        <button data-act="micro-meteor">meteor</button>
+        <button data-act="micro-pulsar">pulsar</button>
+        <button data-act="micro-buzz">close-fighter buzz</button>
+        <button data-act="micro-comm">comm static</button>
+        <button data-act="micro-emp">emp flash</button>
+        <button data-act="micro-drone">drone dart</button>
+      </div>
+
       <div class="mw-admin-foot">~ to toggle</div>
     `;
     root.addEventListener('click', e => {
@@ -4738,6 +6453,7 @@ const MarathonWorld = {
         else if (act === 'scen-derelict')     this._spawnDerelictDrift();
         else if (act === 'scen-interception') this._spawnInterception();
         else if (act === 'scen-distress')     this._spawnDistressBeacon();
+        else if (act === 'scen-bombing')      this._spawnDistressBombing();
         else if (act === 'scen-debris')       this._spawnDebrisCross();
         else if (act === 'scen-scanner')      this._spawnScannerSweep();
         else if (act === 'scen-landing')      this._spawnEmergencyLanding();
@@ -4745,6 +6461,16 @@ const MarathonWorld = {
         else if (act === 'scen-carrier')      this._spawnCarrierLaunch();
         else if (act === 'scen-escort')       this._spawnEscortRun();
         else if (act === 'scen-observer')     this._spawnSilentObserver();
+        else if (act === 'scen-eva')          this._spawnEvaTether();
+        else if (act === 'scen-comet')        this._spawnComet();
+        else if (act === 'scen-patrol')       this._spawnPatrolPair();
+        else if (act === 'scen-pirate')       this._spawnPirateAmbush();
+        else if (act === 'micro-meteor')      this._spawnMeteorMicro();
+        else if (act === 'micro-pulsar')      this._spawnPulsarMicro();
+        else if (act === 'micro-buzz')        this._spawnCloseFighterMicro();
+        else if (act === 'micro-comm')        this._spawnCommStaticMicro();
+        else if (act === 'micro-emp')         this._spawnEmpFlashMicro();
+        else if (act === 'micro-drone')       this._spawnDroneDartMicro();
         else if (act === 'fx-flares')   this._adminToggleFx('uFlaresOn');
         else if (act === 'fx-dirt')     this._adminToggleFx('uDirtOn');
         else if (act === 'fx-godrays')  this._adminToggleFx('uGodraysOn');
@@ -4834,6 +6560,8 @@ const MarathonWorld = {
       elState('mw-el-fog',        this.fogPatches ? this.fogPatches.every(f => f.visible) : true);
       elState('mw-el-core',       this.coreGroup ? this.coreGroup.visible : true);
       elState('mw-el-marathon',   this.marathonShip ? this.marathonShip.grp.visible : true);
+      elState('mw-el-haloring',   this.haloRing ? this.haloRing.grp.visible : true);
+      elState('mw-el-traveler',   this.traveler ? this.traveler.grp.visible : true);
       elState('mw-el-buoys',      this.navBuoys ? this.navBuoys.every(b => b.grp.visible) : true);
       // HUD hidden state
       const hudBtn = root.querySelector('#mw-cap-hud');
@@ -4852,7 +6580,46 @@ const MarathonWorld = {
     };
     this._adminUpdateHints();
     this._initAdminCollapse(root);
+    this._decorateNewBadges(root);
     return root;
+  },
+
+  // Reads `data-since="g###"` on each admin button and paints a "new" pill
+  // that fades the further the current build has drifted from the build that
+  // introduced the button. `--new-strength` (a 0..1 CSS variable) drives both
+  // opacity and glow on .mw-new. Buttons with delta ≥ NEW_FADE_BUILDS get
+  // nothing — the pill is removed entirely. Section labels mirror the
+  // strongest pill among their visible children so collapsed sections still
+  // hint that something new is inside.
+  _decorateNewBadges(root){
+    const NEW_FADE_BUILDS = 5;
+    const cur = parseInt(String(window.BUILD_GALAXY || 'g0').replace(/\D/g, ''), 10) || 0;
+    root.querySelectorAll('button[data-since]').forEach(btn => {
+      const since = parseInt(String(btn.dataset.since || '').replace(/\D/g, ''), 10) || 0;
+      const delta = Math.max(0, cur - since);
+      const strength = Math.max(0, 1 - delta / NEW_FADE_BUILDS);
+      if (strength <= 0) return;
+      const pill = document.createElement('span');
+      pill.className = 'mw-new';
+      pill.textContent = 'new';
+      pill.style.setProperty('--new-strength', strength.toFixed(2));
+      btn.appendChild(pill);
+    });
+    // Section-header rollup so a collapsed section still hints at fresh items.
+    root.querySelectorAll('.mw-admin-section').forEach(sec => {
+      let maxStrength = 0;
+      sec.querySelectorAll('.mw-new').forEach(p => {
+        const s = parseFloat(p.style.getPropertyValue('--new-strength')) || 0;
+        if (s > maxStrength) maxStrength = s;
+      });
+      if (maxStrength <= 0) return;
+      const label = sec.querySelector('.mw-admin-label');
+      if (!label) return;
+      const dot = document.createElement('span');
+      dot.className = 'mw-new-dot';
+      dot.style.setProperty('--new-strength', maxStrength.toFixed(2));
+      label.appendChild(dot);
+    });
   },
 
   // Wraps each admin section's body in a collapsible div. Header click toggles
@@ -4902,6 +6669,8 @@ const MarathonWorld = {
       fog:        () => this.fogPatches,
       core:       () => this.coreGroup,
       marathon:   () => this.marathonShip ? this.marathonShip.grp : null,
+      haloring:   () => this.haloRing ? this.haloRing.grp : null,
+      traveler:   () => this.traveler ? this.traveler.grp : null,
       buoys:      () => this.navBuoys,
     };
     const getter = map[key];
@@ -4959,7 +6728,16 @@ const MarathonWorld = {
     if (!this.titles || !this.titles.length) return;
     const pick = this.titles[(Math.random() * this.titles.length) | 0];
     if (this.focused) this._release();
-    this._focus(pick, { mode: 'look' });
+    // Snap the camera straight at the picked title's bearing instead of using
+    // 'look' mode's gradual yaw/pitch lerp — for a 180° hop the lerp can take
+    // >1s and any drag interrupts it, so the user pressed the button and saw
+    // nothing happen. Snap + 'fly' makes the title pull forward immediately.
+    const p = pick.basePos;
+    const dist = Math.max(0.001, p.length());
+    this.gaze.yaw   = Math.atan2(p.x, -p.z);
+    this.gaze.pitch = Math.asin(Math.max(-1, Math.min(1, p.y / dist)));
+    if (this._dragVel) { this._dragVel.yaw = 0; this._dragVel.pitch = 0; }
+    this._focus(pick, { mode: 'fly' });
   },
 
   _adminBumpFov(delta, absolute){
@@ -5343,7 +7121,12 @@ const MarathonWorld = {
     this._tickBolts(t, dt);
     this._tickCore(t, bass);
     this._tickMarathonShip(t, bass);
+    this._tickHaloRing(t, bass);
+    this._tickTraveler(t, bass);
     this._tickNavBuoys(t, bass);
+    this._tickStarfield(t);
+    this._tickMicroFx(t, dt);
+    this._tickMicroScheduler(t);
     this._updatePlayer();
     if (this.nebula) {
       this.nebula.material.uniforms.uTime.value = t;
@@ -5390,6 +7173,21 @@ const MarathonWorld = {
       this._burstNext = t + 2.0 + Math.random() * 3.0;
     }
 
+    // b192: TWINKLE scheduler — pure brightness flash on a random title
+    // every 0.8–1.5s. Distinct from the glitch burst (which boosts uHover
+    // and triggers RGB-split / displacement); twinkle just brightens for
+    // ~0.18–0.38s. Multiple can overlap so the field reads like distant
+    // stars scintillating, not "one title is doing something."
+    if (this._twinkleNext == null) this._twinkleNext = t + 0.6;
+    if (t >= this._twinkleNext && this.titles.length > 0) {
+      const live = this.focused
+        ? this.titles.filter(n => n.index !== this.focused.index)
+        : this.titles;
+      const pick = live[(Math.random() * live.length) | 0];
+      if (pick) pick._twinkleUntil = t + 0.18 + Math.random() * 0.20;
+      this._twinkleNext = t + 0.8 + Math.random() * 0.7;
+    }
+
     // Color flow — global hue shift advances slowly so the entire constellation
     // breathes through the spectrum. Each title also gets a small phase offset
     // (from its flickerSeed) so neighbors don't move in perfect lockstep.
@@ -5418,6 +7216,11 @@ const MarathonWorld = {
       u.uHover.value += (targetH - u.uHover.value) * Math.min(1, dt * (isHover ? 9 : 5));
       const targetF = isFocus ? 1 : 0;
       u.uFocus.value += (targetF - u.uFocus.value) * Math.min(1, dt * 6);
+      // b192: per-title slow breathing (random phase via flickerSeed) +
+      // eased twinkle ramp toward the scheduled flash.
+      u.uBreath.value = Math.sin(t * 0.55 + n.flickerSeed * 7.31) * 0.05;
+      const targetTw = ((n._twinkleUntil || 0) > t) ? 1.0 : 0.0;
+      u.uTwinkle.value += (targetTw - u.uTwinkle.value) * Math.min(1, dt * (targetTw > 0 ? 16 : 6));
       let targetOp;
       if (this.focused) targetOp = isFocus ? 1.0 : 0.10;
       else targetOp = n.baseOpacity;

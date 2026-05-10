@@ -1,4 +1,1114 @@
-# CHANGELOG
+# CHANGELOG (legacy / pre-split)
+
+> **This file is FROZEN at b242.** From here on, per-scene CHANGELOGs live in:
+> - [docs/galaxy/CHANGELOG.md](docs/galaxy/CHANGELOG.md) (galaxy builds, `g###`)
+> - [docs/tracks/CHANGELOG.md](docs/tracks/CHANGELOG.md) (tracks builds, `t###`)
+> - [docs/scenes/CHANGELOG.md](docs/scenes/CHANGELOG.md) (scenes builds, `s###`)
+>
+> The b001–b242 history below is the shared monolithic log up to the per-scene split. Don't add new entries here.
+
+---
+
+## b242 — 2026-05-09 — Per-scene split: kill the build-number race so parallel chats can run truly in parallel
+
+User: *"why don't we just have like a file map and a changelog per ... one for marathon index page and one for the scenes page and one for the tracks page ... wouldn't that make more sense? what does helpers provide and how can it be split for our system if at all"* + *"proceed"*.
+
+The old monolithic shared-bookkeeping setup — single `js/helpers.js` with one global `window.BUILD_NUMBER`, single `FILE_MAP.md` with a `**Build:**` header touched on every change, single `CHANGELOG.md` with every scene's history interleaved — was forcing every parallel chat (galaxy session + scenes session + occasional tracks session) to race on three files. Within this single conversation alone, the parallel scenes chat repeatedly bumped the build number from under the galaxy chat (b232 → b234 → b237 → b241), triggered "file modified since read" Edit-tool errors, and once even overwrote the galaxy chat's freshly-written changelog entry. Wasted real time.
+
+**The split (effective b242 → forward):**
+
+**1) Per-scene build constants in separate files.** Created `js/builds/`:
+- `js/builds/galaxy.js` → `window.BUILD_GALAXY = 'g1';` (read by `index.html`'s `bootMarathonWorld`)
+- `js/builds/tracks.js` → `window.BUILD_TRACKS = 't1';` (read by `index.html`'s `bootTracksDaw`)
+- `js/builds/scenes.js` → `window.BUILD_SCENES = 's1';` (read by `scenes/play.html`)
+
+Each chat owns exactly one of these files. Format prefixed (`g###` / `t###` / `s###`) so a glance at the build chip tells you which scene a build belongs to and the three timelines don't pretend to share a sequence they don't.
+
+**2) HTML rewiring.** `index.html` line 3799 — replaced `<script src="/js/helpers.js"></script>` with two script tags loading `builds/galaxy.js` + `builds/tracks.js`. The two boot functions (`bootMarathonWorld` line 3611, `bootTracksDaw` line 3642) now read `window.BUILD_GALAXY` and `window.BUILD_TRACKS` respectively. `scenes/play.html` line 136 — `helpers.js` script tag swapped for `../js/builds/scenes.js`.
+
+**3) Per-scene FILE_MAP + CHANGELOG.** Created `docs/galaxy/`, `docs/tracks/`, `docs/scenes/` each with a starter `FILE_MAP.md` (scene scope, owned files, shared dependencies, "always do these" rules, architecture summary) and `CHANGELOG.md` (starts at `g1` / `t1` / `s1`, references this frozen file for pre-split history).
+
+**4) Root `FILE_MAP.md` slimmed** to a route table + pointers to per-scene docs + a list of cross-cutting shared files. No more `**Build:**` header to bump on every change.
+
+**5) Root `CHANGELOG.md` (this file) frozen** with the header note above. b001–b242 stays here as historical record. New work goes in the per-scene CHANGELOGs.
+
+**6) `js/player.js` flagged as SHARED ENGINE.** Added a header comment that explicitly says: do not modify for visual changes, UI lives in the consuming scene file, audio-engine changes need to be tested against all three scenes before shipping. This is the one truly cross-cutting code file (every scene reads `audio.__floorAnalyser` from it for bass-reactive shaders / spectrum bars), so it gets a "coordinate before touching" label.
+
+**7) `CLAUDE.md` rewritten** to teach the new convention: bump *your scene's* build constant in `js/builds/<scene>.js`, log to *your scene's* `docs/<scene>/CHANGELOG.md`, never edit the shared files (`player.js`, `index.html`, `config.json`, `_redirects`, `serve.py`) without coordinating, never bump the legacy `helpers.js` (it's gone).
+
+**8) `js/helpers.js` deleted.** No more single-string race target.
+
+**Validation.** Smoke-tested all three routes after the cutover: `/`, `/tracks`, `/scenes/`, `/scenes/play.html` all return 200 and load. The galaxy and tracks build chips read from their new constants. Old `js/tracks-vault.js` (legacy WebGL revert path) still references `window.BUILD_NUMBER`; it'll show empty build chip if anyone ever resurrects it — acceptable for a deprecated path.
+
+**Files touched in the migration:** `js/builds/galaxy.js` (NEW), `js/builds/tracks.js` (NEW), `js/builds/scenes.js` (NEW), `docs/galaxy/FILE_MAP.md` (NEW), `docs/galaxy/CHANGELOG.md` (NEW), `docs/tracks/FILE_MAP.md` (NEW), `docs/tracks/CHANGELOG.md` (NEW), `docs/scenes/FILE_MAP.md` (NEW), `docs/scenes/CHANGELOG.md` (NEW), `index.html` (script-tag rewire + 2 buildNumber refs), `scenes/play.html` (script-tag rewire), `js/player.js` (SHARED ENGINE header), `FILE_MAP.md` (slimmed to route-table + pointers), `CHANGELOG.md` (this freeze header + entry), `CLAUDE.md` (workflow rules rewritten for the per-scene convention), `js/helpers.js` (DELETED). **Localhost only.**
+
+After this build the user opens three fresh chats — one per scene — and they each work in isolation.
+
+---
+
+## b241 — 2026-05-09 — Scenes: deck-flank fill + missile silo spacing fix (clipping, stale bunker refs, antenna farm push)
+
+User on `/scenes` deck POV: *"i circled the blue areas to address. also in the center of the missile silo seems therres a lot of clipping and objects placed too close together. radar dish right beside the missile like a meter apart>?? other stuff. pls space it properly youre on claude max"* + screenshot circling 3 empty zones (left foreground, right foreground, far-right past panel arc).
+
+Two problems addressed:
+
+**Silo clipping was real.** The b235/b237 scale-up grew the control bunker (cbW 5→8, cbD 5→7) and shifted its center (`padR + 1.5` → `padR + 2.5`, `z=-3` → `z=-4.5`). But the blast door, door frame, wall lamp, HVAC unit, slit window, both cable trays, and the antenna farm were ALL still hard-coded to the old `padR + 1.5` / `-3.0` literals. Result: blast door floating 1.5u in front of the new bunker; HVAC offset on the roof; slit window in the wrong wall; tray2 running through empty space; antenna farm dipoles sitting INSIDE the bunker volume (x=17–18.8 vs bunker x=11.5–19.5 span). Extracted `bunkerX = padR + 2.5`, `bunkerZ = -4.5`, `bunkerFront = bunkerZ + cbD/2` as single source of truth and re-anchored every dependent piece. Antenna farm pushed from `padR + 4` (= 17, inside bunker) to `padR + 14` (= 27, well clear). Also bumped blast door + frame to fit the bigger bunker face (1.4×1.9 → 2.0×2.6), wall lamp scale up, HVAC unit up. Gantry pushed from `siloR + 3.8` to `siloR + 5.0` (3u more breathing room from silo). LOX tank pushed from `siloR + 8.5` to `siloR + 11.5` (clears gantry outer leg). Blast deflector ring grew (`siloR + 1.2/1.6` → `siloR + 1.6/2.2`) to match the bigger silo footprint.
+
+**Deck-flank fill — `_buildDeckFlankFill()` (new).** Drops density into the gap zones the user circled — the dead desert between the rail kiosks (z=-10) and the cement walkways (z=-30/-58), plus the strips past the deepsea/neural panel hosts at x=±70 between panel and patrol road. Each side gets:
+- 1× **guard shack** (3.2×3.0×2.6 concrete booth) with lit door + window + antenna whip — at (±22, -10)
+- 1× **equipment shed** (5.0×3.2×3.6 olive) with roll-up door, yellow caution stripes, side air vents — at (±38, -22)
+- 1× **drum cluster** (5 olive/oliveHi 55-gal drums in a tight pyramid stack) — at (±25, -25)
+- 1× **pallet stack** (wooden pallet + 4 stacked olive crates rising to 2.4u) — at (±44, -8)
+- 2× **floodlight poles** (9.5u steel poles + 1.1×0.45 lamp head + warm sodium lens, head aimed inward toward spine) — at (±26, -16) and (±50, -28)
+
+Far flanks (between outer panels and patrol road) get a thinner version: 1 equipment shed + 1 pallet stack + 1 drum cluster + 1 floodpole at x=±72, oriented along the patrol road. Sells "active maintenance zone" instead of the empty desert that was there. All positions stay clear of the spine road shoulders (x=±5), the cement walkways (x=±30 vertical, z=-30/-58 horizontal), and the existing motor pool / bivouac at z>0. New `_buildDeckFlankFill` called from `init()` immediately after `_buildPerimeterClutter`.
+
+**Untouched.** Panels, panel hosts, POIs, watchtowers, antenna farm builder (just relocated within the silo), conex stacks, ridges, fence envelope. Only the silo block was structurally rewired and one new builder added.
+
+**Validation.** `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs` passes.
+
+**Files touched:** `js/scenes-selector.js` (silo block: bunker constants extracted + dependent positions re-anchored, antenna farm pushed, gantry + LOX spaced out, deflector grew; new `_buildDeckFlankFill` method; init call), `js/helpers.js` (b240 → b241 — hook auto-bumped through b239/b240 mid-edit, plus a concurrent halo-ring commit took b240), `FILE_MAP.md` (build/date), `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b240 — 2026-05-09 — Halo ring: "fucking huge" + steeper tilt + vivid terrain (b239 also: core moved behind camera)
+
+User on the b238 hard-refresh: *"its kind of hard to see the detail of the ring world like the inside (i loved seeing the blue water and green land). how can we make it better? also the marathon ship is a good size but the halo ring needs to be fucking huge and angled in a nice way so the camera can see the inside so to speak."* Plus the prior b239 ask: *"move the core behind the camera spawn and far away."*
+
+**b239 (folded into this entry).** Core moved `(450, 80, -150)` → `(-200, -80, 1650)` — behind the camera spawn, far out, deep enough to sit past the Halo ring as a distant Saturn-observatory landmark you discover when looking back through/past the ring.
+
+**b240 — three coupled fixes for the ring read.**
+
+**1) Bigger.** `RING_R 680 → 900` (+32%). True planet-class megastructure scale — the user explicitly called for "fucking huge." `RING_r 36 → 48` (proportional thickening so the inner-band screen-area-per-radius stays the same — i.e., the ratio of "terrain band width" to "ring diameter" is preserved). Tubular segs `540 → 600` and radial segs `20 → 22` to keep curvature smooth at the new size. Hardcoded `680.0` in the vertex shader's tube-center math also bumped to `900.0` (these have to stay in sync with `RING_R` — there's a comment flagging the requirement).
+
+**2) Steeper angle so the inner face actually shows.** b238 had `rotation.x = 0.65` which gave a 41.6° off-axis viewing angle — close to face-on, where the ring read as a circular outline rather than a tilted plate showing the inhabited surface. Bumped to `rotation.x = 0.85` for a 50.5° off-axis (computed: axis ≈ `(-0.361, -0.719, -0.594)` dot camera-direction-from-ring `(-0.046, -0.038, -0.999)` ≈ `0.637` → `acos ≈ 50.5°`). At 50° you genuinely see the curving inner-face plate sweeping across the view — the iconic Halo angle. Position pushed deeper too: `(40, 30, 1050) → (60, 50, 1300)` so the larger ring still has breathing room from the camera. Camera far plane bumped `1800 → 2400` to fit the new far edge (ring extends in Z by ±0.804·900 = ±723u from center, so far edge at z = 1300 + 723 = 2023u — plus the deep-field core at z=+1650 still inside the frustum).
+
+**3) Terrain visibility — the part the user loved.** Inner-face shader retuned for vivid sun-lit terrain:
+- **Ocean palette saturated.** `oceanDeep 0.030/0.13/0.36 → 0.040/0.18/0.45` (richer royal-blue), `oceanShallow 0.10/0.34/0.62 → 0.18/0.50/0.85` (brighter cyan-blue toward shores). The deep/shallow gradient now actually reads.
+- **Forest brighter.** `0.16/0.40/0.18 → 0.22/0.58/0.24` — clear green that reads as forest, not muddy olive.
+- **Desert warmer.** `0.60/0.48/0.22 → 0.65/0.52/0.24` — slightly warmer for better land contrast.
+- **Cloud cover thinned.** Mix factor `0.45 → 0.32` and threshold `smoothstep(0.58, 0.86) → smoothstep(0.60, 0.90)` so clouds are sparser and let more of the land/ocean mosaic show through.
+- **Brightness pop.** `surface *= 1.08 → surface *= 1.30` — sun-lit inner face now actually reads as *lit*, not muted.
+- **Atmosphere rim haze pulled.** `0.18 → 0.12` so the bluish edge wash doesn't paint over the terrain at the band edges.
+
+**4) Outer-face cyan trim pulled further.** The bright cyan/blue outer rim was outshining the inner terrain in every screenshot. Plate seam `0.30 → 0.18`, side-rim glow `0.18 → 0.10`, bass coupling `0.10 → 0.08`. The outer face now reads as dark structural alloy with subtle power lines, not a glowstick — terrain wins the visual hierarchy as it should.
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (camera far 1800→2400, `_buildHaloRing` position/rotation/RING_R/RING_r/segs + shader hardcoded radius + outer-face glow tone-down + inner-face palette/cloud/brightness retune, `_buildCore` position from b239), `js/helpers.js` (b238 → b240, skipping b239 since the core-only edit got folded in), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b238 — 2026-05-09 — Galaxy 360°: Halo ring goes WORLD-scale + behind camera; core to right; satellites hidden
+
+User on the b237 forward view: *"the ring needs to be much much bigger its a whole world so lets move it back in the scene further and its also too close to the north or whatever. like when i load the page, i see all the things at the same time, mothership, halo ring. they need to be spread around the 360 so it makes sense"* — plus a screenshot pointing at one of the satellite gyros: *"can we move it far far away or remove it i hate how it gets in the way of halo ring."*
+
+Two coupled problems with the b237 layout: (a) every landmark sat in the default forward cone, so the moment the page loaded you saw Marathon ship + ring + core + satellite all at once with no exploration payoff; (b) the ring was big but not WORLD big, didn't read as the Forerunner megastructure it's supposed to be.
+
+**Landmark angular re-spread.** Treating the camera (locked at origin per b109 cockpit lock, drag-look only) as an observation point inside a 360° sphere, each landmark gets its own bearing:
+- **Marathon ship** — `(-340, 36, -120)` — front-left (unchanged). Default-view landmark; first thing you see on load.
+- **Core** (Saturn-observatory ring system) — `(-440, 80, -620)` → `(450, 80, -150)` — moved from far-left to **forward-right**. Visible when drag-looking right from the default heading.
+- **Halo ring** — `(40, 20, -700)` → `(40, 30, +1050)` — moved from forward to **directly behind the camera**. Now requires a 180° drag-look turn to discover. This is the "spread around the 360" payoff: turn around → giant Forerunner world appears.
+- **Satellites** — orbit radius 240-340u from origin. Since the new ring's interior reaches out to ~1700u from origin (R=680 + center distance ~1052), no orbit radius keeps satellites out of the ring's view path. Hidden by default (`grp.visible = false` at build time). The `el-satellites` admin toggle in the `~` panel re-enables them on demand for anyone who wants the busy version.
+
+**Halo ring scale-up.** `RING_R 540 → 680` (+26%), `RING_r 28 → 36` (proportional, so the inner-band screen-area-per-radius read is unchanged). Tubular segs `480 → 540`, radial segs `18 → 20` to keep the curvature smooth at the new size. Hardcoded `540.0` in the vertex shader's tube-center math also bumped to `680.0` to match `RING_R` (these have to stay in sync — there's a comment flagging this requirement).
+
+**Ring orientation flip for the new bearing.** The 45° tilt math established in b235 was for camera-direction-from-ring ≈ `+Z` (ring at z<0). With the ring now at z=+1050, that camera-direction-from-ring inverts to ≈ `-Z`. Adding `Math.PI` to `rotation.y` (`0.45 → 0.45 + π`) flips the symmetry axis 180° around Y — same 45° tilt, just to the new bearing. Computed axis after the flip ≈ `(-0.405, -0.567, -0.717)` dot the new camera-direction-from-ring `(-0.038, -0.029, -0.999)` ≈ `0.748` → `acos ≈ 41.6°` (still solidly in the iconic 3/4-view band). `rotation.x = 0.65` and `rotation.z = -0.10` retained.
+
+**Camera far plane.** Bumped `1500 → 1800`. The ring now extends in Z from ~573 to ~1525 (center 1050 + Z-extent 0.717·680 = 487u), so the b236 far=1500 would have clipped the ring's far edge. 1800u gives ~280u of headroom for the ring plus space for any future deep-field landmarks (Traveler, Marathon-rebuild, etc.).
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (camera far, `_buildHaloRing` position/rotation/RING_R/RING_r/segs + shader hardcoded radius, `_buildCore` position, `_buildSatellites` initial visibility), `js/helpers.js` (b237 → b238), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b237 — 2026-05-09 — Scenes: missile silo scaled up + full LF compound build-out (floods, cameras, signs, transporter, fuel tank, hatch)
+
+User on `/scenes` missile silo POI: *"missile silo could be heavily improved, whats usuallyt around that. p;ls add it in. mkae things bigger too"* + screenshot showing the silo reading as a small model behind the galaxy panel.
+
+The b220 silo had the right ingredients (lattice gantry, LOX tank, generator shed, control bunker, sandbag perimeter) but was undersized — pad r=7.5, silo r=1.5/h=12 — so from the silo POI 52u away the whole launch pad fit in a small frame patch behind the panel. Real Minuteman LFs (Launch Facilities) read as monumental hardened compounds. Scaling the existing silo up substantially and adding the typical LF-perimeter features that were missing.
+
+**Core constants doubled.** `padR 7.5 → 13`, `padH 0.6 → 1.2`, `siloR 1.5 → 2.8`, `siloH 12 → 22`. Silo cap, missile body, nose cone, gantry width/depth/height, LOX tank, generator shed, control bunker all scaled to match. Sandbag perimeter count `28 → 56` to wrap the bigger pad without sparseness. Caution chevron spacing widened (`+= 2` → `+= 3`) for the taller silo. Stencil "07" plate scaled up too. Silo strobe scale `0.55 → 0.85`. Silo top now stands at world y≈22 (cap+missile+nose), dwarfing the galaxy panel at y=10 the way real launch tubes dominate their compound.
+
+**Pad pushed back to clear the road.** `_placeBuilding(grp, 0, -8, -107)` → `(0, -8, -118)`. The bigger sandbag perimeter (now padR+1.8=14.8) at z=-118+14.8=-103.2 puts the north edge well clear of the N perimeter road at z=-90.
+
+**4 corner floodlight pylons.** New 11u-tall pylons at the LF compound corners (`compoundR = padR + 12 = 25`). Each: vertical pole, yoke arm, bank of 3 lamp heads each with a warm sodium lens, and a red aviation strobe at the very top (`rate 1.5–2.0`). Anchors the silhouette of the LF compound from any POI.
+
+**4 cardinal security camera poles.** 6u poles at compound radius 0.62, with small angled-housing camera boxes at the top oriented toward the pad center, plus a tiny red status LED on each (rate 2.8 — slow blink). Reads as "this compound is monitored" without burning detail polygons.
+
+**4 "RESTRICTED AREA" warning signs.** At diagonals on stakes at `compoundR * 0.92`. Red sign panels (`0xc83838`) with a white horizontal stripe band suggesting the canonical "RESTRICTED AREA / USE OF DEADLY FORCE AUTHORIZED" stencil. All face the pad center — readable from outside the compound.
+
+**Above-ground diesel fuel tank.** Horizontal cylindrical tank (5.5u long × 1.6u radius) beside the generator shed with proper saddle supports, dome end caps, vent stack, and yellow hazard placard. Real LFs always have an above-ground diesel reserve next to the generator since the buried gen-set runs months between fillings.
+
+**Payload Transporter (PT) parked SW.** Flat-bed semi at `(-padR-8, _, +9)` with green olive cab, warm cab windshield, a faux-canister cargo lashed to the bed (suggests missile maintenance hardware), 10 wheels, lashing straps, and an amber roof beacon. PT trucks are the visual signature of an active maintenance window at a Minuteman LF.
+
+**Sloped concrete personnel access hatch.** Separate from the main blast door — small 2.6×0.9×2.6 concrete cube at `(padR-2, _, -padR+2)` with a tilted steel lid (-0.25 rad) suggesting "hatch lifted for crew entry," yellow caution stripe, and a small handrail loop at the lifted edge. Real LFs have a separate small personnel access plane the maintenance crew uses, distinct from the main blast cover.
+
+**Untouched.** Every other builder, panel positions, perimeter fence, ridges, watchtowers, conex stacks, antenna farm. Only `_buildMissileSite` was modified (one inline section appended before the `_placeBuilding` call). Cable trays, antenna farm, blast deflector ring, slit window, all the inner detail from b217-b220 stays intact.
+
+**Validation.** `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs` passes.
+
+**Files touched:** `js/scenes-selector.js` (`_buildMissileSite` core constants + new LF compound block), `js/helpers.js` (b236 → b237 — hook auto-bumped through b235/b236 mid-edit, plus a concurrent halo-ring commit took b236), `FILE_MAP.md` (build/date), `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b236 — 2026-05-09 — Halo ring scale-up: 2.25× bigger so it dwarfs the ships (canon-accurate hierarchy)
+
+User: *"i think halo world gotta be much bigger considering size of all our ships."*
+
+The b235 ring at `R=240, r=12` was barely 2× the Marathon ship's spine length (~180u). That's a hood-ornament read, not the canonical Halo Array hierarchy where the ring is a planet-scale artifact and capital ships are dust along its rim.
+
+**Geometry bump.** `R: 240 → 540` (2.25×). `r: 12 → 28` (proportional thickening — same tube/major aspect ratio, ~32:1, matches the canon ~10000km / 318km ≈ 31.4:1). Tubular segs `380 → 480` and radial `14 → 18` to keep curvature smooth at the new size. The vertex shader's hardcoded `RING_R` (used for the inner-vs-outer face computation) bumped from `240.0` → `540.0` to match — easy to miss; if the constants ever go out of sync, the shader's face-classification flips and the terrain renders on the wrong side.
+
+**Position deepened.** Center `(40, 10, -460) → (40, 20, -700)`. Pushing back compensates for the size bump so the near edge isn't crowding the camera. With ring orientation axis ≈ `(0.284, -0.637, 0.717)` and R=540, the ring's far edge sits at world-Z ≈ `-700 - 0.697 × 540 = -1077u`. Near edge at z ≈ `-323u`.
+
+**Camera far plane bumped.** `800 → 1500`. The b226–b235 ring at R=240 fit comfortably inside an 800u far plane; at R=540 + center z=-700, the far edge would clip without expansion. 1500u also gives headroom for upcoming additions (Traveler / new Marathon / Covenant CCS) without another camera tweak. Depth-buffer ratio (near 0.1, far 1500 = 15000:1) is well within float-24 precision range — no z-fighting risk introduced.
+
+**Apparent size.** At 540u radius / ~700u depth, the ring subtends roughly half the visible viewport at FOV=80°. From any angle the Marathon ship now reads as a small artifact next to a planet-scale ring — the intended hierarchy.
+
+**Untouched.** Rotation values from b235 (`x=0.65, y=0.45, z=-0.10`) retained — the 45° viewing angle is correct, only the size needed fixing. Spin rate (0.0007 rad/frame), terrain shader frequencies, outer-face cyan tone-down all unchanged. Core position from b235 (-440, 80, -620) is fine — at 770u from origin and 1500 camera-far, it's still well inside frustum.
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (camera far plane, `_buildHaloRing` position + RING_R/r/segs constants + matching shader-side hardcoded `540.0`), `js/helpers.js` (b235 → b236), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b235 — 2026-05-09 — Halo ring at real 45° + core moved much further out + Marathon flipped to face-forward
+
+User on the b233 screenshot: *"the halo ring is now at a bad angle cuz i see it directly from its side, need like a good 45 or something angle for it yknow / also move that core the fuck out the way pls its still close and annoying much further out / the marathon ship flies backwards i believe. all our ships (new ones) keep flying backwards u add them backwards pls dont do that."*
+
+Three independent fixes.
+
+**1) Ring rotation — actually 45° this time.** b233 set `rotation.y = 0.35, rotation.x = 0.45` claiming a "3/4 view" but the math worked out to ~34° off camera-direction-axis = still mostly face-on (which is exactly what the screenshot showed: a perfect circular outline, no curving-plate read). b235 retunes for a true 45°: `rotation.x = 0.65` (more forward lean) + `rotation.y = 0.45` (more axis swing). Computed axis ≈ `(0.284, -0.637, 0.717)` dot camera-direction `(-0.087, -0.022, 0.996)` ≈ `0.703` → `acos = 45.4°`. Now the ring genuinely reads as a tilted disc with the curving inner-face plate dominant. `rotation.z = -0.10` retained for the slight asymmetric roll.
+
+**2) Core pushed way out.** b233 moved the core from `(0, 0, -440)` → `(-180, -10, -440)` — only 180u to the left, still mid-frame, still reading as "annoyingly close" per the user. b235 lifts it to `(-440, 80, -620)`: far upper-left quadrant + 180u deeper Z. Distance from origin = 770u, just inside camera-far = 800. Apparent size in frame is now ~30% of what it was at the b233 position. Fully clear of the ring's view path. The god-ray hookup at `_animate` line ~7047 (`coreGroup.position.clone().project(camera)`) keeps working — it just sources godrays from a smaller, more distant projected screen-position now.
+
+**3) Marathon flipped 180° — head toward camera, engines trailing.** Was `rotation.y = π × 0.18` (engine block at local-X=-100 ended up at world (-0.85, 0, +0.54) → CLOSER to camera; head at local-X=+105 ended up INTO the screen). The engine block is 28×22×22 with bright orange thruster cones; the head is an 11u icosa with three small spires. Massive engine + parallax + closer-to-camera = engine reads as "the front" → ship looks like it's flying butt-first. Flipped to `rotation.y = π × 1.18` (added π). Now: head at world ≈ (-0.85, 0, -0.54) offset → head sits closer to camera (at world z ≈ -64u) and engines trail into the screen (at world z ≈ -174u). The visual hierarchy now matches the semantic hierarchy: head = front, engines = behind. Tick-loop yaw drift (line ~5350) was also updated `π × 0.18 → π × 1.18` to keep the slow station-keeping wobble centered on the new orientation rather than springing it back to the old pose.
+
+**Memory.** Saved `feedback_ships_face_forward.md` so this pattern doesn't repeat on Traveler / Marathon-rebuild / Covenant CCS / future flyby additions: when picking ship rotation, verify the head ends up closer-to-camera than the engine block; if not, flip 180°. The visually dominant end should be the head.
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (`_buildHaloRing` rotations, `_buildCore` position, `_buildMarathonShip` rotation.y + `_tickMarathonShip` yaw-drift offset to match), `js/helpers.js` (b234 → b235), `FILE_MAP.md`, `CHANGELOG.md`. **Memory:** new `feedback_ships_face_forward.md` + MEMORY.md index entry. **Localhost only.**
+
+---
+
+## b234 — 2026-05-09 — Scenes: bring the ridge silhouette back (b231 pushed it past the readable horizon)
+
+User on `/scenes` ridge POI after b231: *"but now u removed the ridge line"* + screenshot showing empty desert and a thin fence with no mountain horizon.
+
+In b231 the rings were pushed to near=180 / far=240 to clear the new bigger fence corners (outer x=±125, z=-142/+98, max diagonal ~189). At those distances the silhouettes blended into the flat horizon line and stopped reading as mountains. Pulling the rings back to a visible distance and bumping their height for more horizon presence.
+
+**Ring radii.** `_buildRidgeline`: near 180 → 145, far 240 → 200. Near ring sits 3u outside the N-S axis fence at z=±142; the E-W axis fence at x=±125 sits comfortably inside the silhouette. Inner-fence diagonal corners (~169) poke past the near ridge in the back-left/back-right; that reads as "fence in front of mountain" — acceptable, and those corners are far enough back that they're rarely centered in any POI's frame.
+
+**Ring heights.** Near `baseH 7→11, jitterH 8→14`. Far `baseH 16→24, jitterH 12→18`. Compensates for the larger overall scale post-b227 — pancake bumps now read as substantial mountains.
+
+**Aviation beacons + window glints repositioned to match.** Beacon ring r 180 → 145, glint ring r 240 → 200, with proportional jitter trims. The ridge constellation (mast silhouettes + blinking beacons + warm/cool window glints) all stays bound to its host ring.
+
+**Untouched.** Floor (still 360×360 from b227), fence envelope (still ±110/±125 from b227), watchtowers, antenna farm, conex stacks, base structures. Only the ridge horizon was tuned.
+
+**Validation.** `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs` passes.
+
+**Files touched:** `js/scenes-selector.js` (`_buildRidgeline` ring radii + heights, beacon r, glint r), `js/helpers.js` (b233 → b234 — hook auto-bumped through b232/b233 mid-edit), `FILE_MAP.md` (build/date), `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b233 — 2026-05-09 — Halo ring: actually open the face + move the core off the dead-center stack
+
+User on the b232 screenshot: *"the forerunner thing gets in the way of the halo ring, we can move that thing, and the halo ring still at a bad angle when looking at it smh"*
+
+Two real bugs from the b232 photo:
+
+**1) Ring is still edge-on.** The b232 reorientation reduced `rotation.y` from `π/2 → π/2.45` (90° → 73°) which I claimed was a "3/4 view," but the math doesn't bear it out. With the camera at origin and ring center at `(40, 10, -460)`, the camera-direction-from-ring is essentially world-`+Z`. For the ring's inner face to be visible the symmetry axis needs to point near `+Z`, not perpendicular to it. `rotation.y = π/2.45` actually keeps the axis ~73° from camera direction (computed: `acos(0.197) ≈ 79°`) — still nearly edge-on. The screenshot confirmed it: ring rendered as two thin parallel arcs, exactly what an edge-on torus gives.
+
+Real fix: `rotation.y = 0.35` (~20°). With `rotation.x = 0.45` retained for the forward-lean read, the axis ends up at `(0.309, -0.435, 0.846)`, dot-product with camera direction = `0.825`, off-axis angle = `~34°` — that's the actual 3/4 view. `rotation.z` pulled `-0.18 → -0.10` (the prior asymmetry roll was making the prior bad angle worse).
+
+**2) Core landmark stacked on the ring.** `_buildCore` placed `this.coreGroup` at `(0, 0, -440)` — the original "centerpiece" position, set before the Halo ring landmark existed. The ring at `(40, 10, -460)` is essentially the same depth, and the core's Saturn-observatory-style ring system (4 toruses + central icosa orb) sits right inside the ring's inner-face view path. The screenshot shows the orb dead-center, occluding the ring's interior.
+
+Moved the core to `(-180, -10, -440)` — into the empty left quadrant. Same depth (so the core's god-ray hookup at line 7047, which projects `coreGroup.position` to NDC, still produces sensible screen-space positions for the volumetric god-ray pass). Different angular sector — Marathon is far-left at `(-340, 36, -120)`, core now mid-left at `(-180, -10, -440)`, ring right at `(40, 10, -460)`. Three landmarks, three quadrants, none overlapping.
+
+**What stayed.** The b232 geometry (R=240, r=12, 380×14 segs) is correct — the read was wrong because the orientation kept it edge-on, not because of size. Spin rate (0.0007 rad/frame), terrain shader frequencies/colors, outer-face cyan tone-down, cloud drift speed — all retained from b232.
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (`_buildCore` position only — `(0,0,-440)` → `(-180,-10,-440)`; `_buildHaloRing` rotations only — `rotation.y π/2.45→0.35`, `rotation.x 0.55→0.45`, `rotation.z -0.18→-0.10`), `js/helpers.js` (b232 → b233), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b232 — 2026-05-09 — Halo ring: thicker, slower, opened up — terrain reads instead of glowing band
+
+User on the b226 ring (two screenshots): *"the ring world for halo, it's a too thin it also moves like rotates way too fast. And so it can be a little bit thicker so that there's more diversity in the land. You know water and then like the land the greenery and it spins too fast. And then change its rotation on like the x-axis a little bit. To the right so that I can like see that a better view because right now I see like way too close to the camera. At this kind of almost parallel with the camera"*
+
+The b226 screenshots showed the failure mode clearly: ring rendered as a near-vertical glowing ellipse, all cyan/yellow rim, zero terrain visible — exactly because the ring's symmetry axis was set fully along world-X (`rotation.y = π/2`) which puts the plane parallel to the camera's view direction (= edge-on). With a thin tube (r=5.5) at that angle, basically only the rim glow ever shows up. Compounded by spin rate so fast (0.0035 rad/frame ≈ one rev / 30s) that it didn't read as monumental, just busy. (Builds b228–b231 went to a parallel scenes session — this ring rework lands on b232.)
+
+**Reorientation — open up the face.** `rotation.y` dropped `π/2 → π/2.45` (90° → ~73°), which swings the ring's axis ~17° toward the camera so the inner face presents in a 3/4 view rather than fully edge-on. `rotation.x` bumped `0.16 → 0.55` to lean the top of the ring away from camera — the curving plate now reads. Added `rotation.z = -0.18` for cinematic asymmetry (no longer mirror-symmetric across vertical screen axis). Position shifted `(-60, 5, -380) → (40, 10, -460)`: deeper Z so the near edge is no longer crowding the camera (was 152u from origin, now 220u), and X shifted positive so the ring lives in the right quadrant (Marathon ship is the left-quadrant landmark).
+
+**Geometry — thicker tube.** `RING_r` doubled-plus: `5.5 → 12.0`. The visible inner-face band is now ~2.2× wider in screen-space at any given orientation, which is what gives the terrain shader enough vertical area to show actual oceans/continents/ice instead of a rim sliver. Bumped tubular and radial segs (`360→380`, `10→14`) to keep curvature smooth at the new radius.
+
+**Terrain shader retune.** Same shader, recalibrated for the new tube width:
+- Continent fbm frequency lowered: `vUv.x*7 + vUv.x*16` → `vUv.x*4.5 + vUv.x*11`. At the wider tube, lower frequencies make a few large landmasses dominate (continents) instead of pixel-noise (which read as static).
+- Ocean color stops shifted darker/wider: `oceanDeep 0.045/0.16/0.38 → 0.030/0.13/0.36`, `oceanShallow 0.10/0.32/0.58 → 0.10/0.34/0.62`. Bigger contrast between deep and shallow zones.
+- Forest land color saturated: `0.20/0.36/0.16 → 0.16/0.40/0.18` — the green reads as forest, not muddy.
+- Ice cap threshold tightened: `0.78..0.96 → 0.82..0.97` — only the polar tips, not 22% of the band.
+- Cloud layer drift slowed: `uTime*0.045/0.012 → uTime*0.020/0.006` and density pulled from `*0.55 → *0.45` so clouds don't smother the land/ocean mosaic.
+- Atmosphere rim haze pulled `0.32 → 0.18` so the inner-face edges don't paint a wide blue smear over the terrain.
+- Bass-driven cyan energy pulled `0.55 → 0.45` for the same reason.
+
+**Outer-face cyan dominance fix.** The Forerunner alloy's seam/rim glow was over-intense in b226 — the ring photographed as a uniform cyan ribbon. Plate-seam strength `0.55 → 0.30`, side-rim glow `0.40 → 0.18`. The outer face now reads as dark structural alloy with subtle power lines instead of a glowstick.
+
+**Spin rate.** `rotation.z += 0.0035 → 0.0007` per frame — 5× slower. At 60fps that's ~1 full revolution per 150s (~2.5min), which sells "monumental gravity-providing turn" instead of "spinning ride." Cloud layer drift was also slowed (above) so the apparent surface motion stays consistent with the geometry's spin.
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (`_buildHaloRing` rotation/position/geometry params, terrain shader retune, outer-face glow tone-down, `_tickHaloRing` spin rate), `js/helpers.js` (b231 → b232), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b231 — 2026-05-09 — Scenes: bigger perimeter envelope — fence/floor/ridges/towers/antenna/conex all pushed out
+
+User on `/scenes` ridge POI after b227: *"in the way of a lot of shit needs to be more on the outside man not right by the road ugh"* + *"bigger perimeter"*.
+
+The b227 conex stacks landed at x=±70 to ±86 — inside the panel infield, blocking sight lines to v2 panels from ridge POI. And the whole perimeter envelope (fence x=±82/±90, watchtowers x=±88, floor 220×220) was tight against the patrol road at x=±78. Pushing the entire perimeter system out together so the fence wraps the actual base with breathing room, and the conex/staging clutter sits in the outer clear-strip where real installations stage it.
+
+**1) Floor expanded.** `_buildEnvironment`: `PlaneGeometry(220, 220)` → `(360, 360)`. The road shader masks reference absolute world coordinates so the patrol road / spine / walkways stay locked to the same positions; the new floor area extends past the perimeter so the fence has visible ground on both sides.
+
+**2) Ridges pushed out.** `_buildRidgeline`: near ring r=132 → r=180, far ring r=175 → r=240, with proportional jitter bumps (12→16, 16→20). Aviation beacons moved from r=132 to r=180. Distant window-glints from r=175 to r=240. Near ridge now sits 35-55u beyond the new outer fence corners, so the perimeter envelope reads against the silhouette horizon, not against the dirt right next to the fence.
+
+**3) Inner + outer fence envelope expanded.** `_buildPerimeterClutter` constants: inner from `(IX=82, INZ=-94, IPZ=54)` → `(110, -128, 85)`, outer from `(OX=90, ONZ=-102, OPZ=62)` → `(125, -142, 98)`. Same 15u clear-strip width between inner and outer. Same razor-wire-on-inner pattern. Same posts-every-8u + continuous mesh panel + razor-coil-every-2.4u construction.
+
+**4) Conex stacks moved into the new clear-strip.** Earlier b227 conex placement at x=±86 (in the OLD clear-strip) and at infield x=±70 is gone. New layout: 5 stacks per flank at x=±117 (between inner 110 and outer 125), spread along z from -120 to +45. Aligned along ±π/2 so the long 6u side runs along ±Z, fitting neatly inside the 15u corridor. 10 stacks total.
+
+**5) Watchtowers pushed to new outer corners.** Was `(±88, ±58/±98)` — sat midway between the old patrol road (x=±78) and the old outer fence (x=±90). Now `(±127, ±100/-144)` — anchors the new outer fence corners with a 2u offset outboard. Patrols still loop at x=±78, z=-90/+50 and don't drive through any tower base.
+
+**6) Antenna farm pushed further out.** From `(108, -8, -18)` → `(150, -8, -25)` — outside the new east outer fence at x=125 by 25u, sized for the new bigger perimeter envelope.
+
+**Untouched.** Patrol loop (x=±78), patrol Hog beacons (b227), spine road, panel coords, walkways, panel hosts, and every existing structure inside the patrol envelope. Only the perimeter shell + the floor/ridges that frame it grew.
+
+**Validation.** `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs` passes.
+
+**Files touched:** `js/scenes-selector.js` (floor geometry, ridge radii + beacons + glints, fence inner/outer constants, conex stack positions, watchtower positions, antenna farm position), `js/helpers.js` (hook auto-bumped through b228/b230 mid-edit; final = b231), `FILE_MAP.md` (build/date), `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b227 — 2026-05-09 — Scenes: real perimeter — double fence + razor + patrol beacons + antenna farm + conex stacks
+
+User on `/scenes` ridge POI: *"from ridge view, both sides of it look empty. whats on the end and perimeter of military bases, especially active ones with missile silos and shit like that"* + *"proceed pls"* on the recommended fence + watchtowers + patrol-beacon + antenna-farm package.
+
+Towers and patrols already existed; the gap was that the perimeter "fence" was 32 sparse posts on a circle at r=92 (effectively invisible from the ridge), patrol Humvees had no rotating beacon to read as active security from a distance, the antenna farm was disabled in b193 because its old position clipped v2 panels, and the SE/SW flanks between v2 panels and the perimeter were empty desert. This commit lands the structural perimeter pieces in one cohesive pass — fences, beacons, antenna silhouette, and conex container scatter.
+
+**1) Real rectangular double chain-link perimeter (`_buildPerimeterClutter`).** Replaces the b171 sparse circle. Inner fence at x=±82, z=-94/+54 — sits just inside the corner watchtowers at (±88, ±58/±98). Outer fence at x=±90, z=-102/+62 with an ~8u "clear zone" strip between (the raked-sand no-man's-land you see at real strategic-asset bases). New `buildFenceLeg(x1,z1,x2,z2,addRazor)` helper: posts every ~8u (4-sided cylinders, 0.10→0.13 taper, 2.6u tall), plus one continuous semi-transparent mesh-panel plane along each leg (alpha 0.55, doubleside) so the chain-link reads from a distance instead of being just a row of pickets. Inner fence gets razor-wire coils on top — small TorusGeometry(0.32, 0.03, 3, 6) every 2.4u, oriented along the leg axis with its loop facing across the fence direction. ~165 posts + ~213 coils + 8 panel planes total — well within the existing scene mesh budget.
+
+**2) Conex shipping-container stacks on the empty flanks.** New inline `buildConexStack(x, z, yaw, count)` helper inside `_buildPerimeterClutter` after the fences. Each stack is `count` ISO containers (6×2.6×2.4) stacked vertically with slight color variation across an olive/sand/storm-grey palette and a darker door end-cap on the +X end. Seven stacks placed in the actually-empty zones visible from ridge POI: SW flank at (-72,-30) double, (-68,-12) single, (-74,+16) double; SE flank at (73,-32) double, (70,-6) single; back-of-base between bivouac and rear fence at (-32,+44) single and (32,+46) double. Yaws perturbed off-axis (±0.8 rad) so they don't read as a parade lineup.
+
+**3) Rotating amber beacon on patrol Humvees (`_buildPatrolWarthog` + `_tickPatrolWarthog`).** Each of the 3 patrol Hogs gets a small steel housing (0.10×0.20 cylinder) on the cab roof at (0, 2.32, 0.60) plus an amber `_makeRunningLight(0xffaa22, 0.70)` lens at y=2.58. Sprite always faces camera, so the rotating-mirror sweep is faked in tick: `flash = 0.5 + 0.5 * cos(phase + t*5.5)` then opacity = `0.25 + flash² * 0.75` — squared falloff gives the sharp-spike-then-decay read of a real rotating beacon at ~0.9 Hz. Parked motor-pool Hogs intentionally don't get one (they're parked vehicles, not active security). Stored on `car.userData.beacon` for tick lookup.
+
+**4) Antenna farm reactivated, relocated outside the eastern wire.** `_buildAntennaArray()` was defined but disabled in b193 (old position at (-58,-56) clipped through the broken-dish + dimensions panel hosts). Re-enabled in `init()` between fuel depot and watchtowers. Position changed from (-58,-8,-56) to (108,-8,-18) — outside the east outer fence at x=90. Provides silhouette punctuation on the eastern flank to balance the broken dish dominating the western back; from ridge POI you read 8 antenna masts (8-16u tall) staggered in a loose grid with 3 aviation strobes blinking at the tips, plus a small lit equipment shed at the south edge of the pad. Zero changes to the antenna builder itself — only its call site and final position.
+
+**Why this approach** (vs. zone-by-zone scatter): from the ridge POI the eye reads the silhouette frame first (fence line, tower verticals, antenna masts, beacon flashes) and the floor-prop scatter second. Filling the silhouette layer first means subsequent zone-by-zone polish has structure to attach to instead of decorating dirt that disappears against the floor. Berms / fuel drums / cable spools deferred to the next commit per the user's recommendation acknowledgment.
+
+**Validation.** `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs` passes (per memory: must validate as ES module, not CommonJS).
+
+**Untouched.** No panels, no POIs, no shaders, no lighting tone changes, no camera. Existing watchtowers, jersey-wall lines, floodlight catenary, and patrol loop sampling all byte-identical aside from the per-Hog beacon attachment.
+
+**Files touched:** `js/scenes-selector.js` (init call site, `_buildAntennaArray` final-position line, `_buildPerimeterClutter` fence rewrite + conex stacks helper, `_buildPatrolWarthog` per-hog beacon, `_tickPatrolWarthog` beacon flash), `js/helpers.js` (b226 → b227), `FILE_MAP.md` (build/date), `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b226 — 2026-05-09 — Galaxy: Halo ringworld landmark — curving plate, inner-face terrain, axial spin
+
+User: *"and start local host for main page galaxy scenes and tracks"* + screenshots of the iconic Halo arc seen from inside the ring (continents curving up to the sky) and from space (ring + planet). Approved list: **Traveler / Marathon-rebuild / Covenant CCS + scripted scenarios / Halo ringworld**. Shipping the ring first because it's the most user-emphasized of the four; Traveler / Marathon / CCS follow in b227-b229.
+
+**`_buildHaloRing()` placement & geometry.** New permanent landmark in `marathon-world.js`, called from `init()` right after `_buildMarathonShip()`. Big `TorusGeometry(R=240, r=5.5, 10×360 segs)` — major radius gives the ring its dramatic sweep, the thin tube radius keeps it reading as a ribbon plate (matches canon ~32:1 ratio). Group placed at `(-60, 5, -380)` so the arc sits slightly off-center forward; `rotation.y = π/2` swings the ring's symmetry axis from default-Z to world-X, then `rotation.x = 0.16` adds the lean that makes the curve read as "horizon → up → far depth" instead of dead-flat. Distance from camera-origin to ring far edge ≈ 624u — within the 800u camera far plane and inside the title sphere's outer radius (`SHELL_RADIUS = 130`) by a wide margin, so titles partially occlude the ring's near edge organically.
+
+**Two-faced shader.** Single `ShaderMaterial`, `side: DoubleSide`. Vertex stage classifies each fragment as **inner** vs **outer** face by computing the object-space tube center (`normalize(position.xy) * 240`), then `dot(vertexNormal, radialOutward)`: negative = inner (faces the ring's symmetry axis = the inhabited surface), positive = outer (the structural exterior). Passed to fragment as `vInnerFace` (0/1) plus `vRimMix` (peaks at the side rims where the two faces meet).
+
+**Outer face — Forerunner alloy.** Dark base `vec3(0.085, 0.092, 0.110)` modulated by a 5-octave fbm ridge pattern. Plate seams: `step(0.985, fract(vUv.x * 60.0))` runs ~60 panel boundaries around the major circumference, painted in cyan-blue trim `vec3(0.18, 0.45, 0.62)` for that "power conduit" Forerunner read. Side rims gain extra cyan glow via `smoothstep(0.55, 0.95, vRimMix)`. Subtle bass coupling so the alloy breathes (`*= 1.0 + uBass * 0.12`).
+
+**Inner face — terrain band.** V coordinate remapped to `lat = (vUv.y - 0.5) * 2.0` (-1..1 across inner band). Continent mask = sum of two octave bands of fbm; `landMask = smoothstep(0.42, 0.50, cont)` gives a clear coast threshold. Color stack: `oceanDeep → oceanShallow` mixed by continent value, `forest → desert` for land variations, mixed by mask. Ice caps near the band edges via `smoothstep(0.78, 0.96, abs(lat))` painted in `vec3(0.88, 0.93, 1.00)`. **Cloud layer** = additional fbm with `uTime * 0.045` translation on U and `uTime * 0.012` on V — clouds drift around the ring at different rates than they spread, selling planetary motion. Atmosphere haze paints a bluish rim glow (`vec3(0.42, 0.58, 0.92)`) at the band edges where atmosphere refracts on the curve. Bass-driven cyan energy adds a 0.55-strength glow on bass hits — the Forerunner ring "alive" when the music drops. Inner face brightened ×1.10 for the sun-lit relative-to-outer feel.
+
+**Spin.** `_tickHaloRing(t, bass)` increments `mesh.rotation.z` by `0.0035 rad/frame` (canon: rotation provides gravity for inhabitants). Spin is on the inner mesh, not the group, so the lean orientation stays locked while the surface rotates underneath. The cloud layer `uTime` translation already gives separate apparent motion, so you read both "ring spinning" + "weather moving" as distinct.
+
+**Fog opt-out.** `ShaderMaterial` deliberately omits `fog: true` — at scene fog density `0.0035`, anything past ~400u gets totally swallowed. The far edge sits at ~624u from origin, which would render to near-black without the opt-out. `transparent: false` + `depthWrite: true` so titles, satellites, and shards depth-sort against the ring correctly.
+
+**Admin wiring.** New `el-haloring` toggle in the **scene elements** section of the admin panel (the `~` overlay), positioned right after `el-marathon`. Wired through `_adminToggleElement` (`haloring` → `this.haloRing.grp`) and `_adminUpdateHints` so the ON/OFF chip stays in sync with the actual `grp.visible` state. Ring is ON by default.
+
+**Validation.** `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` passes (per project memory: must validate as ES module, not CommonJS).
+
+**Untouched.** No existing scenarios, no flyby pool changes, no other landmark touched. Marathon ship at `(-340, 36, -120)` is byte-identical. The ring sits in a different quadrant of the void so the two landmarks don't fight for attention.
+
+**Files touched:** `js/marathon-world.js` (build call in init, tick call in animate, `_buildHaloRing` + `_tickHaloRing` ~115 lines, admin button HTML, `_adminToggleElement` map entry, `_adminUpdateHints` line), `js/helpers.js` (b225 → b226), `FILE_MAP.md` (build/date/helpers ref), `CHANGELOG.md`. **Localhost only.**
+
+**Roadmap.** b227 = The Traveler (white sphere landmark, opposite quadrant). b228 = Marathon rebuild (replace generic spine-cylinder with canon hollowed-Deimos asteroid + spinning habitat ring + comm tower). b229 = Covenant CCS-class battlecruiser model + 5 scripted scenarios (slipspace arrival, glassing beam, broadside duel, fleet escort, autumn-pursuit) wired to admin with `_scenarioFollow` camera locks.
+
+---
+
+## b225 — 2026-05-09 — Remove `/galaxy.html` — "the galaxy" = `/`, the duplicate page is gone
+
+User: *"http://localhost:8000/galaxy.html - remove this page. when i refer to galaxy im referring specifically to : http://localhost:8000/(main page)"*
+
+Single source of truth for the galaxy is now `/` (mounting `MarathonWorld` from `marathon-world.js`). The standalone `/galaxy.html` (which mounted the parallel `TextGalaxyPro` from `text-galaxy-pro.js`) was a sister build kept around for fly-cam navigation iteration; it became a vocabulary trap — "the galaxy" referred to the main page, but the URL collided with a separate scene that shared the look-and-feel. Killing the duplicate so future ship/animation work in this thread targets `marathon-world.js` unambiguously.
+
+**Deleted:** `galaxy.html` (entry page, ~155 lines), `js/text-galaxy-pro.js` (~720-line module). The TextGalaxyPro window export goes with it.
+
+**Nav scrub.** Both `js/corridor.js` (line 333) and `js/object.js` (line 370) had a `<a href="/galaxy.html">galaxy</a>` link in their HUD nav strip alongside `home` / `catalog` / `corridor`. Dropped the dead link from each — those scenes now show `home / catalog` (corridor) and `home / catalog / corridor` (object). The `home` link already covers what "galaxy" was reaching.
+
+**Docs scrub.**
+- `FILE_MAP.md`: removed the `/galaxy.html` route entry from the Routes section, removed the `js/text-galaxy-pro.js` files entry, bumped the helpers.js entry's parenthetical from `b105 → b225` (was stale anyway), and added a clarifying note on the `/` route line that "the galaxy = `/`".
+- `STYLEGUIDE.md`: removed the `/galaxy.html (Text Galaxy Pro)` rollout subsection.
+- `CHANGELOG.md` historical entries (b105, b106, b148, b155, b161 etc.) intentionally untouched — they reference the page as it existed at the time and rewriting history would obscure the build trail.
+
+**Untouched.** `marathon-world.js`, `index.html`, `_redirects`, `serve.py`. The main page (`/`) is byte-identical to b224.
+
+**Files touched:** `galaxy.html` (deleted), `js/text-galaxy-pro.js` (deleted), `js/corridor.js` (1-line nav), `js/object.js` (1-line nav), `STYLEGUIDE.md` (subsection removed), `FILE_MAP.md` (route + file entry removed, header bumped), `js/helpers.js` (b224 → b225), `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b224 — 2026-05-08 — Scenes: globally brighten the base — assets are silhouettes, not lit by night
+
+User on `/scenes`: *"a lot of our assets are dark, is this illumination globally, do they need their own lights? even tho its night time its a military base, i want it illuminated everywhere and on builidngs and assets and all etc"*
+
+The structures read as silhouettes against the slightly-brighter ground because **every building/asset in `scenes-selector.js` uses `MeshBasicMaterial` (unlit)**. There is no real lighting in this scene — adding `AmbientLight` / `HemisphereLight` / `PointLight` would do nothing because `MeshBasicMaterial` ignores all lights. The "darkness" is baked directly into the hex constants (0x14171e steel, 0x0a0c12 near-black, etc.). And b213-b216 stripped the additive halo sprites that previously painted glow columns onto buildings (those were turning into rectangular bloom artifacts), which left the buildings unilluminated entirely.
+
+So the fix is two-pronged: lift the **base material colors** so structures aren't near-black to begin with, and add a **global post-pass brightness gain** so everything reads brighter overall. No additive halos re-introduced.
+
+**1) Post-pass brightness lift.** In `POST_FRAG` after the CA sample, added `col = col * 1.18 + 0.028;`. Gain + tiny black-floor lift before the scanline modulation. Pure black goes from 0 → ~7/255; mid-grey 0x808080 goes from 128 → ~158. Bright panels stay bright (within tone range), but the building hexes lift visibly.
+
+**2) Dark hex-color bumps.** File-wide `replace_all` on every dark `MeshBasicMaterial` constant. New values are ~80-100% brighter while keeping the same hue character (steel still cool, olive still warm). Concrete medium-dark tones bumped ~50%. Examples:
+- `0x14171e` (steel, 20× usage)        → `0x2a3142`
+- `0x14171d` (sandbag, 5×)             → `0x2a3040`
+- `0x0a0c12` / `0x0c0e14` (near-black) → `0x191d28` / `0x1d2230`
+- `0x222836` / `0x242a36` (concrete)   → `0x36404f` / `0x3a4358`
+- `0x303848` / `0x2c3344` (concrete lit) → `0x4a5468` / `0x424c64`
+- `0x232714` / `0x232a1c` (olive dark) → `0x3a401e` / `0x3a4030`
+- `0x1f2218` / `0x2c3122` (ODST armor) → `0x363c2c` / `0x42493a`
+- `0x202028` / `0x22252e` (body)       → `0x363640` / `0x3a3e4a`
+- `0x1c1f27` / `0x1a1d24` / `0x1c2028` / `0x1e222b` (accents/dish) → brighter family
+- `0x281a14` (broken steel)            → `0x4a3225`
+- `0x16191f` / `0x10131a` (dark)       → `0x2c303a` / `0x3a4050`
+
+**3) Ground lift + fog tweak.** Floor shader's base dirt color `vec3(0.135, 0.112, 0.075)` → `vec3(0.175, 0.148, 0.105)` so the desert reads as moonlit, not void. Fog `0x06080d @ 0.015` → `0x0e1218 @ 0.0115` — slightly brighter cool-grey haze and ~23% less density, so the missile silo and back-rim dishes don't get swallowed before they read.
+
+This intentionally does NOT add new lights, sprites, or beam volumetrics — those were the b213-b216 problem. The scene reads "illuminated military base at night" via brighter base albedo + post lift, which is how dim-light games actually achieve that look anyway (lift the floor, don't paint halos).
+
+**Validation.** `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs` passes.
+
+**Files touched:** `js/scenes-selector.js` (POST_FRAG `col = col * 1.18 + 0.028`, fog color/density, dirt-color lift, ~22 hex `replace_all`s), `js/helpers.js` (b223 → b224), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b223 — 2026-05-08 — Tracks: instrument init() so the next reload pinpoints the black-screen cause
+
+After b222's cache-bust, `/tracks` was still blank. Console: 0 errors, 1 user log (`[audio] localhost detected — forcing audioBase`), 969 AudioContext-warn-after-user-gesture warnings (one per RAF, ~16s of run-time), and a `requestAnimationFrame` violation at 468ms. So `tracks-daw.js` is loading and `animate()` is running — but the DAW UI is invisible.
+
+Added 3 instrumentation points to `TracksDaw.init`:
+1. `console.log('[daw] init() start, container =', container, 'tracks =', n)` — prints the mount node and track count up-front.
+2. `console.log('[daw] root mounted. rect =', w, 'x', h, 'parent =', parentId)` — fires immediately after `container.appendChild(root)`. Tells us whether mount happened, the rect is non-zero, and the parent is `#app`.
+3. Wrapped `_buildSession()` in try/catch. If it throws, we log the error AND inject a red error string into the grid so the user sees it instead of pure black.
+
+Also wrapped `_wireEvents()` in its own try/catch for symmetry.
+
+Next reload of `/tracks` will produce one of three outcomes that nail the bug:
+- `[daw] init() start` doesn't appear → SPA router never reaches `bootTracksDaw` (route mismatch).
+- `[daw] root mounted. rect = 0 x 0` → CSS issue (`.daw-root` not sizing — most likely `position:fixed; inset:0` is being defeated by a parent containing block I haven't spotted).
+- `[daw] _buildSession threw: …` → the silently-swallowed exception that's the actual root cause.
+
+**Files touched:** `js/tracks-daw.js` (init: 3 console.log calls + try/catch around `_buildSession` and `_wireEvents`), `js/helpers.js` (b222 → b223), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b222 — 2026-05-08 — Scenes: hoist `cbW/cbH/cbD` (b217 TDZ); tracks: cache-bust loader
+
+User reported `/scenes` had hopped to a NEW error after b220 fixed `olive`:
+```
+Uncaught ReferenceError: Cannot access 'cbD' before initialization
+    at _buildMissileSite (scenes-selector.js:6135:66)
+```
+
+**`/scenes` fix.** The `cbW = 5, cbH = 4, cbD = 5` line declaring the control-bunker dimensions sat at line 6172 — but b217 had added a blast-door + HVAC block at lines 6133-6153 that referenced `cbD` and `cbH`. Same b217 mistake as the `olive` issue: code added in the wrong order so refs preceded their `const`. Hoisted the bunker-dim line to just above the blast-door section (line ~6128) and removed the duplicate. Single declaration; both blocks see it.
+
+**`/tracks` fix.** User also reported `/tracks` was a blank screen with no JS errors — only AudioContext autoplay warnings (expected). Console showed `_readAudio @ tracks-daw.js:806` running, meaning init ran far enough to start the analyser. Disk file looked correct, file served correct content. Strong signal: stale Vivaldi script cache holding an older broken `tracks-daw.js`.
+
+Replaced the static `<script src="/js/tracks-daw.js"></script>` tag with a tiny inline loader that appends `?v=${Date.now()}` to the URL — same trick b221 applied to `scenes-selector.js`. Forces a fresh fetch every page load. Production CDN cacheability unaffected (Cloudflare ignores arbitrary query params for cache key by default).
+
+**Validation.** `cp js/scenes-selector.js /tmp/sc.mjs && node -c /tmp/sc.mjs` passes.
+
+**Files touched:** `js/scenes-selector.js` (hoist `const cbW/cbH/cbD`, remove duplicate), `index.html` (replace `<script src=tracks-daw.js>` with timestamped dynamic loader), `js/helpers.js` (b221 → b222), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b221 — 2026-05-08 — Scenes: timestamp cache-buster on the scenes-selector import
+
+Even after b220 fixed the `olive` ReferenceError on disk, Vivaldi/Chrome served the cached pre-fix module — same line 6039 error after a hard reload. ES-module caching ignores the standard reload-bypass on some Chromium builds.
+
+Switched `scenes/index.html`'s import from a static path to `await import(\`/js/scenes-selector.js?v=${Date.now()}\`)`. Every page load forces a fresh fetch (cheap during dev — the file is local). Cloudflare's prod CDN ignores arbitrary query params for cache key by default so prod cacheability is unaffected.
+
+**Files touched:** `scenes/index.html` (import statement), `js/helpers.js` (b220 → b221), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b220 — 2026-05-08 — Scenes: fix b217 ReferenceError — `olive` / `oliveHi` undeclared in `_buildMissileSite`
+
+User reported `/scenes` showed HUD but black canvas. Console gave the answer:
+
+```
+scenes-selector.js:6039 Uncaught ReferenceError: olive is not defined
+    at Object._buildMissileSite (scenes-selector.js:6039:72)
+    at ensure (scenes-selector.js:1349:10)
+    at Object._buildAllStructures (scenes-selector.js:1351:5)
+    at Object.init (scenes-selector.js:178:10)
+```
+
+`init()` builds the HUD before structures (line 148 vs 178), so the HUD overlay rendered fine — then `_buildMissileSite` threw and aborted the rest of `init` (renderer setup runs but no panels/environment are completed and the animate loop never starts cleanly).
+
+**Cause.** b217 ("realistic-bases pass #1") added the **generator shed** to the missile silo: `BoxGeometry(gsW, gsH, gsD), olive` at line 6039 + `BoxGeometry(gsW + 0.3, 0.18, gsD + 0.3), oliveHi` at line 6043. The `_buildMissileSite` material block (lines 5781-5786) declares `concrete`, `concreteLit`, `yellow`, `stencil`, `steel`, `accent` — no `olive` / `oliveHi`. The b217 author copy-pasted from another scene's material vocabulary (the file has `olive = 0x3a4030` / `oliveHi = 0x4d5440` declared in 4 other functions: `_buildBarracksRow`, `_buildScorpions`, `_buildWarthog`, etc.) but didn't carry the declarations into the missile-site scope.
+
+**Fix.** Two lines, in the `_buildMissileSite` material block:
+
+```js
+const olive = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
+const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
+```
+
+Same color values used everywhere else in the file. The shed body now reads as olive-drab military with a slightly lighter roof slab, exactly the silhouette b217's CHANGELOG describes.
+
+**Validation.** `cp js/scenes-selector.js /tmp/sc.mjs && node -c /tmp/sc.mjs` passes (lesson from b212 — never trust `node --check` on raw `.js`; ES-module reference errors only surface in browser).
+
+**Files touched:** `js/scenes-selector.js` (2-line addition to `_buildMissileSite` material block), `js/helpers.js` (b219 → b220), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b219 — 2026-05-08 — Galaxy admin: surface every scenario in the menu (4 missing full + 6 missing micros)
+
+User: *"account for everything in admin menu like put it there"* (after b218 — they noticed scenarios in the auto-spawn pool that had no admin button).
+
+Audited `_spawn*` definitions vs admin buttons. Missing full scenarios: `_spawnPirateAmbush`, `_spawnPatrolPair`, `_spawnComet`, `_spawnEvaTether`. Missing micros: `_spawnMeteorMicro`, `_spawnPulsarMicro`, `_spawnCloseFighterMicro`, `_spawnCommStaticMicro`, `_spawnEmpFlashMicro`, `_spawnDroneDartMicro`.
+
+**Added to existing sections:**
+- *cinematic*: `scen-eva` (eva tether), `scen-comet` (comet pass)
+- *fleet ops*: `scen-patrol` (patrol pair), `scen-pirate` (pirate ambush)
+
+**New section — *micro events*:** all 6 micros (`micro-meteor`, `micro-pulsar`, `micro-buzz`, `micro-comm`, `micro-emp`, `micro-drone`).
+
+Click-handler block extended with the matching dispatches. Every spawn function now has a way to be triggered from the admin panel.
+
+**Note re: pelican-lead interception (b218).** Verified my edit landed correctly — `_spawnInterception` lead is `_acquireShip('pelican')`, the `interception_target` tick branch type-guards on `'pelican'`. If the user is still seeing 3 banshees, that's stale browser cache — `Ctrl+Shift+R` in Vivaldi clears it.
+
+**Validation.** `cp js/marathon-world.js /tmp/c.mjs && node -c /tmp/c.mjs` passes.
+
+**Files touched:** `js/marathon-world.js` (admin HTML — 4 buttons added to existing sections + new "micro events" section with 6 buttons; click handler dispatch — 10 new branches), `js/helpers.js` (b218 → b219), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b218 — 2026-05-08 — Galaxy: pelican-led interception + new "distress bombing run" scenario
+
+User: *"interception 2v1 on galaxy spaces 3 ships. the one in front should be the pelican / love our distress beacon. any way to have a new version where an enemy ship flies by, bombs the distressed thing and it explodes? so the purple banshee or lancer would fly by bomb it"*.
+
+**1. Interception scenario — lead is now a pelican.**
+`_spawnInterception` previously spawned 3 banshees in a 2-vs-1 formation (1 lead + 2 chasers behind). Lead swapped to pelican (UNSC dropship being intercepted by 2 covenant fighters). Speed dropped 48 → 42 to match the heavier silhouette; chaser speed 60 → 56 (gap=14 over 14s, chasers close mid-scenario). The `interception_target` tick branch now matches `s.type === 'pelican'`, drops the banshee barrel-roll line, and uses a smaller evasive sway envelope (lateral 14 → 8, vert 6 → 3.5; phase rates softened) so the dropship lumbers across the field instead of flicking like a fighter.
+
+**2. New scenario — `distress · bombing run`.**
+`_spawnDistressBombing` reuses the visual signature of `_spawnDistressBeacon` (red SOS strobe + amber rotating + white emergency strobe + two persistent damage fires + smoke trail + sparks + listing tumble) on a parked pelican, then a banshee or longsword (50/50) strafes in from one side at 58 u/s. The bomber fires a fat slow bolt (scale 1.4, life 1.4s, color matches type — magenta plasma for banshee, amber for longsword) at scenarioTime 1.3s, computes detonation time from bolt travel distance/speed, and at impact flips a `detonated` flag on the victim's scenarioBase.
+
+The victim's tick branch (folded into the existing `distress_beacon` branch via an OR-guard) checks that flag every frame: when set, it switches to explosion FX — a 14u flash sprite scales up + fades over 0.85s, a billboarded shockwave ring (`RingGeometry(1.0, 1.08, 64)`, additive) scales to 16u + fades over 0.85s, a 0.6s burst pumps 3 sparks/frame outward at 14 u/s into a bumped 24-sprite pool, and the hull goes invisible after 0.18s. Smoke + spark sprites continue ticking to evolution. After the explosion, normal scenario expiration (`maxLife = 9`) cleans everything up via `scenarioCleanup` (disposes flash, ring, ringGeo/Mat, plus all the beacons/fires/smokes/sparks).
+
+Bomber: type-agnostic `distress_bomber` tick branch (since either banshee or longsword can be picked). Banshee gets the continuous barrel-roll, longsword gets the bank tilt. Both peel out via base velocity inertia; `maxLife = 8` retires them after the explosion completes.
+
+Wired into the auto-spawn pool (`['bombing', () => this._spawnDistressBombing()]`) and the admin panel (cinematic section, button `scen-bombing → distress · bombing run`).
+
+**Validation.** `cp js/marathon-world.js /tmp/c.mjs && node -c /tmp/c.mjs` passes (per b212 rule — never trust `node --check` on raw JS).
+
+**Files touched:** `js/marathon-world.js` (interception lead swap + tick guard, new `_spawnDistressBombing` + 2 tick branches, scenario pool registration, admin button + handler), `js/helpers.js` (b217 → b218), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b217 — 2026-05-07 — Scenes: realistic-bases pass #1 — missile silo (galaxy hero) gets a real launch complex
+
+User: *"its fixed pls move onto structural pass"* (after b216 nailed the halo/uplight problem). Phase 1 of the realistic-bases pass kicks off with the centerpiece — the missile silo at world (0, -8, -107), galaxy panel host. Most visible structure on the base.
+
+**Before.** A 2-post vertical gantry (just 2 posts + horizontal cross-bars on one face, no platforms, no ladder). 1 cone cap. 5×4×5 control bunker, slit window, sandbag perimeter, 4 jersey barriers. Read as "abstract sci-fi obelisk on a target pad."
+
+**After.** A real launch complex.
+
+- **4-leg lattice gantry** (was 2 posts). 1.8×1.6 footprint, 14.5u tall, 4 vertical legs at the corners. **Diagonal X-bracing on every face × 5 height tiers** — every face of the tower has both diagonals AND a horizontal stringer at every level. ~120 lattice members total. Reads as actual rocket-pad scaffolding from any angle.
+- **3 service platforms** at 1/3, 2/3, and 95% height. Each platform is a 0.10u-thick deck slab + 7 transverse slats + 4 corner handrail posts + double-rail (top + mid) on all sides + 1.0u toe-kick. Service arms at the lower two platforms reach toward the silo with a torus-loop "fuel/cryo hose" half-coil.
+- **Caged ladder** climbing the camera-facing leg pair: 2 vertical side rails + rungs every 0.4u + safety hoops every 0.7u above 3u (proper hooped fall-cage). Reads as a real climbable ladder, not just a drawn line.
+- **Lightning rod + aviation strobe** at the gantry top (0.40 brightness, 1.6Hz red — registers in standoff strobe pool).
+- **LOX / cryo tank** beside the silo (4u tall, 1.1u radius). Insulated cylinder with 3 frost-banding rings, dome end-cap, 1.6u vertical vent stack, hazard placard on the camera face, 2 cradle saddle supports at the base, and a horizontal 0.10u conduit running from tank base toward the silo (fuel feed). Reads as cryogenic storage, exactly the read for a launch pad.
+- **Generator shed** off the SE corner (3.4 × 2.4 × 4.0u). Olive-drab body, slightly lighter roof slab, 1.4u-tall diesel exhaust stack with a conical rain cap, 5 louvre vents on the long face, warm-glow door (registered for window-flicker), 2 fuel drums beside the shed.
+- **Cable tray network** running at ground level: tray from generator shed → control bunker → silo base, with 3 vertical pillar supports. Reads as actual electrical infrastructure tying the complex together.
+- **Antenna farm** behind the bunker: 3 dipole masts (4.5/3.9/3.3u tall), each with a cross-dipole element near the top. Tallest carries 3 guy wires fanning out at 120° intervals to ground anchors.
+- **Bunker entrance**: 3-tread concrete stair landing leading up to a 1.4×1.9u steel **blast door** in a thicker frame. Wall-mount lamp beside the door (warm 0.18 brightness).
+- **HVAC unit on the bunker roof**: 1.4×0.7×1.0 box + a 0.30u radius round fan grille on top. Reads as actual HVAC.
+- **Blast deflector ring** around the silo base: a 0.50u-tall ring (siloR+1.2 inner, siloR+1.6 outer) with yellow caution-paint top — the structural lip that real silos have to redirect launch exhaust away from the gantry.
+
+**Net.** ~250 added meshes on this one host. The silo zone now reads as a working launch complex with cryo storage, power, comms, ingress, and pad infrastructure — not as a single decorated cylinder. Every element is real geometry (no additive sprites, no fake "glow" — those are what got us into trouble all morning), so silhouettes hold up at any angle and there's no halo painted around anything.
+
+**Why ship just the silo first.** Phase-1 demonstrates the level of structural detail. If the look reads, I'll bring the same density to the other 8 panel hosts (comms_array_shed, forward_ops_radar, sigint_tower, logistics_yard, broken_dish, sensor_pylon, biostation_quarantine, back_billboard_lattice) in subsequent builds. If the direction needs adjustment (too busy / not busy enough / wrong details), better to course-correct after one host than after nine.
+
+**Files touched:** `js/scenes-selector.js` (`_buildMissileSite` rewrite — kept original silo body, missile, control bunker, sandbag/jersey perimeter; replaced 2-post gantry with full lattice tower; added LOX tank, generator shed, cable trays, antenna farm, blast door, HVAC, blast deflector). `js/helpers.js` (b216 → b217). `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**.
+
+---
+
+## b216 — 2026-05-07 — Scenes: clear roads, spread the airfield, lift base illumination, kill colored building halos
+
+User: *"focus on scenes page. images show that the whole base is not well illuminated. random glows tints emitted from objects, billboards and buildings. buildings are randomly psotioned, get in the way of the road, are diagnoal to the road, position doesnt make sense. deep sea obstructs road. 4 titty like silos obstruct the road. organism buildig obstructs the road. tents cars and a tank all packed togehter in a tiny little space. mountain formation bgtets in the way of the road, jeep just drives thru the mountain like its nothing. tackle this stuff and then well do more"* (5 screenshots — full panel arc, deep-sea sign close-up, broken-dish corner, tents+vehicles cluster, cyan-circled "where the road should go" overlay).
+
+A focused first pass on layout + illumination. **Six concrete fixes, all `js/scenes-selector.js`:**
+
+- **Mountain ring no longer crosses the perimeter road.** `_buildRidgeline` near ring radius pushed 100→132. Old radius crossed N perimeter (z=-90, x=±78) at x=±43.6, so the patrol Warthog and Scorpion drove straight through the silhouette mesh. r=132 puts the ridge at x≈±97 along z=-90 — outside the road's x=±78 bounds. Far ring matched out 165→175 to preserve parallax depth. The 14 aviation-beacon masts and 24 distant-window glints follow the new radii.
+
+- **Missile silo cleared off the N perimeter.** `_buildMissileSite` `_placeBuilding` z=-94 → -107 (offset -88-6 → -88-19). Sandbag perimeter (silo + 8.9u) used to sit at z=-85.1, dead inside the road (z=-90 ±4.5). New position puts the sandbag north edge at z=-98.1 — 3.6u south of the road. Galaxy panel still floats at (0, 10, -88) so the billboard reads as the entry sign for the launch zone behind it instead of growing out of the asphalt. Stadium pylons (`_buildBaseLighting`) shifted -82/-106 → -98/-120 to surround the relocated silo, lookAt target moved -94 → -107, three building-flood beam aim points and source positions matched. Galaxy ground-crew personnel route from-/to- z=-82 → -98. Structure-uplight target moved 0,-94 → 0,-107.
+
+- **Fuel depot off the E perimeter.** `_buildFuelDepot` group placed at (62, -8, 8) instead of (72, -8, 8). Old position put the east tank pair at world x=77, sitting inside the E perimeter road (x=78 ±4.5) — those are the "4 silos blocking the road" from the user's screenshot. Building-flood beam aim updated 72 → 62.
+
+- **SE airfield no longer a 12u-square pile.** Parked Warthogs spread (38,20)/(32,24)/(45,18) → (32,8)/(50,12)/(40,22). Parked Scorpion (28,16) → (22,14). SE bivouac tent cluster (22,16) → (8,24). SW bivouac (-22,18) → (-26,20). Walking-personnel routes anchored to the new bivouac coords. Jersey wall that used to run z=12 across the airfield (cutting straight through the new motor pool) pulled to z=4 as the airfield's south frontage; SW jersey followed the bivouac west. Vehicles and tents now occupy distinct lanes instead of a single jam.
+
+- **Base brightness lifted.** Floor shader: distance-fade base 0.78 → 1.05, fade amplitude 0.22 → 0.30; moonlight wash bumped vec3(0.005, 0.008, 0.014) → vec3(0.022, 0.028, 0.038). The desert ground reads as actually-lit-by-floodlights now instead of "barely-discernible-tan-against-black."
+
+- **Random colored building halos toned down.** `_buildStructureUplights` opacity 0.85 → 0.38, scale 12×24 → 8×14 — these warm/cool/amber additive sprite cones at every host's base were the dominant "random tints around buildings" the user flagged (each painted a wide colored haze rectangle bloomed by the post-FX). Atmospheric back-glow sprites in `_buildEnvironment` opacity 0.45/0.40 → 0.18/0.15, pulled deeper to z=-100/-95 so they form a horizon glow instead of veiling the foreground. Building-flood beam lens dots opacity 0.16 → 0.08 (~22 of them; each was a small bloom-source that aggregated into atmospheric haze). Bloom itself was already toned (b214: strength 0.20, threshold 0.75, radius 0.25) so this pass leaned on opacity, not bloom.
+
+**Validation.** `cp js/scenes-selector.js /tmp/c.mjs && node -c /tmp/c.mjs` passes (the lesson from b212 — `node --check` parses as CommonJS and silently allows ES-module-breaking patterns; always validate as `.mjs`).
+
+**Files touched:** `js/scenes-selector.js`, `js/helpers.js` (b215 → b216), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only.**
+
+---
+
+## b215 — 2026-05-07 — Galaxy + Scenes: REVERT b207 — restore the inner.rotation.y = π flip; ships fly nose-first again
+
+User: *"random dog fight encoutner but the pelican ship was fighting no one just reversing and shooting / pelica nvs banshee script pelican flies backwards / fleet ops flies backwards / |same with convoy / carrier launch as well longsword. / all ships fly backwards bro like theyre giubg the wrong way"* (with three screenshots — distress pelican, dogfight, longsword carrier launch all clearly tail-forward).
+
+**The b207 fix was wrong.** I had the `Object3D.lookAt` convention reversed. For **camera or light** subclasses, `lookAt` aims local **-Z** at the target. For every **other** Object3D — including Group/Mesh — three.js [swaps the `Matrix4.lookAt` arguments](https://github.com/mrdoob/three.js/blob/master/src/core/Object3D.js) (`_m1.lookAt(_target, _position, this.up)` instead of `(_position, _target, this.up)`), which makes the resulting matrix's **+Z** column point at the target. So a regular Group's local **+Z** axis ends up aimed at whatever you pass to `lookAt`.
+
+That means the original codebase was correct:
+- Models built with nose at local **−Z** (cockpit at `z = -3.2`, engines/exhaust at `z = +2.6..+10`)
+- `inner.rotation.y = π` flips the inner so the nose lives at outer's **+Z**
+- `outer.lookAt(target)` aligns outer's **+Z** with the velocity direction → nose leads → forward
+
+By stripping the `Math.PI` everywhere in b207, I made every ship fly tail-first.
+
+**This pass restores the original convention** + adds a leading comment in each constructor explaining *why* the flip is there, so the next person reading it doesn't repeat my mistake.
+
+**Galaxy (`js/marathon-world.js`):**
+- 4 constructors (`_makeLongsword`, `_makeBanshee`, `_makePelican`, `_makeForerunner`): re-added `inner.rotation.y = Math.PI;` plus a 4-line comment block explaining the camera-vs-non-camera lookAt distinction.
+- 36 spawn-site `inner.rotation.set(0, 0, 0)` → `.set(0, Math.PI, 0)`.
+- 5 plain `inner.rotation.y = 0;` → `= Math.PI;` (animate-loop pose resets between scenarios).
+- 6 composite formulas restored: `Math.PI + s.scenarioTime * 0.22`, `... * 0.4`, `Math.PI + tt * 0.3`, `Math.PI + Math.sin(s.rollPhase * 0.4 + 1.0) * 0.10`, `Math.PI + Math.sin(s.rollPhase * 0.42 + 1.0) * 0.10`, `Math.PI + s.rollPhase * 0.22`.
+
+**Scenes (`js/scenes-selector.js`):**
+- `_respawnFlyby` (line ~3074): re-added `ship.rotateY(Math.PI);` after `ship.lookAt(target)` with a corrected comment.
+- `_startPelicanRun` (line ~3180): same — `sp.rotateY(Math.PI);` restored after `sp.lookAt(dropZone)`.
+
+**Altitude floor kept.** The altitude bug from b207 (low-pass branch flying at `camY − 6..−10` = below ground) was a separate, real fix. That one stays — flybys still spawn at `camY + 3..6` (low pass) / `camY + 6..12` (mid) / `camY + 18..28` (high). No more ground-clipping.
+
+**Distress beacon kept.** b210's fire/smoke/sparks/multi-beacon distress pelican is unaffected — the spawn already used `inner.rotation.set(0, Math.PI, 0)` (which got correctly restored by the global swap), so the listing tumble + flame/smoke effects all still work.
+
+**Lesson for the index.** Three.js `Object3D.lookAt` is **+Z-aimed for non-cameras, -Z-aimed for cameras/lights**. Always verify against the source before "correcting" widespread codebase conventions — a globally-applied wrong fix is worse than a single misread ship.
+
+**Files touched:** `js/marathon-world.js` (~50 reverts across constructors + spawn sites + composite formulas), `js/scenes-selector.js` (2 surgical reverts), `js/helpers.js` (b214 → b215), `FILE_MAP.md` build header, `CHANGELOG.md`. Localhost only.
+
+---
+
+## b214 — 2026-05-07 — Scenes: NUKE all panel tint + glow (three-prong attack)
+
+User: *"remove the fucking glow or tint from all the billboards fucker"* (with screenshot showing every billboard still ringed by a clearly-tinted rectangular halo — cyan freq map, pink dimensions, cyan galaxy, green living wall, orange tape spine).
+
+Earlier passes addressed individual contributing layers but each one alone wasn't enough. Going aggressive on all three sources at once:
+
+**1. Killed the shader tint multiplication.** `PANEL_FRAG` had `col *= uTint;` near the bottom — every panel pixel multiplied by the per-scene tint color. Combined with white text on the texture, that produced bright tint-colored pixels (cyan/pink/green/orange) covering the whole panel rectangle. Bloom then smeared those rectangles outward. Removed entirely. Panel content now shows in the texture's native colors only. The hover-pulse `+= uTint * 0.1 * pulse;` also retinted on hover — replaced with a neutral white pulse `+= vec3(0.10) * 0.6 * pulse;`.
+
+**2. Dimmed the texture itself.** `_makePanelTexture` was painting:
+   - White (#fff) title
+   - Saturated magenta (#ff7ec3) kicker, accent stripe, ENTER prompt
+   - Bright pink (rgba(255,126,195,0.18)) caution band
+
+   All of these were brightness ≥ 0.50 in some channel — well above any realistic bloom threshold. Re-painted with a muted gray family:
+   - Title: `#fff` → `#b8bec8` (light gray)
+   - Kicker / body / accent prompts: → `#7a8090` (mid gray)
+   - Caution stripe: `(255,126,195,0.18)` → `(120,130,150,0.10)` (neutral, half opacity)
+   - Corner brackets: `#fff` → `#9ca2ad`
+
+   Net: brightest pixel anywhere on a panel is ~0.72 (the title), most pixels much lower. No more fluorescent text crashing through the tonemapper.
+
+**3. Raised bloom threshold above panel content.** `_setupComposer` had `threshold 0.30 / strength 0.35 / radius 0.30`. Title text at brightness ~0.72 was still above threshold so it kept a soft white bloom even after (1)+(2). Bumped to `threshold 0.75 / strength 0.20 / radius 0.25` — now panel pixels are below threshold and don't contribute to bloom at all. The few genuinely bright pixels in the scene (planet rim, missile-silo aviation strobe, sun, vehicle headlights, `_makeRunningLight` lens dots dialed up to >0.75) still get a tight glow at the source — but no spread, no rectangle, no halo around any panel.
+
+**Why all three.** Removing only the tint left a soft white bloom rectangle. Dimming only the texture left the tint amplifying still-readable text into a tinted halo. Raising only bloom threshold left the panel as a saturated tinted rectangle without the spread (which arguably looks even worse — a hard color square). All three together = panels read as actual flat data displays mounted on the buildings. No glow, no tint, no halo, period.
+
+**Files touched:** `js/scenes-selector.js` (PANEL_FRAG: removed `col *= uTint`, replaced hover-pulse with neutral white; `_makePanelTexture`: dimmed all 6 fillStyle/strokeStyle calls; `_setupComposer`: bloom threshold + strength + radius retuned), `js/helpers.js` (b213 → b214), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**.
+
+---
+
+## b213 — 2026-05-07 — Scenes: kill the volumetric beam-cone halos all over the base
+
+User: *"it still exists on certain things not sure why"* (4 screenshots — overview shot showing the wide field; close-up of an orange disc near the broken dish; a translucent rectangular column around the central tower/silo; freq map + dimensions panels still ringed by faint glow boxes).
+
+**Root cause.** `Sprite` always faces the camera. The codebase had FIVE separate places where multiple cone-textured additive sprites were stacked along a beam path to fake a volumetric spotlight beam — every one of them rendered as a glowing rectangular column rather than a directional cone, exactly the "weird halo" the user kept circling. None of these sprites actually illuminated anything: every building in the scene uses `MeshBasicMaterial` (lighting-free), so the flood beams were pure decoration.
+
+Inventory of cone-stacks killed:
+
+1. **`_buildBuildingFloodBeams.addBeam`** (~22 calls × 4 cone-step sprites = ~88 cones + 22 hit-glows) — the dominant source. Each beam aimed a 4-sprite chain at a panel host (silo, broken dish, sigint tower, biostation, etc.) and painted a bright `_makeRunningLight` "hit glow" on the building face. Hit-glow + bloom = the rectangular halo the user circled around freq map / dimensions / silo.
+2. **`_buildBaseLighting.addStreetlamp`** (~20 lamps × 1 down-cone) — every perimeter streetlamp painted a 5.5×7.5 additive box on the road.
+3. **`_buildBaseLighting` stadium pylons** (4 pylons × 3 heads × 1 cone, scale 6×18) — the dominant halo on the central missile silo (the "translucent box around the tower" in screenshot 3).
+4. **Hex-deck floodlights** (~6 posts × 1 cone, scale 8×12) — corner-deck halos.
+5. **Catenary floodlights along spine road** (~10 lamps × 1 cone, scale 5×7).
+6. **Broken-dish scaffold floodlight** (3-step cone chain) — the bright orange disc the user flagged in screenshot 2.
+7. **Pelican-pad floodlights** (4 stands × 3-step cone chain).
+
+Roughly **150+ additive cone sprites removed** in total.
+
+**What was kept.** The actual fixture geometry (dark steel head/lens-housing on each lamp) + a small `_makeRunningLight` lens dot at the bulb position, dimmed slightly across the board (e.g. `0.34 → 0.20`, `0.30 → 0.18`, `0.28 → 0.18`). The lens still bloom-glows enough to read "this fixture is on" without painting a giant cone on whatever surface it's pointed at.
+
+**Why this is the right cut.** Buildings don't react to lights anyway, so the volumetric beams were always just decoration. Real military-base photography at night reads as: dark structures with a few bright pinpoints (lens flares from fixtures, lit windows, strobes). It does NOT read as: glowing cones in mid-air. The new look is closer to the photographic reference and the scene reads more like infrastructure, less like a sci-fi diorama.
+
+**Side effect.** ~150 fewer transparent additive sprites in the scene → cheaper render → bigger headroom for adding real structural detail (trusses, ladders, conduit, vents, parapet detail) on the realistic-bases pass the user actually asked for. That pass is up next.
+
+**Files touched:** `js/scenes-selector.js` (5 cone-stack removals across `_buildBuildingFloodBeams`, `_buildBaseLighting` × 2, `_buildHexDeck`, broken-dish scaffold, `_buildPelicanLights`; + lens-dot brightness dialed down ~25-40% across the board), `js/helpers.js` (b212 → b213), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**.
+
+---
+
+## b212 — 2026-05-07 — Scenes: fix /scenes/ black-screen #2 — raw backticks in shader-comment broke the ES module parse
+
+User: *"and its still a gblack screen"* (with screenshot — pure black canvas, even after b211's absolute-import fix).
+
+**Root cause.** The b209 comment block I wrote inside `PANEL_FRAG` (a JS template literal) contained markdown-style code spans with literal backticks: `` `uTint` `` and `` `_buildPanelHost` ``. Inside a template literal, ANY raw backtick terminates the string. The first `` ` `` ended `PANEL_FRAG` mid-shader, the next started a new template literal, identifiers between them became invalid syntax. Parsed as: `const PANEL_FRAG = \`...\` uTint \`...\` _buildPanelHost \`...\`;` — invalid JS.
+
+**Why it slipped past my checker.** I was running `node --check` (which parses as CommonJS by default). CommonJS parsing apparently tolerates this pattern silently — exit 0, no error. The browser parses as ES module (the file uses `import`), and ES-module parsing strictly catches the broken template literal. Re-checking with `cp file.js test.mjs && node -c test.mjs` immediately surfaced:
+
+```
+SyntaxError: Unexpected identifier 'uTint'
+  at line 66
+```
+
+When the module fails to parse, no exports run, `window.ScenesSelector` is never assigned, and the inline `<script type="module">` in `scenes/index.html` calls `undefined.init(mount)` → uncaught error → black canvas, no HUD, no scene.
+
+**Fix.** Replaced backticks in the comment with prose: `` `uTint` `` → `uTint`, `` `_buildPanelHost` `` → `_buildPanelHost`, and "tint²" → "tint-squared" (the unicode-superscript was fine but easier to read as words alongside the rest). The semantic content of the comment is unchanged.
+
+**Lesson learned.** Going forward, ALWAYS validate scene-related JS edits as ES modules (`cp foo.js test.mjs && node -c test.mjs`), not via plain `node --check`. The two parsers diverge on subtle template-literal cases. CommonJS-mode validation is a false confidence trap for files using `import`.
+
+**Files touched:** `js/scenes-selector.js` (5-line comment edit, no code change), `js/helpers.js` (b211 → b212), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**.
+
+---
+
+## b211 — 2026-05-07 — Scenes: fix /scenes/ black-screen (ES module relative import was 404ing under <base href>)
+
+User: *"http://localhost:8000/scenes/ is blackscreen not sure if broken or something"* (after I started serve.py and confirmed all four routes returned 200).
+
+**Root cause.** `scenes/index.html` has `<base href="/">` set in `<head>`, then in the body uses `<script type="module">` with `import './js/scenes-selector.js';`. ES module specifiers (relative paths) resolve against the **importing module's URL**, not always against the document's base URL — exactly the same spec ambiguity that's bitten plenty of projects on Chromium. When the importing module is the inline script in `/scenes/`, the relative path resolves to `/scenes/js/scenes-selector.js` which doesn't exist (the file lives at `/js/scenes-selector.js`). The 404 silently kills module evaluation, `window.ScenesSelector` never assigns, and the next-tick `init(mount)` call throws on `undefined.init`. Page renders the static HUD background — black canvas, no scene.
+
+Dev-server log confirmed:
+```
+"GET /scenes/ HTTP/1.1" 200
+"GET /scenes/js/scenes-selector.js HTTP/1.1" 404
+```
+
+This worked intermittently across earlier sessions because some Chromium builds DO honor `<base href>` for module resolution and some don't (cached vs. cold-loaded module graph differs too). The behavior was always fragile — absolute path is the deterministic fix.
+
+**Fix.** `scenes/index.html` (one-char edit): `import './js/scenes-selector.js';` → `import '/js/scenes-selector.js';`. Absolute path always resolves to the origin root, no base-URL or module-URL semantics involved.
+
+**Files touched:** `scenes/index.html` (1 char edit), `js/helpers.js` (b210 → b211), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**.
+
+---
+
+## b210 — 2026-05-06 — Galaxy: distress beacon — fire, smoke, sparks, multi-beacon strobe + listless tumble
+
+User: *"distressed ships should emit more signals of distress"* + *"maybe have it on fire abit or smoking"* (screenshot: b203 distress pelican floating dim with two thin engine flames — reads as "asleep with a red light," not "in trouble").
+
+**What was there.** A single red SOS sprite blinking 3-short-1-long, a ±0.18u sin wobble, no movement, no damage cues, 14s lifetime.
+
+**What this pass adds (all on the same pelican):**
+
+- **Three out-of-phase emergency lights** instead of one — multi-system failure read:
+  - Red SOS strobe (top, original 3-short-1-long pattern)
+  - Amber rotating beacon (port wing) — `pow(sin, 4)` cycle
+  - White emergency strobe (starboard wing) — sharp 2.2 Hz, off-phase from red so they fight for the eye
+
+- **Two hull fires** at "damaged" hull spots — starboard engine pod (3.05, -0.10, 0.5) and port wing root (-2.20, 0.40, 1.2). `_makeFlameTexture` called with a fire-orange palette `(255,250,210) → (255,200,80) → (255,110,40) → (160,30,20)`. Per-flame seed drives a compound flicker `0.65 + 0.35·sin(t·14+seed)·sin(t·7.3+seed·2.1)` — sub-second wobble in opacity AND scale so they never sit still and the two never sync.
+
+- **Smoke trail** — 18-sprite pool, normal-blended gray puffs:
+  - Spawn every 0.06–0.11s from a fire's world position. Vel `(±0.6, 0.35–0.7, ±0.6)` drifts up-and-back in WORLD space (puffs are scene-children, not pelican-children, so the listing rotation doesn't drag them).
+  - Lifetime 1.6–2.4s; scale grows 0.6× → 2.2×; opacity falls quadratically. Same flame texture, gray ramp `(220,220,220) → (110,110,110) → (40,40,40)`.
+
+- **Sparks** — 14-sprite pool, additive `0xffe0a0`:
+  - Spawn cooldown 0.35–0.90s (rarer than smoke), lifetime 0.4–0.7s. Vel `(±2.4, 0.2 − rand·1.2, ±2.4)` — mostly fall + occasional rises. Reads as "blown circuit fleck."
+
+- **Listless tumble** — `outer.rotation.z` and `.y` advance every frame at random per-spawn velocities (roll ±0.08–0.14 rad/s, yaw ±0.04–0.08 rad/s). Engine velocity stays zero; vertical sin drift kept for breath. Sells "attitude control failed."
+
+- **Hull power flicker hook** — `if (s.runningLights) ...` block primed for when ship pools track running-light arrays; harmless no-op today, ready for next pass.
+
+- **Lifetime extended** 14s → 18s so the new effects get visible airtime under the auto-scheduler's follow-cam.
+
+**Plumbing.** `p.scenarioBase` now carries `{ beaconRed, beaconAmber, beaconWhite, fireA, fireB, smokes[18], sparks[14], smokeNext, sparkNext, drift, listRollV, listYawV, hullSeed }`. `p.scenarioCleanup` removes/disposes all 37 sprites + their textures — important since the auto-scheduler can re-fire this scenario roughly every minute. Smoke + spark sprites are scene-attached (not pelican-attached) so the listing tumble doesn't drag them through the world.
+
+**Files touched:** `js/marathon-world.js` (`_spawnDistressBeacon` rewrite ~110 lines; `_tickDistress` clause inside `_tickFlyby` rewritten ~85 lines), `js/helpers.js` (b209 → b210), `FILE_MAP.md` build header, `CHANGELOG.md`. Localhost only.
+
+---
+
+## b209 — 2026-05-06 — Scenes: actually kill the billboard halo (shader edge-frame + bloom were the real source)
+
+User: *"they still have thay weird effect all around them"* (with second screenshot of the radial panel arc — every billboard still ringed by a wide colored rectangular halo despite b208's halo-sprite removal). Confirmed: b208 deleted the wrong layer.
+
+**Real root cause (re-diagnosed).** Two amplifying sources stacked on top of each other:
+
+1. **Shader edge-frame in `PANEL_FRAG`.** The fragment shader painted the outer 4% of each panel's UV with `mix(near-black, uTint, 0.85) * 0.6`, then the very last line ran `col *= uTint;` over the whole panel. Net: edge pixels become `~uTint² * 0.51`. For a cyan panel (tint ≈ RGB(0.27, 0.85, 0.96)) the border ends up at roughly RGB(0.04, 0.43, 0.55) — well above bloom threshold. Every panel had a bright tinted rectangle baked into its outermost row of pixels, regardless of hover/focus.
+
+2. **UnrealBloomPass at radius 0.55, strength 0.65, threshold 0.10.** Wide-radius bloom smeared those bright tinted edges outward into a 30-40% colored glow ring — the rectangular "halo" the user circled. Threshold 0.10 meant nearly every lit pixel in the scene contributed; radius 0.55 meant the spread was huge.
+
+The b208 halo-sprite removal was real but minor — the dominant source was always (1)+(2). Sprite at 0.10 opacity was just a small bonus contribution.
+
+**Fix:**
+- `PANEL_FRAG` (`js/scenes-selector.js` ~L66-L72): removed the edge-frame block entirely. The panel mesh no longer paints any tint border. The actual 3D steel framing built around each panel by `_buildPanelHost` (top/bottom rails, side rails, dark backplane) provides all the visual framing the panels need.
+- `_setupComposer` (`js/scenes-selector.js` ~L6680): bloom retuned. `strength 0.65 → 0.35`, `radius 0.55 → 0.30`, `threshold 0.10 → 0.30`. Bright pixels (panel text, strobes, headlights, planet rim, lit windows) still get a screen-glow but it's tight to the source. Background lit elements no longer blur into amorphous glow.
+
+**Why both, not one?** Removing only the shader frame still leaves wide-radius bloom amplifying every other bright pixel in the scene — text on panels, strobes, planet rim — into the background haze that makes the whole arc feel "painted." Tightening only bloom still leaves the 1-pixel-wide bright tinted edge, which would read as a crisp colored outline. Both have to go.
+
+**Files touched:** `js/scenes-selector.js` (shader edit + bloom tune), `js/helpers.js` (b208 → b209), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**, no Cloudflare push.
+
+---
+
+## b208 — 2026-05-06 — Scenes: kill the cyan ghost-halo around every billboard
+
+User: *"continuing resdeisning military bases — first correct this weird effect around our billboards"* (with screenshot of the radial panel arc — every billboard ringed by a soft cyan/colored halo that bleeds outward, drawn over with cyan loops to mark which panels were affected).
+
+**Root cause.** Each panel in `_buildPanels` was paired with a 1.05× radial-glow `Sprite` placed at the same world position, additive blending, opacity 0.10. The sprite's footprint is essentially the same area as the panel itself, so the additive layer brightens the panel pixels uniformly — then the post-stack bloom (strength 0.65, radius 0.55, threshold 0.10 in `_setupComposer`) picks up those brightened panel edges and amplifies them into a wide colored ring around every billboard. The shader's own edge frame already paints a magenta/tint border; the sprite was double-dipping on top of it, which is what produced the "ghosted" look.
+
+The b184 changelog notes the sprite was *already* dialed back from 1.8× / 0.45 → 1.05× / 0.10 to fix a previous saturation bug. Even at the new tight values, additive + bloom amplification kept producing a visible halo on the deep-fog backgrounds.
+
+**Fix.** Removed the halo sprite entirely from `_buildPanels`. The panel mesh now stands alone — its shader edge frame + bloom on the bright frame pixels carry all the screen-glow the panel needs. Animate-loop references to `p.halo` (position copy, opacity ramp, scale lerp on hover/focus) deleted; the surrounding `lerp` for `p.mesh.position` / `p.mesh.scale` / `lookAt` are unchanged.
+
+**Why kill the sprite vs. tune it.** The sprite's job (a faint outer glow rim) is already accomplished by bloom of the panel's bright magenta-tinted edge frame, which is per-billboard color-correct without an extra additive layer that the bloom kept double-counting. Simpler is correct.
+
+**Files touched:** `js/scenes-selector.js` (one removal block in `_buildPanels` ~L4383, one trim in the panel animate tick ~L6991), `js/helpers.js` (b207 → b208), `FILE_MAP.md`, `CHANGELOG.md`. **Localhost only**, no Cloudflare push.
+
+---
+
+## b207 — 2026-05-06 — Galaxy + Scenes: ships fly nose-first (kill the global Math.PI flip), scenes flybys no longer clip the ground
+
+User: *"in galaxy this ship floats backwards. pls ensure all our ships fly the correct way :("* (with screenshot of a Pelican flying tail-first across the nebula) + *"also stuff flys through our land/surface"* (scenes screenshot of a ship+glow embedded in a building) + *"like in this image too"* (third screenshot — same scenes clipping issue, plus a parked-pelican silhouette across the road).
+
+**Root cause (galaxy).** Every ship constructor in `marathon-world.js` builds geometry with the nose at `-Z` (correct three.js convention), then immediately flips the inner group with `inner.rotation.y = Math.PI`. After the flip, the model's nose lives at `outer +Z`. `outer.lookAt(target)` aligns the object's local `-Z` axis with the travel direction — so the **tail** points along velocity. Ship flies tail-first.
+
+The same `Math.PI` was baked into the ~38 spawn/animate sites that re-set inner rotation between scenarios, so removing it from the constructor alone wasn't enough — every `inner.rotation.set(0, Math.PI, 0)` and `inner.rotation.y = Math.PI [+ extra]` had to drop the `Math.PI` term.
+
+**Fix:**
+- 4 constructors (`_makeLongsword`, `_makeBanshee`, `_makePelican`, `_makeForerunner`): removed `inner.rotation.y = Math.PI`.
+- 36 `inner.rotation.set(0, Math.PI, 0)` → `inner.rotation.set(0, 0, 0)` across spawn methods.
+- 5 plain `inner.rotation.y = Math.PI;` → `= 0;` (in tick/animate paths that re-zero between scenarios).
+- 6 composite `inner.rotation.y = Math.PI + <expr>;` → `= <expr>;` (banking/barrel-roll/yaw-drift updates that previously baked in the 180° offset).
+
+Net: every ship in galaxy now flies nose-forward. Visually identical to before for symmetric models (longsword octahedron, forerunner orb), but Pelican (asymmetric: cockpit-front, hatch-rear) and Banshee (curved canopy front) now show their faces in the direction of travel.
+
+**Root cause (scenes).** Same bug pattern, ported when the random-flyby + scripted pelican-dropoff systems were lifted from galaxy. Both spots called `ship.lookAt(target)` then `ship.rotateY(Math.PI)` to "flip nose-forward" — which is exactly the wrong direction.
+
+Plus a separate **altitude bug**: `_respawnFlyby` had a 12% branch picking `altitude = camY - 6 - rand*4` (camY is 0 on the deck, so altitude went to **−6 to −10** = below ground) and a 70% branch picking `camY + (rand - 0.3)*5` (range −1.5 to +3.5 — also dipping below the deck floor). Result: flybys cut through the desert and through buildings.
+
+**Fix (scenes):**
+- `js/scenes-selector.js:3148` — removed the `ship.rotateY(Math.PI)` after the random-flyby `ship.lookAt(target)` call. Pelican model has nose at -Z, lookAt already aims it correctly.
+- `js/scenes-selector.js:3253` — same fix for the scripted pelican-dropoff `_startPelicanRun`.
+- `js/scenes-selector.js:3117–3121` — flyby altitude buckets re-floored:
+  - High pass: `camY + 18..28` (unchanged — clears buildings)
+  - Low pass: was `camY − 6..−10` → now `camY + 3..6` (dramatic close-pass without ground clip)
+  - Eye-level: was `camY − 1.5..+3.5` → now `camY + 6..12` (mid-air, panel/building height)
+
+**Known follow-ups (NOT fixed in this pass):**
+- Even at the new floor (camY+3), low-pass ships could still nick the back face of buildings 30–90u out from camera. No collision avoidance — ships travel straight lines on the chosen altitude. If clipping persists, the next pass should raise the low-pass minimum or add building-collision sampling.
+- The bright orange disc in the third screenshot is most likely a flyby pelican's engine-glow sprite rendering through a building wall (additive sprites have no depth occlusion). Same root cause — once flybys stop clipping buildings altogether, the "sun in building" stops too.
+- The forerunner `inner.rotation` may still have ring-spin animations that reference `Math.PI` as a pose offset; visually it's a symmetric orb so a 180° drift wouldn't read, but worth a sweep next time.
+
+**Files touched:** `js/marathon-world.js` (~50 lines across constructors + ~38 spawn/animate sites — pure `Math.PI`-stripping), `js/scenes-selector.js` (3 surgical edits — 2 `rotateY` removals + altitude bucket rewrite), `js/helpers.js` (b206 → b207), `FILE_MAP.md` build header, `CHANGELOG.md`. **Localhost only**, no Cloudflare push (per current iteration rule).
+
+---
+
+## b206 — 2026-05-06 — /tracks: full DAW Session view — year lanes + clip cells + master + arrangement timeline (replaces WebGL spire) + new track wired
+
+User: *(after pitching 5 distinct redesign concepts for /tracks: DJ booth POV, Vinyl Crate, Album-Art Sky, DAW Session View, Editorial Magazine)* → *"4 seems interesting if u can make it really high quality"*. Plus: *"add this song into catalog galaxy and everything and make sure its playable i added a new song called moves on"* → *"ima change its name to still looking for you"*.
+
+Replaces the b146/b200 WebGL Tracks Vault (helix spire) with an Ableton-faithful 2D Session view. The previous helix was pretty but read as "another floaty WebGL scene"; the DAW view says "this artist *makes* music" with the same surface a producer uses every day.
+
+**New file: `js/tracks-daw.js`** (~830 lines, vanilla JS, no Three.js). IIFE registering `window.TracksDaw = { init, setFilter, setQuery, onTrackChange, destroy }`. DOM-driven by design — DAWs need crisp text rendering, not GLSL approximations. Two canvases only: per-clip waveform thumbnail + master spectrum analyser.
+
+**Layout (5-row CSS grid):** topbar (36px) · transport (56px) · filter band (32px) · main grid (1fr) · status bar (22px). All bars stretch full width; main grid is the only scrollable area.
+
+**Top bar.** Brand block (LED dot that goes red when audio is playing, "CANTMUTE" + version + artist sub) | SESSION ↔ ARRANGEMENT tabs (active tab gets bottom-border accent + tinted background) | search input (`⌕` prefix, full-width, type to filter clips by title) | count + ← galaxy back-link.
+
+**Transport bar.** Five-button group (prev/play/stop/next/shuffle), each a 32px square with charcoal gradient + 1px line border; play button is wider (42px) and accent-orange-bordered, becomes solid orange-red pill with `box-shadow:0 0 18px` glow when armed. Now-playing column (240-300px) with `TRK.NNN · TIER` kicker, lowercase Space Grotesk title, year+tags meta. Scrubbable progress with live `<canvas>` waveform underlay, fill gradient (orange semi-transparent), 1px white playhead with shadow. `mm:ss.t / mm:ss.t` time display (tenths). SC button (real inlined SVG mark, orange). Volume slider (custom-styled `<input type="range">`, white thumb, accent border). Two stereo level meters with green→yellow→red gradient + `* 0.94` peak-hold falloff.
+
+**Filter band.** Chip row (all/featured/new/hard/chill/grunge/vibe) — selected chip gets accent tint. Filter syncs URL: `new` → `/tracks/new`, others → `/tracks`. Right-side keyboard hint (`SPACE play  R shuffle  ← → ↑ ↓ nav  ↵ launch`), hidden on narrow screens.
+
+**Session view (default).** Two flex-row siblings inside `.daw-grid`:
+- `.daw-scroll` (flex:1, horizontally scrollable) holds **year lanes** — one column per release year, sorted newest left → oldest right. Each lane is 226px wide with sticky `.daw-lane-head` (year stripe colored by lane index, year title, "N clips", decorative M/S buttons) and a vertically-scrollable `.daw-stack` of clips.
+- `.daw-lane.is-master` (300px, doesn't scroll horizontally) — sticky on the right showing now-playing details: NOW PLAYING kicker · `TRK.NNN · TIER` · lowercase title · year+tags meta · live 64-bar spectrum analyser canvas (gradient fill, sine-bass center scope) · key/value grid (TIER / TAGS / DATE / SLOT) · vertical action stack (▸ details / ▸ soundcloud / ▸ share).
+
+**Clip cell** (`.daw-clip`). Golden-ratio per-track hue (`paletteForCell(idx, tier)` — tier modulates sat/lit only). 5px gradient color stripe at top + 1px hue-tinted border. Header row: 22px launch button (▶ glyph, hue-tinted) + title + `num · MM.DD · TAG` meta. Below the row: per-clip waveform `<canvas>` thumbnail (deterministic procedural — layered sines + hash-noise, drawn once per cell on build, redrawn on resize). Bottom: 2px progress underline that glides with `audio.currentTime` while playing. Hover state brightens border + body. Selected = white outline. **Armed (playing) state** swaps the launch glyph to ■, applies a `daw-armed-pulse` keyframe animation (2s ease-in-out, 22→30px shadow), tints the body gradient with red overlay, and sets the launch button to solid red.
+
+**Arrangement view** (toggle via SESSION/ARRANGEMENT tab). `_buildArrangement` flips `.daw-grid` to `.is-arrange` (overflow-auto). Inner `.daw-arr` has explicit width = `(maxYear - minYear + 1) * 12 * 90px`. Sticky 32px year ruler with major (year-line) and minor (month-line) ticks. 5 horizontal lanes (FEATURED / NEW / HARD / CHILL · VIBE / ARCHIVE), each 56px tall, with sticky-left lane label. Each track = a colored bar absolutely positioned at `((year - minY) * 12 + month + day/30) * 90px`, width based on title length. Hover = lift + white border. Click = launch. Single global vertical playhead line glides across all lanes with `currentTime / duration` of the playing track's bar.
+
+**Audio reactive.** Reuses `audio.__floorAnalyser` cache from `marathon-world.js` so analyser is shared across views (no double-pipelining). 60fps `_drawSpectrum` reads `getByteFrequencyData` into 64 bars + sine-modulated center scope; L/R fake-stereo split derived from `bass + energy` with `* 0.94` peak hold for meter ballistics. Idle wiggle on spectrum so panel doesn't look dead before play. Per-clip waveforms are static (procedural).
+
+**Keyboard.** `Space` = play/pause (resumes suspended `audioCtx`). `R` = shuffle visible clip + focus + scroll into view. `←/→` = jump to first clip of prev/next year column. `↑/↓` = step within current year column. `Enter` = launch selected. `Esc` = clear status. Inputs are skipped (search field still works).
+
+**Filtering.** `_applyVisibility` toggles `.is-hidden` on cells, recomputes per-lane clip counts in lane heads, and updates the top-bar `count` ("N / total CLIPS"). `setFilter` and `setQuery` both flow through `_applyVisibility`.
+
+**Routing changes (`index.html`).** `bootTracksVault` → `bootTracksDaw` (same wakeup pattern, but checks `window.TracksDaw.root` instead of `.scene`). Script tag swapped from module `tracks-vault.js` to classic `tracks-daw.js`. `body.tv-on` and `app.className = 'tv'` are kept since the existing CSS already hides the topbar/miniplayer for them — DAW takes the page over completely. `tracks-vault.js` left in the repo (dormant) for trivial revert.
+
+**New track wired (`config.json`).** Added "Still Looking For You" (file `still looking for you.mp3`) at index 0 — `isNew: true`, dated `2026-05-06`. Verified `audio-mp3/still looking for you.mp3` serves locally with HTTP 206 Partial Content. All views (galaxy, DAW, corridor, object, scenes) read `state.tracks` dynamically — they all pick up the new clip with no per-view changes. **R2 not synced** — production playback needs `bash scripts/upload-audio-to-r2.sh` before next push.
+
+**CSS palette** (Ableton-faithful charcoal). `--daw-bg #131316` / `--daw-panel #1a1a1d` / `--daw-cell #252529` / `--daw-line #34343a` / `--daw-text #d6d6d8` / `--daw-text-mid #9da0a6` / `--daw-text-low #6b6e75` / `--daw-accent #ff7a3d` (orange) / `--daw-record #ee4242` (armed red) / `--daw-arm #f3d04e` (cued yellow) / `--daw-cyan #66ddff` / `--daw-pink #ff7ec3` / `--daw-green #6bdf80`. All borders are 1px solid, no border-radius (sharp DAW edges). Custom webkit scrollbars (10px, dark thumb, hover-lighten). Inter / Space Grotesk / JetBrains Mono families.
+
+**Files touched:** `js/tracks-daw.js` (new, ~830 lines), `index.html` (boot swap + ~580 lines of new `.daw-*` CSS in the `<style>` block), `js/helpers.js` (b202 → b206), `config.json` (new track at index 0), `FILE_MAP.md`, `CHANGELOG.md`.
+
+**Local-only (no Cloudflare push)** per the no-deploy-during-iteration rule. `python serve.py 8000` running for verification at `/tracks` and `/tracks/new`.
+
+---
+
+## b205 — 2026-05-06 — Scenes: POI navigation system + tone-down holographic windows + SCENES_HANDOFF.md
+
+User: *"The illumination is pretty terrible, dude. … all the lights are fucked up and have this weird like holographic thing going on. … there's a lot of still empty space on the military bases. … the different fucking things the different scenes have no context. … I want like points across the map that we built."* → after pitching POI-first plan → *"lets do ur plan pls create md for a new caht tho addressing all"*.
+
+Two-part commit. Builds the discrete-waypoint navigation the user asked for, kills the worst of the "holographic floating cards" reading on lit windows, and writes a handoff doc so a fresh chat can pick up the redesign without re-explaining six prior commits.
+
+**SCENES_HANDOFF.md (new, repo root).** Cross-context catch-up for the active redesign thread. Covers what shipped (b193-b201 panel reposition + broken-dish + lighting passes), open issues (additive-sprite holographic look, empty desert between deck and forward arc, missing scripted-activity layer, abstract scene descriptions), the agreed-on POI-first plan, the deferred build priority list (Pelican loop / patrols / engineer crews / forklift / bivouac campfire / etc.), and conventions (coordinate system, road shader masks, build-bump hook, CLAUDE.md hard rules). Indexed at the top of FILE_MAP.md as **read FIRST in a fresh session**.
+
+**POI navigation (`_buildPOI` + `_gotoPOI` + `_tickPOI`).** 10 named viewpoints across the base. Camera animates pos + yaw + pitch over 1.6s with smoothstep ease (`t*t*(3-2*t)`). Drag-look continues from each POI; the new POI's yaw becomes the new gaze yaw, dragging adjusts from there. Bottom-center HUD strip shows clickable buttons with the POI name + index digit. Keyboard: digits `0-9` jump direct, `N`/`P` cycle next/prev, `ESC` returns to deck (or releases focus first if a panel is focused).
+
+POIs:
+- 0  OBSERVATION DECK — (0, 0, 0) facing N (default)
+- 1  MISSILE SILO — (0, 4, -75) facing the silo
+- 2  BROKEN DISH — (-50, 6, -25) facing the damaged dish
+- 3  SIGINT TOWER — (-30, 4, -35) facing freqmap host
+- 4  LOGISTICS YARD — (30, 4, -35) facing tape-spine yard
+- 5  FORWARD OPS — (15, 4, -55) facing livwall radar
+- 6  COMMS ARRAY — (-15, 4, -55) facing dim shed
+- 7  SE AIRFIELD — (35, 4, +18) facing pelican pad
+- 8  BIOSTATION SW — (-30, 4, +30) facing organism
+- 9  RIDGE VIEW — (0, 18, +30) elevated, facing N over the whole base
+
+Yaws computed from `atan2(dx, -dz)` so the forward-vec aligns with target. Shortest-path yaw lerp (subtracts/adds 2π if dy > π) so transitions don't full-spin. CSS strip styled in `scenes/index.html`: dark backdrop with blur, monospace 10px button labels, accent-debug magenta highlight on the active POI.
+
+**Emissive flicker tone-down.** Old `standoff.windows` tick used ±10% sin amplitude, which combined with additive blending and depthWrite:false made every window read as a "blinking holographic card" floating off the wall. New tick branches by userData type:
+- Standard windows: ±2% sin (steady warm shimmer, no card-blink)
+- Welder pulses (`isWelder`): sharp bright pulses every ~4s (preserved — that's the active-repair narrative on broken dish)
+- Spark sprites (`isSpark`): sustained jitter (preserved — short-circuit reading)
+- Fault windows (`fault: true`, broken-dish plinth): irregular skips (preserved — damaged-but-occupied)
+
+Did NOT switch additive→non-additive on materials this pass — that's a bigger pipeline question (chassis materials would need to lit-respond) and the flicker dampening alone removes the worst of the holographic feel. Revisit if the user still flags it after navigating new POIs.
+
+**Files touched:** `js/scenes-selector.js` (~150 new lines for `_buildPOI`/`_gotoPOI`/`_tickPOI`/`_highlightPOI` + `_onKey` hotkey expansion + animate-loop position rewrite + window-flicker tick branching), `scenes/index.html` (~70 lines new CSS for `.ss-poi-strip`/`.ss-poi-btn`/`.ss-poi-num`), `js/helpers.js` (build chain bumped to b205), `FILE_MAP.md`, `CHANGELOG.md`. New: `SCENES_HANDOFF.md`.
+
+---
+
+## b202 — 2026-05-06 — Tracks: full admin shell — every existing system toggleable, presets, sliders, search-filter, scaffolded events
+
+User: *"think about all weve done to galaxy and scenes. how can we improve tracks now"* → after pitching the gap (galaxy got Far-Cry density, scenes got patrols/personnel, tracks is the only one still static) and a 50-button admin inventory → *"sure but we can fix admin shell to be better encompassing"*.
+
+Step 1 of the tracks improvement plan: build the control panel before adding new content, and make it more comprehensive than galaxy's so the rest of the work plugs in without re-wiring. **Localhost only** — no Cloudflare push.
+
+**Beyond galaxy's admin** (which has ~60 buttons, 13 collapsible sections, ~ shortcut, FX/element toggles, time-scale, capture):
+
+- **Filter search** at the top — type to hide buttons whose label doesn't match. ~50 buttons fit on a laptop screen without it; with it, navigable on a small viewport.
+- **Preset chips** — `default · minimal · cinematic · photo · party`. One click reconfigures bloom strength, FX uniforms, time scale, scene-element visibility, HUD visibility, FOV. Photo additionally hides HUD for clean still-frames.
+- **Sliders alongside toggles** — FOV (40–100), bloom strength (0–2.5), CA amount (0–0.012), helix descent scrub (–180 → +180). Galaxy's panel was buttons-only.
+- **Per-section status** — every toggle has a `<span>ON|OFF</span>` plus a `tv-on` class that wraps the label in `[ ]` when active. Time-scale buttons self-highlight when their value is the current scale.
+- **Master "all on / all off"** in the scene-elements section — covers nebula + starfield + energy stream + dust + glints + shards + pulses + rings + back-glows + panels + 4 core layers in one tap.
+
+**Sections** (collapsible, state persisted to `localStorage`, default open except `events`/`micro` which are stubbed):
+
+1. **presets** — 5 chips
+2. **vault events** — 10 stubs (decryption sweep, courier drone, archive flythrough, panel surge, catalog index, tier rainbow, discovery beacon, stack collapse, glitch storm, track aura) — `disabled`, ship next pass
+3. **micro fx** — 6 stubs (meteor, pulsar, comm scrap, emp flash, bit drift, shelf rumble) — `disabled`
+4. **camera** — reset, hop random, prev/next panel, release focus, FOV slider + ±5 buttons
+5. **feel · motion** — auto-yaw, auto-scroll, drag inertia, bass-rotate (placeholder), helix descent slider
+6. **helix** — reshuffle slot order (re-runs the b148 init shuffle live), density (117/60/30/featured-only)
+7. **filter · tier** — radio: all/featured/new/hard/chill/grunge/vibe (mirrors the existing `tv-chips` row)
+8. **scene elements** — 14 individual toggles + master row. Per-core-layer toggles (inner white / blue / cyan / outer halo)
+9. **post fx** — bloom on/off + strength slider, CA on/off + amount slider, flares, color grade, scanlines, grain, vignette
+10. **time** — pause + 0.25× / 0.5× / 1× / 2×
+11. **capture** — PNG download, hide HUD, random panel hop
+12. **stage** — clear all events (placeholder), reset focus, reset filter, reset camera
+
+**Plumbing changes:**
+
+- `POST_FRAG` now reads 7 uniforms (`uCAOn`, `uCAAmt`, `uFlaresOn`, `uGradeOn`, `uScanOn`, `uGrainOn`, `uVignetteOn`) — each FX block gated on `> 0.5`. CA amount is continuous float; others 0/1. Old hardcoded values become defaults in `_setupComposer`.
+- New TracksVault state: `adminEl`, `_adminTime`, `_paused`, `_timeScale`, `_hudHidden`, `_autoYawOn`, `_autoScrollOn`, `_inertiaOn`, `_bassRotateOn`, `_density`, `backGlows[]`.
+- Animate loop uses `_adminTime` (`rawDt × scale`, scale=0 when paused) for `t`, so pause/scale propagate to every shader uniform sourcing `t` (panels, nebula, dust, energy stream, core, post pass).
+- Bloom strength baseline can be pinned via `bloom._adminBase` so the slider sticks instead of being overwritten every frame by the bass-driven default.
+- `_applyVisibility` respects `p.densityHidden` so density caps survive `setFilter` calls.
+- `_buildEnvironment` stores back-glow sprites in `this.backGlows[]` for toggling.
+- New methods (~430 lines): `_toggleAdmin`, `_buildAdminPanel`, `_adminInitCollapse`, `_adminDispatch`, `_adminToggleElement`, `_adminAllElements`, `_adminToggleFx`, `_adminSetFov`, `_adminSetBloom`, `_adminSetCA`, `_adminReshuffleSlots`, `_adminSetDensity`, `_adminSavePng`, `_adminApplyPreset`, `_adminRefreshLabels`.
+- HUD `[ admin ]` link added beside `← galaxy` / `scenes`. `~` / `` ` `` keyboard shortcut in `_onKey`.
+
+**Files touched:** `js/tracks-vault.js` (~520 new lines), `index.html` (~150 new CSS lines for `.tv-admin*` — collapsible sections, sliders, search, presets, mobile drawer), `js/helpers.js` (b201 → b202), `FILE_MAP.md` build header, `CHANGELOG.md`.
+
+**Why no events yet.** Scaffolded as `<button disabled>` with a "soon" hint chip. Step 2 ships scintillation + starfield + 1 ship; step 3 wires the 10 vault events into these stubs.
+
+---
+
+## b201 — 2026-05-06 — Catalog cull: drop 14 archived tracks across galaxy / tracks / corridor / object / wall
+
+User: *"remove these songs i dont like them - from all (galaxy, tracks, etc)"* + a "hidden archive" list of 14 files.
+
+The galaxy, tracks vault, signal corridor, and the object all read from `config.json#tracks`, so cutting them at the source removes them everywhere automatically. Removed entries:
+
+- Peep Demo (`Project_song_may22_peepdemo2.mp3`)
+- Arkham Villain (`arkham villain.mp3`) — was `isFeatured: true`
+- May Flowers (`Project_song_apr12_may flowers.mp3`)
+- Rap About Some Bullshit (`rap about some bullshit 3.mp3`)
+- First Rap in a While (`first rap in a while.mp3`)
+- Space Star Galactica (`SPACE STAR GALACTICA.mp3`)
+- What Changed With U (`what changed w u cworld kazoo.mp3`)
+- Moods (`MOODS ROLO.mp3`)
+- Greatest Consequences (`greatest consequences.mp3`)
+- What U Expect of Me (`what u expect of me - jayzlinkinpark.mp3`)
+- Nirvana (Alt Lyrics) (`nirvana dannz0-differentlyrics.mp3`) — original `Nirvana` is kept
+- Wind Blows (`WIND BLOWS_3.mp3`)
+- Stop Light (`STOP LIGHT.mp3`)
+- Skeat x Kani (`skeatxkanikani.mp3`)
+
+Catalog drops 118 → 104 tracks. The track-count constants in the WebGL views (helix slot count `117`, corridor card count `117`, object Voronoi cell count `117`) are derived from `tracks.length` at runtime, so they automatically resize to 104.
+
+`featured` / `newReleases` lists in `config.json` were already keyed off slugs that don't intersect this cull set, so they need no edit. None of the removed slugs are referenced from `_redirects`, `index.html`, or any view file.
+
+**`js/wall.js` icon overrides.** The hidden-archive cull orphaned 5 entries in the `ICON_OVERRIDES` table (`space star → spaceship`, `arkham → villainmask`, `stop light → trafficlight`, `wind blows → windmill`, `may flowers → raincloud`) — removed. The `nirvana → wonkysmile` override stays because the original `Nirvana` track is still in the catalog (only the alt-lyrics version was cut).
+
+**Not touched:** the actual MP3s on R2 / in the local `audio-mp3/` cache stay where they are — only the catalog references are gone, so the files are now orphaned but harmless. Re-adding any of these would just be a `config.json` insert (the audio is still there).
+
+**Files touched:** `config.json` (14 track entries removed), `js/wall.js` (5 icon overrides removed), `js/helpers.js` (b200 → b201), `FILE_MAP.md`, `CHANGELOG.md`.
+
+**No Cloudflare push** per the no-deploy-during-iteration rule. JSON re-validated with `python -c "json.load(...)"` — track count 104, structure intact.
+
+---
+
+## b200 — 2026-05-06 — Tracks Vault: SoundCloud links + persistent transport + tag-constellation + keyboard shortcuts
+
+User: *"http://localhost:8000/tracks — how can we improve this page since we changed so much with the other ones. think cool dont be lazy really put urselv to work. songs should have a way of linking to the soundcloud little icon, otherwise think of some crazy stuff"*.
+
+The spire was already pretty, but it had no transport, no SC link, no keyboard, and no inter-track signal once a song started. b200 turns it into a real player — and exposes the catalog's hidden tag graph.
+
+**SoundCloud link.** New `↗ soundcloud` action button on the focus card, real SC mark inlined as SVG (orange `#ff7a3d` strokes for the cloud + bars). Resolves URL via `track.links.soundcloud` → `track.links.sc` → ctx-passed `scUrl(title)` → constructed `https://soundcloud.com/kanisongs/<slug>` fallback. Same icon mirrored as a circular button in the new transport strip so it's reachable without focusing the panel. Each panel canvas texture also stamps a small `↗ SC` glyph under the tier badge so you can see at a glance that the link exists.
+
+**Persistent transport strip (`tv-now`, bottom-center).** Always-on while a track is loaded:
+- prev / play-pause / next / shuffle / scrub-progress / `mm:ss / mm:ss` time / SC
+- progress bar is full-width inside the row and supports click-to-seek + pointer-drag scrubbing (uses `setPointerCapture` + `onSeek(pct)` callback wired to `audio.currentTime`)
+- play/pause glyph swaps live based on `audio.paused`
+- title is clickable — focuses the playing panel
+- audio-reactive shadowed glow on the fill bar
+- bottom-right filter chips auto-shift up to `bottom:90px` when the strip is visible (via `:has(.tv-now.on)`) so they don't collide
+
+**Tag-constellation lines (`_buildTagIndex` / `_rebuildConstellation` / `_tickConstellation`).** When a track plays, additive `THREE.Line` segments draw from the playing panel to every panel sharing one of its tags. Lines breathe on individual phases (`0.5 + 0.5 sin(t * 0.9 + phase)`) and lift with bass. Untagged tracks get a fallback constellation: nearest 6 tier-mates by `basePos.distanceToSquared`. Constellation rebuilds on every `onTrackChange`. Lines update positions every frame against current panel positions (continuous scroll keeps moving them). Color = playing track's tint.
+
+**Shuffle (`_shuffle`).** Random visible track is picked, the helix focuses it, audio plays. Avoids re-picking the currently-playing track when alternatives exist. Surfaced as a `⤬ shuffle` chip in the bottom-right filter row AND as a `⤬` button inside the transport strip.
+
+**Keyboard shortcuts (`_onKey`).**
+- `Space` — play/pause (resumes suspended `audioCtx`)
+- `R` — shuffle
+- `←` / `→` — focus prev / next visible panel (`_focusByOffset`)
+- `S` — copy share URL of focused (or playing) panel via `ctx.onCopy` + `ctx.onToast`
+- `Esc` — release focus (existing)
+- text inputs are skipped (search field still works)
+
+**ctx wiring (`bootTracksVault` in `index.html`).** New callbacks passed through: `onNext: playNext`, `onPrev: playPrev`, `onSeek: pct => audio.currentTime = pct * audio.duration`, `onCopy: copyText`, `onToast: toast`, `scUrl`. None of these existed in the v2 ctx — `TracksVault` previously only had `onPlay/onTogglePlay/getCurrent`.
+
+**HUD shuffle hint** (`tv-shuffle-hint` under `.tv-tr`). Small kbd-styled hint: `SPACE play  R shuffle  ←→ jump`. Hidden on mobile.
+
+**Files touched:** `js/tracks-vault.js` (HUD additions, `_buildTagIndex`/`_rebuildConstellation`/`_tickConstellation`, `_updateNowPlaying`/`_fmtTime`, `_scUrlFor`, `_shuffle`, `_focusByOffset`, expanded `_onKey`, animate-loop hooks, destroy cleanup, panel-texture SC stamp), `index.html` (`.tv-now*` / `.tv-act-sc` / `.tv-shuffle-hint` / `.tv-sc-glyph` CSS + bootTracksVault ctx), `js/helpers.js` (b199 → b200), `FILE_MAP.md`, `CHANGELOG.md`.
+
+**No Cloudflare push** per the no-deploy-during-iteration rule. `python serve.py 8000` running for verification.
+
+---
+
+## b199 — 2026-05-06 — Scenes: v2 radial layout — panel reposition + broken-dish redesign + BASEMAP.md spec
+
+User: *(after parsing screenshots showing the right-flank cluster pile-up at the airfield + neural + helipad + commtower stack, and the "broken radar dish" the user said planes should fly through)* → built top-down ASCII map → user *"can u improve it and its design. and id want it cool as fruck, tanks moving across roads to warehouses, a place fro scripted ships to come leave land unload etc etc. engineers tinkering, shit that happens on a military installation."* → after pitching the radial-zone redesign + activity catalog → *"fucking love it"* → *"do whatver u think is best but MD this stuff so u have memory if we gota mvoe to new context"*.
+
+Foundation pass for the v2 base. Locks panel coordinates to the radial spec (every panel ≥18u from any other in (x,z)) and rebuilds the deep-sea host as a properly damaged dish. All v2 scope (Pelican landing loop, patrol vehicles, engineer crews, forklifts, bivouac NPCs, sensor pylon ring) keys off these new positions, so this commit unblocks everything.
+
+**BASEMAP.md (new, repo root).** Persistent design spec — panel coords, per-zone activity script, road network, build priority for b193→b202. Loaded by future chats so we don't rebuild the design from screenshots each session. Indexed in FILE_MAP.md.
+
+**Panel reposition (`_buildPanels` mounts table).** Coordinates locked to 11 radial bearings:
+
+| Panel | Bearing | Old pos (x,z) | New pos (x,z) |
+|---|---|---|---|
+| galaxy | 0° | (-55, -78) | (0, -88) |
+| dimensions | -20° | (-58, -49) | (-26, -70) |
+| livingwall | +20° | (20, -42) | (26, -70) |
+| freqmap | -42° | (-38, -25) | (-43, -48) |
+| tape spine | +42° | (60, -2) | (43, -48) |
+| deepsea | -62° | (-72, -38) | (-66, -35) |
+| neural | +62° | (52, -16) | (66, -35) |
+| organism | -135° | (12, 28) | (-42, 42) |
+| wall | +135° | (45, 32) | (42, 42) |
+| terrain / villa | rail kiosks | unchanged | unchanged |
+
+This kills the right-flank pile-up (helipad + neural + comm tower + supply depot all in a 40×30u box) and the symmetric left-flank antenna stack. Galaxy moves to dead-axis dead-deepest as the hero feature — camera always re-centers on the silo.
+
+**Broken-dish redesign (`_buildBrokenDish`, replaces deepsea host).** New host kind. Large parabolic dish with east half of rim sagging at -0.45 rad, support truss broken on one side (visibly severed beam), scaffolding propping the broken edge, hazard cones around base, sparking sprite at break point with additive flicker. Aviation strobe blinks irregularly (fault behavior — random skip frames). Welder additive pulse on scaffold every 4s. Panel mounts on the intact west half of the rim. **Flyby-through gag wired in:** `standoff.brokenDishGap = { x, y, z, normal }` exposed so the existing `_tickFlybys` longsword spawner can detour formations through the gap on every 3rd flyby (wire-up arrives in b196).
+
+**Host kinds added (`_buildPanelHost` switch):** `comms_array_shed`, `forward_ops_radar`, `sigint_tower`, `logistics_yard`, `broken_dish`, `sensor_pylon`, `biostation_quarantine`, `back_billboard_lattice`. The pre-v2 hosts that lost their panel mount (`radarbuilding` for livwall, `commtowerbig` for freqmap, `antenna_shed` for dimensions, `supplydepot_top` for tape spine, `back_billboard` for wall+neural, `biostation` for organism) are no longer referenced in the mounts table. Their `_buildXxx` builders stay in the file for now (will be removed in b194 if nothing else needs them).
+
+**Roads.** Added forward cross-road @ z=-50 (x ∈ [-66, 66], 3.5u half-width) so vehicles can move E↔W between SIGINT tower and logistics yard without going all the way around the perimeter. Added back cross-road @ z=+30 for supply convoy. Added airfield spur @ x=+50, z ∈ [+30, +55].
+
+**Local-only (no Cloudflare push)** per the no-deploy-during-iteration rule. `python serve.py 8000` running for verification.
+
+**Files touched:** `js/scenes-selector.js` (panel mounts table rewrite, 8 new `_buildPanelHost` cases, new `_buildBrokenDish` ~140 lines, road shader masks updated, deprecated host builders left in place), `js/helpers.js` (build bumped through hook chain to b199), `FILE_MAP.md`, `CHANGELOG.md`. New: `BASEMAP.md`.
+
+---
+
+## b198 — 2026-05-06 — Fix audio playback on localhost — force /audio-mp3/ + Range-request support in serve.py
+
+User: *"(index):1924 [audio] loading: https://pub-...r2.dev/jolly%20mood... only loads but doesnt do anything"* → after first fix → *"none of these play, 1 got an error. but still the corner top left media player doesnt move even if its been 30 seconds or whatever like stuck loading"*.
+
+Two stacked bugs. b198 unblocks both.
+
+**1. R2 silently stalls on localhost.** `audioBase` from `config.json` is `https://pub-....r2.dev/...`, and `<audio crossOrigin="anonymous">` triggers a CORS preflight. The R2 bucket doesn't whitelist `localhost:8000`, so the audio element loads metadata but never streams data — and crucially, **no `error` event fires**, so the existing `/audio-mp3/` fallback at [index.html:1891](index.html#L1891) never triggers. Patch: detect `localhost`/`127.0.0.1` after `config.json` resolves and override `state.audioBase = '/audio-mp3/'` before any track loads ([index.html:2856-2864](index.html#L2856-L2864)).
+
+**2. `serve.py` ignores HTTP Range requests.** Python's `SimpleHTTPRequestHandler` returns full `200 OK` for everything, even when the browser sends `Range: bytes=N-M`. Chromium-based browsers (Vivaldi, Chrome, Edge) treat that as broken seeking support and `audio.play()` never resolves — currentTime stays `0:00` even though metadata loaded. The user's symptom — "stuck loading 30 seconds" — is exactly this. Added `_serve_with_range()` to `serve.py`: parses `Range:` headers, returns `206 Partial Content` with proper `Content-Range`/`Accept-Ranges` headers, streams in 64 KiB chunks. Wired in via a new `RANGE_EXTS` list (mp3, m4a, ogg, wav, webm, mp4); non-media paths fall through to the standard handler. Also overrode `do_HEAD` so HEAD requests behave consistently. Confirmed working: `curl -I -H "Range: bytes=0-100" http://localhost:8000/audio-mp3/dutch.mp3` now returns `206 Partial Content` with `Content-Range: bytes 0-100/1113487`.
+
+Side note on the `AbortError: play() interrupted by new load request` the user saw mid-debug — that's the natural fallout of clicking the next button 7 times while waiting for any track to start. With Range working, a single click plays immediately and the cascade won't reproduce. Not adding debouncing — clicking 7 next-buttons in 2 seconds genuinely should abort previous play()s.
+
+**Files touched:** `index.html` (+8 lines: localhost audioBase override after config.json fetch), `serve.py` (+~55 lines: Range-aware media handler + do_HEAD), `js/helpers.js` (b197 → b198), `FILE_MAP.md`, `CHANGELOG.md`.
+
+---
+
+## b192 — 2026-05-06 — Galaxy: Far-Cry-density ambient layer — micro fx tier, 4 new mid scenarios, twinkling starfield, per-title scintillation
+
+User: *"follow far cry framework, something new every 30 seconds. animation, something happening, etc. what other scripted ship things can we do? id love more cool stuff explroation like shit. also what can wo about song titles. they feeel boring and static, like still in space."* → after pitching tiers + ideas → *"well do all"* (+ *"dont deploy to cloudflare until i say so, but run a localhost"*).
+
+The 18-scenario pool (b189–b190) only fires every 22–40s. Long stretches between firings read as dead air, and the song titles felt frozen against the void even when ships were on screen. b192 adds a third **micro tier** firing every 5–12s, four new mid-tier scenarios, a real starfield, and per-title brightness life.
+
+**Localhost-only.** No Cloudflare push (per re-issued no-deploy rule). `python serve.py 8000` running for galaxy/tracks/scenes during iteration.
+
+**Micro tier — fires every 5–12s, anti-repeat memory of 3 (`_tickMicroScheduler`, `_fireRandomMicro`, `_tickMicroFx`):**
+- `meteor` — fat bright streak across one quadrant in ~1.8s (separate from existing `_tickStreaks` ambient — bigger plane, brighter, deliberate one-shot)
+- `pulsar` — fixed-position blinker, ~12s lifespan, sharp 1.4–1.9 Hz square-pulse rhythm with squared-sine envelope (sharp peak, dim tail)
+- `buzz` — single banshee tearing past camera at 170 u/s (vs 80–120 standard), 1.6s life, off-axis pass close to forward vector
+- `comm` — short text scrap ("…CONTACT BEARING 2-7-9…", "…UPLINK NOMINAL…", 11 variants) faded in/out near a random title using `TITLE_FRAGMENT` shader at 0.35-peaked triangle envelope
+- `emp` — bright sphere flash from far point, 0.55s, sharp rise (12% sqrt curve) + 88% pow-1.6 falloff, scale grows 2 → 20
+- `drone` — tiny octahedron darting between two random titles on a 1.4–1.9s arc with mid-flight perpendicular bump, head-glow sprite child
+
+Each fx tracks `life`/`maxLife` locally and disposes its own geometry/material/textures via `cleanup()`. The `_tickMicroFx` loop walks the array in reverse and splices completed entries.
+
+**Mid scenarios — added to `_fireRandomScenario` pool (now 22 ship-scenarios + the 4 focus-only):**
+- `pirate` — 3 banshees chase 1 pelican target. Target weaves on two perpendicular axes; chasers home toward target with side-bias slot offsets (lateral ±9, vertical ±3), continuous barrel rolls, opportunistic red bolt fire (0xff5060) at 0.55–1.05s cooldown
+- `patrol` — 2 pelicans painted as **emergency response** (per user spec — "PELICAN UNSC SHIP but different colors like an emergency response military vehicle space lights on"). 4 strobe sprites attached to each `outer` group: red ports + blue starboards. Sharp `pow(sin, 6)` peaks at ~1.6 Hz, alternating phase between red/blue. Slow 30 u/s lumbering speed
+- `comet` — bright nucleus + 22-sprite trail crossing the full 360° on a great-circle path (220 u in, 220 u out). Trail sprites lag 1.4 + i*1.6 units behind nucleus; color gradient white-hot → ice-blue → deep-blue. ~12s traversal, fade-in/out at 8% endpoints
+- `eva` — pelican holds station with breathing drift; small astronaut figure (capsule torso + sphere helmet visor + boxy backpack) drifts on a slack tether (Line geometry between anchor-local and figure-local), reels in over the last 3.5s
+
+All four are wired into `_tickScenario` with proper case clauses; cleanup callbacks dispose attached sprites/lines/figures so ship pool reuse stays safe.
+
+**Starfield (`_buildStarfield`, `_tickStarfield`):**
+- 2200-star Points cloud at radius 380–450 (between titles at 130 and nebula at 600). Custom shader; per-vertex `aPhase`/`aRate`/`aSize`/`aTone` attributes mean every star has its own twinkle frequency (0.4–2.5 Hz) and phase
+- Brightness oscillation 0.25–1.0 (never fully off — they're stars, not strobes), gl_PointSize scales by `90/(-mv.z)` so apparent angular size stays stable
+- Color: cool blue-white ↔ warm peach mix via `aTone`, smoothstep-blended in fragment shader. Pareto-ish size distribution: 85% tiny (0.6–1.6), 15% noticeably bigger (1.7–7.7) for sparse "lead stars"
+- `renderOrder = -1` so titles paint over them; `frustumCulled = false` so they're always present in the 360° dome
+
+**Per-title scintillation — extends `TITLE_FRAGMENT`:**
+- New uniforms: `uBreath` (±0.05 brightness offset, slow per-title sine driven by flickerSeed in animate loop) and `uTwinkle` (0..1 brief flash, eased toward target at dt*16 attack / dt*6 release)
+- Twinkle scheduler distinct from existing `_burstNext` (which boosts `uHover` for glitch+RGB-split). Twinkle fires every 0.8–1.5s on a random title, brightening for 0.18–0.38s. Multiple can overlap so the field reads as scintillating-stars-of-different-distances rather than "one title is doing something"
+- Both effects multiply col + a in the shader so they affect both luminance and alpha — small bumps but the cumulative reading is "void is alive"
+
+**Files touched:** `js/marathon-world.js` (~600 new lines: TITLE_FRAGMENT shader uniforms + math, title material uniforms in `_buildTitles` + `_buildFragments`, animate-loop drive of breath/twinkle, `_buildStarfield` + `_tickStarfield`, init insertion after `_buildNebula`, animate-loop tick wiring for starfield + microFx + microScheduler, full micro-tier section after `_fireRandomScenario`, four new `_spawnPirateAmbush`/`_spawnPatrolPair`/`_spawnComet`/`_spawnEvaTether` methods + matching `_tickScenario` clauses, scenario pool updated), `js/helpers.js` (b191 → b192), `FILE_MAP.md`, `CHANGELOG.md`.
+
+---
 
 ## b191 — 2026-05-06 — Deploy: ship `/`, `/tracks`, `/scenes` (galaxy index + catalog + scenes selector) to Cloudflare Pages
 
