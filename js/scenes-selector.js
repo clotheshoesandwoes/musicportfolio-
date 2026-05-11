@@ -135,6 +135,7 @@ const ScenesSelector = {
   gaze: null, drag: null,
   hudEl: null, destroyed: false,
   arc: null, floor: null,
+  labels: null,
 
   init(container) {
     if (this.renderer) return;
@@ -142,6 +143,9 @@ const ScenesSelector = {
     this.panels = [];
     this.hovered = null;
     this.focused = null;
+    // s13: debug label overlay (?labels=1 or L key) — see docs/scenes/LABEL_OVERLAY_PLAN.md
+    const wantLabels = new URLSearchParams(location.search).get('labels') === '1';
+    this.labels = { enabled: wantLabels, sprites: [], texCache: new Map() };
     this.mouse = { x: 0.5, y: 0.5, ndc: new THREE.Vector2(0, 0) };
     this.gaze = { yaw: 0, pitch: -0.05 };
     this.drag = { active: false, x0: 0, y0: 0, lx: 0, ly: 0, totalPx: 0 };
@@ -183,7 +187,18 @@ const ScenesSelector = {
     this._buildWatchtowers();          // b171: 4 perimeter watchtowers
     this._buildPerimeterClutter();     // b171/b227: real rectangular double fence + razor wire + conex stacks on flanks
     this._buildDeckFlankFill();        // b237: fill the empty zones between deck and panel arc — guard shacks, equip sheds, drums, pallets, floods
-    this._buildOuterCompounds();       // s4: BIG silhouette anchors in the wide flanks (x=±78..±110) — propellant tank farm, hangar, secondary silo, SAM battery
+    // s12: _buildOuterCompounds DISABLED — the 4 anchors at (±95, -25/-65)
+    // and (±92, -100) read as "ugly distant cities" outside the base
+    // perimeter loop. User wants buildings ON the road grid INSIDE the base.
+    // Definition kept in file for now in case we re-enable selectively.
+    // this._buildOuterCompounds();
+    this._buildNWQuadrantFill();       // s5: layered fill for the NW quadrant (broken-dish POI) — SIGINT vans, relay tower, maintenance pad, aid station, conex depot, watchtower
+    // s12: _buildSWQuadrantFill DISABLED — the 7-cluster fill piled up
+    // around the biostation panel from BIOSTATION SW POI no matter how many
+    // times we shifted individual buildings off the S-perim road. Ripping
+    // out the cluster; re-add selectively in defined grid plots if user
+    // wants stuff back. Definition kept in file.
+    // this._buildSWQuadrantFill();
     this._buildAllStructures();        // b173/b193: now only ensures missile silo (other hosts inline)
     this._buildFloorProps();
     this._buildPanels();
@@ -197,6 +212,7 @@ const ScenesSelector = {
     this._buildTents();                // b184: 3 bivouac clusters of GP-medium tents
     this._buildPersonnel();            // b184: 8 soldiers walking between tents/buildings
     this._buildScorpions();            // b173: 1 parked Scorpion tank + 1 slow patroller
+    this._buildLabels();               // s13: debug ID labels (?labels=1 / L key)
     this._setupComposer();
 
     this.clock = new THREE.Clock();
@@ -572,6 +588,7 @@ const ScenesSelector = {
      Replaces the painted-helipad reading of the immediate ground. */
   _buildHexDeck() {
     const grp = new THREE.Group();
+    grp.name = 'hex_deck';
     const deckR = 12.0;
     const floorY = -8.0;
     const deckH = 0.40;
@@ -777,6 +794,7 @@ const ScenesSelector = {
      fills the otherwise-empty far-right zone. */
   _buildFuelDepot() {
     const grp = new THREE.Group();
+    grp.name = 'fuel_depot';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const tankPaint = new THREE.MeshBasicMaterial({ color: 0x6a6a4a });
     const tankBand = new THREE.MeshBasicMaterial({ color: 0x4a4a32 });
@@ -877,6 +895,7 @@ const ScenesSelector = {
      adds visual density to the otherwise sparse back-left zone. */
   _buildAntennaArray() {
     const grp = new THREE.Group();
+    grp.name = 'antenna_array';
     const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
     const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
 
@@ -972,6 +991,7 @@ const ScenesSelector = {
 
     positions.forEach(({ x, z, lightColor }) => {
       const grp = new THREE.Group();
+      grp.name = `watchtower_${x}_${z}`;
       const towerH = 14;
       const baseW = 2.8;
       // 4 lattice legs
@@ -1200,6 +1220,7 @@ const ScenesSelector = {
     const conexPalette = [0x3a4030, 0x4d4730, 0x36404f];
     const buildConexStack = (x, z, yaw, count) => {
       const grp = new THREE.Group();
+      grp.name = `conex_stack_${x}_${z}`;
       for (let i = 0; i < count; i++) {
         const col = conexPalette[(i + Math.abs((x | 0) + (z | 0))) % 3];
         const mat = new THREE.MeshBasicMaterial({ color: col });
@@ -1251,6 +1272,7 @@ const ScenesSelector = {
 
     const buildGuardShack = (x, z, yaw) => {
       const grp = new THREE.Group();
+      grp.name = `guard_shack_${x}_${z}`;
       const shack = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3.0, 2.6), concrete);
       shack.position.y = 1.5;
       grp.add(shack);
@@ -1283,6 +1305,7 @@ const ScenesSelector = {
 
     const buildEquipShed = (x, z, yaw) => {
       const grp = new THREE.Group();
+      grp.name = `equip_shed_${x}_${z}`;
       const W = 5.0, H = 3.2, D = 3.6;
       const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), olive);
       body.position.y = H / 2;
@@ -1333,6 +1356,7 @@ const ScenesSelector = {
 
     const buildPalletStack = (x, z, yaw) => {
       const grp = new THREE.Group();
+      grp.name = `pallet_stack_${x}_${z}`;
       const pallet = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 1.8), olive);
       pallet.position.y = 0.09;
       grp.add(pallet);
@@ -1396,6 +1420,7 @@ const ScenesSelector = {
 
     const buildCommUplinkTrailer = (x, z, yaw) => {
       const grp = new THREE.Group();
+      grp.name = `comm_uplink_trailer_${x}_${z}`;
       // Trailer box (camouflage-olive, longer than the equip shed)
       const tW = 3.4, tH = 2.0, tD = 5.4;
       const body = new THREE.Mesh(new THREE.BoxGeometry(tW, tH, tD), olive);
@@ -1478,6 +1503,7 @@ const ScenesSelector = {
       // Row of HESCO Bastion barriers — wire-frame cubes filled with rubble.
       // Real-world ubiquitous on FOBs, instantly reads as a fortified wall.
       const grp = new THREE.Group();
+      grp.name = `hesco_row_${x}_${z}`;
       const cubeW = 1.4, cubeH = 1.3, cubeD = 1.1;
       const fillMat = new THREE.MeshBasicMaterial({ color: 0x4a4438 });
       const meshMat = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
@@ -1520,6 +1546,7 @@ const ScenesSelector = {
     const buildParkedWarthog = (x, z, yaw) => {
       const car = this._buildWarthogMesh(olive, oliveHi, steel,
         new THREE.MeshBasicMaterial({ color: 0x191d28 }));
+      car.name = `parked_warthog_flank_${x}_${z}`;
       car.position.set(x, -8, z);
       car.rotation.y = yaw;
       this.scene.add(car);
@@ -1595,6 +1622,7 @@ const ScenesSelector = {
     // (was -98/-120 — bracket center sat at z=-109, 9u north of the silo).
     [[14, -110], [-14, -110], [14, -126], [-14, -126]].forEach(([px, pz]) => {
       const grp = new THREE.Group();
+      grp.name = `stadium_pylon_${px}_${pz}`;
       grp.position.set(px, -8, pz);
       const pylonH = 14;
       const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, pylonH, 5), steel);
@@ -1628,6 +1656,7 @@ const ScenesSelector = {
     // 2 yellow construction lamp stands, aimed at the broken rim
     [[-58, -30], [-66, -28]].forEach(([sx, sz]) => {
       const grp = new THREE.Group();
+      grp.name = `scaffold_floodlight_${sx}_${sz}`;
       grp.position.set(sx, -8, sz);
       const tripodMat = new THREE.MeshBasicMaterial({ color: 0x3a3416 });
       // Tripod
@@ -1935,8 +1964,9 @@ const ScenesSelector = {
       { x: padX - 8,  z: padZ + 9, color: 0xfff0c8 },
       { x: padX + 8,  z: padZ + 9, color: 0xfff0c8 },
     ];
-    standPositions.forEach(s => {
+    standPositions.forEach((s, i) => {
       const grp = new THREE.Group();
+      grp.name = `pelican_floodlight_${i}`;
       grp.position.set(s.x, padY, s.z);
       // Tripod legs (3 splayed cylinders)
       [0, Math.PI * 2 / 3, Math.PI * 4 / 3].forEach(theta => {
@@ -2071,11 +2101,13 @@ const ScenesSelector = {
 
     // Engineer 1 — kneeling at access panel near rear ramp (right of ramp)
     const e1 = buildEngineer(true);
+    e1.name = 'engineer_kneeling';
     e1.position.set(padX + 1.6, ground + 1.2, padZ - 6.0);  // slightly elevated on the pad
     e1.rotation.y = -Math.PI / 4;
     this.scene.add(e1);
     // Engineer 2 — standing, holding clipboard, at left rear of pelican
     const e2 = buildEngineer(false);
+    e2.name = 'engineer_clipboard';
     e2.position.set(padX - 2.2, ground + 1.2, padZ - 5.0);
     e2.rotation.y = Math.PI / 6;
     // Add a small clipboard prop in left hand
@@ -2088,6 +2120,7 @@ const ScenesSelector = {
     this.scene.add(e2);
     // Engineer 3 — standing, beside the right wing inspection point
     const e3 = buildEngineer(false);
+    e3.name = 'engineer_inspector';
     e3.position.set(padX + 4.5, ground + 1.2, padZ + 1.0);
     e3.rotation.y = -Math.PI / 2;
     this.scene.add(e3);
@@ -2134,14 +2167,15 @@ const ScenesSelector = {
   },
 
   _buildTents() {
-    const cluster = (cx, cz, jitterRot = 0) => {
+    const cluster = (cx, cz, jitterRot = 0, tag = '') => {
       const layout = [
         { dx:  0,    dz:  0,    yaw:  0.05 },
         { dx: -5.2,  dz:  1.6,  yaw: -0.18 },
         { dx:  5.4,  dz: -1.4,  yaw:  0.22 },
       ];
-      layout.forEach(spec => {
+      layout.forEach((spec, i) => {
         const tent = this._makeTent(4.0, 5.5, 2.4);
+        tent.name = `tent_${tag || cx + '_' + cz}_${i}`;
         tent.position.set(cx + spec.dx, -8, cz + spec.dz);
         tent.rotation.y = spec.yaw + jitterRot;
         this.scene.add(tent);
@@ -2155,8 +2189,8 @@ const ScenesSelector = {
     // b214: SE bivouac was sitting at (22,16) inside the motor pool spread
     // — tents, hogs, scorpion all clustered in the same 12u square. Pulled
     // west to (8,24) so the bivouac and the airfield read as separate zones.
-    cluster(-26,  20, 0.18);   // SW bivouac (clear of biostation @ -42,+42)
-    cluster(  8,  24, -0.20);  // SE bivouac (clear of motor pool x∈[32,50])
+    cluster(-26,  20, 0.18, 'sw_bivouac');   // SW bivouac (clear of biostation @ -42,+42)
+    cluster(  8,  24, -0.20, 'se_bivouac');  // SE bivouac (clear of motor pool x∈[32,50])
     // Removed N bivouac — now overlapped by the new comms-array shed and
     // missile silo at the deeper N positions.
   },
@@ -2233,6 +2267,7 @@ const ScenesSelector = {
     ];
     routes.forEach((r, i) => {
       const fig = makeFigure();
+      fig.name = `personnel_${i}`;
       fig.userData.from = new THREE.Vector2(r.from[0], r.from[1]);
       fig.userData.to   = new THREE.Vector2(r.to[0],   r.to[1]);
       fig.userData.dist = fig.userData.from.distanceTo(fig.userData.to);
@@ -2372,6 +2407,7 @@ const ScenesSelector = {
     // b214: pulled west from (28,16) so the tank doesn't crowd the parked
     // Warthogs (now at z=8/12/22) — sits at the airfield's west edge.
     const parked = this._buildScorpionMesh();
+    parked.name = 'scorpion_parked';
     parked.position.set(22, -8, 14);
     parked.rotation.y = Math.PI * 0.65;
     this.scene.add(parked);
@@ -2380,6 +2416,7 @@ const ScenesSelector = {
     // CLOCKWISE and offset by half a loop so the two vehicles read as
     // coordinated patrol — they meet on opposite sides of the base.
     const mover = this._buildScorpionMesh();
+    mover.name = 'scorpion_patrol';
     mover.userData.t = 296;  // total/2 = 592/2 — start opposite the Warthog
     this.scene.add(mover);
     this.patrolScorpion = mover;
@@ -2514,6 +2551,7 @@ const ScenesSelector = {
 
   _buildDish(x, y, z, dishR, strobeColor, baseYaw) {
     const grp = new THREE.Group();
+    grp.name = `dish_${x}_${z}`;
     grp.position.set(x, y, z);
     grp.userData.baseYaw = baseYaw;
     grp.rotation.y = baseYaw;
@@ -2651,6 +2689,7 @@ const ScenesSelector = {
      billboard at (-66, 8, -35). */
   _buildBrokenDish() {
     const grp = new THREE.Group();
+    grp.name = 'broken_dish_geom';
     const x = -70, y = -8, z = -38;
     grp.position.set(x, y, z);
     const baseYaw = Math.atan2(-x, -z);  // face origin
@@ -2880,6 +2919,7 @@ const ScenesSelector = {
 
   _buildCommTower(x, y, z, height, lightColor) {
     const grp = new THREE.Group();
+    grp.name = `comm_tower_${x}_${z}`;
     grp.position.set(x, y, z);
     const mat = new THREE.MeshBasicMaterial({ color: 0x3a4050 });
     const accentMat = new THREE.MeshBasicMaterial({ color: 0x32384a });
@@ -2953,6 +2993,7 @@ const ScenesSelector = {
 
   _buildBunker(x, y, z, w, h, d, glowColor) {
     const grp = new THREE.Group();
+    grp.name = `bunker_${x}_${z}`;
     grp.position.set(x, y, z);
     grp.rotation.y = Math.random() * Math.PI * 2;
     const wallMat = new THREE.MeshBasicMaterial({ color: 0x36404f });
@@ -3088,6 +3129,7 @@ const ScenesSelector = {
       `,
     });
     this.planet = new THREE.Mesh(planetGeo, planetMat);
+    this.planet.name = 'planet';
     this.planet.position.set(-110, 12, -130);
     this.scene.add(this.planet);
 
@@ -3489,6 +3531,7 @@ const ScenesSelector = {
      physics pool so it falls, bounces, rolls and accumulates on the floor. */
   _buildScriptedPelican() {
     const grp = new THREE.Group();
+    grp.name = 'pelican_scripted';
     const sz = 1.0;
     const bodyMat = new THREE.MeshBasicMaterial({ color: 0x363640 });
     const engineColor = 'rgba(140, 200, 255, 1.0)';
@@ -4675,7 +4718,7 @@ const ScenesSelector = {
       { scene: SCENES[4], pos: [ 43,   5, -48], size: [8,  4.8],  host: 'logistics_yard' },          // tape spine → logistics yard (containers)
       { scene: SCENES[7], pos: [-66,   7, -35], size: [11, 6.6],  host: 'broken_dish' },             // deepsea   → BROKEN parabolic dish (sparking, scaffold, flyby gag)
       { scene: SCENES[8], pos: [ 66,   7, -35], size: [7,  4.2],  host: 'sensor_pylon' },            // neural    → sensor pylon w/ obelisk ring
-      { scene: SCENES[2], pos: [-42,   4,  42], size: [7,  4.2],  host: 'biostation_quarantine' },   // organism  → biostation w/ quarantine perimeter
+      { scene: SCENES[2], pos: [-42,   4,  30], size: [7,  4.2],  host: 'biostation_quarantine' },   // organism  → biostation w/ quarantine perimeter (s12: pulled 12u north from z=42 → z=30 so the host's diagonal-rotated front corner clears the S-perim road span at z=45.5..54.5 by ≥10u instead of touching the edge)
       { scene: SCENES[5], pos: [ 42,   4,  42], size: [8,  4.8],  host: 'back_billboard_lattice' },  // wall      → free-standing lattice billboard (rear-right)
 
       // DECK-RAIL TACTICAL KIOSKS (unchanged):
@@ -4732,6 +4775,7 @@ const ScenesSelector = {
     // a window-frame trim.
     this._builtBuildings ??= new Set();
     const grp = new THREE.Group();
+    grp.name = kind;  // s13: panel-host ID for debug label overlay
     grp.position.set(px, py, pz);
     // b200: face camera HORIZONTALLY (was `py * 0.5` which tilted the
     // chassis by atan(py/2 / R). For galaxy at py=10, R=88 → 3° tilt;
@@ -5207,9 +5251,18 @@ const ScenesSelector = {
     }
 
     else if (kind === 'biostation_quarantine') {
-      // Organism panel @ SW-rear (-42, 4, +42). Greenhouse w/ pink glow
-      // roof + 4 yellow-tape hazard posts forming a quarantine perimeter
-      // + 2 specimen tanks + warning sign + support masts.
+      // s6: REWRITTEN. Was a small greenhouse + a few hazard posts. User
+      // said "biostation is completely empty give it cool building colors
+      // etc". Now: 3-pod xenobio research facility w/ neon pink/cyan/
+      // purple/green glow, larger central airlock dome, 6 bio-luminescent
+      // specimen tanks, animated grow lights, caution chevrons. The
+      // surrounding SW quadrant fill lives in `_buildSWQuadrantFill`.
+      const neonPink   = new THREE.MeshBasicMaterial({ color: 0xff5fa8, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      const neonCyan   = new THREE.MeshBasicMaterial({ color: 0x44ddee, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      const neonPurple = new THREE.MeshBasicMaterial({ color: 0xaa44ee, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      const neonGreen  = new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      const labWhite   = new THREE.MeshBasicMaterial({ color: 0xb8c4d4 });
+      const labWhiteHi = new THREE.MeshBasicMaterial({ color: 0xd4dce8 });
       // Support masts (panel altitude → floor)
       [-w * 0.42, w * 0.42].forEach(xo => {
         const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.20, -floorY, 6), steel);
@@ -5219,71 +5272,203 @@ const ScenesSelector = {
         foot.position.set(xo, floorY + 0.20, -0.30);
         grp.add(foot);
       });
-      const gW = 6.5, gH = 3.6, gD = 5.5;
-      const shell = new THREE.Mesh(new THREE.BoxGeometry(gW, gH, gD), concrete);
-      shell.position.set(0, floorY + gH / 2, -gD / 2 - 0.45);
-      grp.add(shell);
-      // Pitched glass-roof skylight (pink)
-      const glass = new THREE.MeshBasicMaterial({
-        color: 0xff5fa8, transparent: true, opacity: 0.55,
-        blending: THREE.AdditiveBlending, depthWrite: false,
+      // ===== Central airlock dome (the hero shape) =====
+      const domeR = 3.2;
+      const domeBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(domeR, domeR + 0.3, 0.6, 16),
+        labWhite,
+      );
+      domeBase.position.set(0, floorY + 0.30, -domeR - 1.0);
+      grp.add(domeBase);
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(domeR, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+        labWhiteHi,
+      );
+      dome.position.set(0, floorY + 0.60, -domeR - 1.0);
+      grp.add(dome);
+      // Glowing dome equator band (cyan)
+      const eqBand = new THREE.Mesh(
+        new THREE.TorusGeometry(domeR + 0.04, 0.18, 6, 24),
+        neonCyan,
+      );
+      eqBand.rotation.x = Math.PI / 2;
+      eqBand.position.set(0, floorY + 0.60, -domeR - 1.0);
+      grp.add(eqBand);
+      // Glowing dome apex (pink) — visible from any POI
+      const apex = this._makeRunningLight(0xff5fa8, 0.55);
+      apex.position.set(0, floorY + 0.60 + domeR + 0.15, -domeR - 1.0);
+      apex.userData = { rate: 0.5, phase: Math.random() * 6 };
+      grp.add(apex);
+      this.standoff?.strobes.push(apex);
+      // Airlock entry door (lit warm interior)
+      const airlockDoor = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.6, 2.2),
+        new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      airlockDoor.position.set(0, floorY + 1.40, -0.96);
+      airlockDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+      grp.add(airlockDoor);
+      this.standoff?.windows.push(airlockDoor);
+      // Airlock door frame
+      const airlockFrame = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 0.20), steel);
+      airlockFrame.position.set(0, floorY + 1.40, -0.92);
+      grp.add(airlockFrame);
+      // ===== 3 connected research pods (left/right of dome) =====
+      const podW = 4.0, podH = 3.0, podD = 5.5;
+      [{ x: -domeR - podW / 2 - 0.4, glow: neonPink },
+       { x:  domeR + podW / 2 + 0.4, glow: neonPurple }].forEach(p => {
+        const pod = new THREE.Mesh(new THREE.BoxGeometry(podW, podH, podD), labWhite);
+        pod.position.set(p.x, floorY + podH / 2, -domeR - 1.0);
+        grp.add(pod);
+        // Roof
+        const podRoof = new THREE.Mesh(new THREE.BoxGeometry(podW + 0.30, 0.20, podD + 0.30), labWhiteHi);
+        podRoof.position.set(p.x, floorY + podH + 0.10, -domeR - 1.0);
+        grp.add(podRoof);
+        // Glowing window strip on the front face (camera side)
+        const winStrip = new THREE.Mesh(new THREE.PlaneGeometry(podW * 0.78, 1.4), p.glow);
+        winStrip.position.set(p.x, floorY + podH * 0.55, -domeR - 1.0 + podD / 2 + 0.04);
+        winStrip.userData = { rate: 1.2, phase: Math.random() * 6, baseOpacity: 0.85 };
+        grp.add(winStrip);
+        this.standoff?.windows.push(winStrip);
+        // Vertical glowing accent strip on outer side
+        const sideAccent = new THREE.Mesh(new THREE.PlaneGeometry(0.30, podH * 0.85), p.glow);
+        sideAccent.position.set(p.x + (p.x < 0 ? -1 : 1) * (podW / 2 + 0.04), floorY + podH * 0.5, -domeR - 1.0);
+        sideAccent.rotation.y = (p.x < 0 ? -Math.PI / 2 : Math.PI / 2);
+        sideAccent.material = p.glow.clone();
+        sideAccent.material.opacity = 0.65;
+        grp.add(sideAccent);
+        this.standoff?.windows.push(sideAccent);
+        // Connecting tube to dome
+        const tube = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.85, 0.85, Math.abs(p.x) - domeR - 0.1, 12),
+          labWhite,
+        );
+        tube.rotation.z = Math.PI / 2;
+        tube.position.set((p.x + (p.x < 0 ? domeR : -domeR)) / 2, floorY + 1.4, -domeR - 1.0);
+        grp.add(tube);
+        // Tube glow band
+        const tubeBand = new THREE.Mesh(new THREE.TorusGeometry(0.85 + 0.04, 0.08, 4, 18), p.glow);
+        tubeBand.position.set((p.x + (p.x < 0 ? domeR : -domeR)) / 2, floorY + 1.4, -domeR - 1.0);
+        tubeBand.rotation.y = Math.PI / 2;
+        grp.add(tubeBand);
+        // Roof vent stacks (2 per pod)
+        [-podW * 0.25, podW * 0.25].forEach(vo => {
+          const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.2, 6), labWhiteHi);
+          vent.position.set(p.x + vo, floorY + podH + 0.85, -domeR - 1.0 - podD * 0.30);
+          grp.add(vent);
+          const ventCap = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.25, 6), steel);
+          ventCap.position.set(p.x + vo, floorY + podH + 1.55, -domeR - 1.0 - podD * 0.30);
+          grp.add(ventCap);
+        });
       });
+      // ===== Pitched glass-roof skylight (pink) over central dome =====
       [-1, 1].forEach(side => {
-        const r = new THREE.Mesh(new THREE.PlaneGeometry(gW + 0.3, gD * 0.6), glass);
-        r.position.set(0, floorY + gH + 0.45, -gD / 2 - 0.45 + side * gD * 0.18);
+        const r = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 3.2), neonPink.clone());
+        r.material.opacity = 0.45;
+        r.position.set(0, floorY + 4.2 + 0.45, -domeR - 1.0 + side * 1.0);
         r.rotation.x = side * 0.42;
         grp.add(r);
       });
-      // Roof ridge
-      const ridge = new THREE.Mesh(new THREE.BoxGeometry(gW + 0.4, 0.16, 0.16), concreteLit);
-      ridge.position.set(0, floorY + gH + 0.85, -gD / 2 - 0.45);
-      grp.add(ridge);
-      // Caution stripe along bottom of panel
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w * 1.30, 0.12, 0.06), yellow);
-      stripe.position.set(0, -h/2 - 0.30, 0.05);
-      grp.add(stripe);
-      // 4 hazard posts forming a 6×6 perimeter
-      [[-3.5, 1.5], [3.5, 1.5], [-3.5, -3.0], [3.5, -3.0]].forEach(([px, pz]) => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 1.6, 4), yellow);
-        post.position.set(px, floorY + 0.80, pz);
-        grp.add(post);
-        const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.30), yellow);
-        flag.position.set(px, floorY + 1.55, pz);
-        grp.add(flag);
+      // ===== 6 bio-luminescent specimen tanks in front of the dome
+      // (s8: tightened x-spacing 1.4 → 1.0 so the front-right tank doesn't
+      // reach into the S-perimeter road at world z=45.5 once host-rotated) =====
+      const tankColors = [0xff5fa8, 0x44ddee, 0x66ff88, 0xaa44ee, 0xff5fa8, 0x44ddee];
+      tankColors.forEach((color, i) => {
+        const xo = (i - 2.5) * 1.0;
+        // Glass cylinder
+        const tank = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.55, 0.55, 1.8, 14),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+        );
+        tank.position.set(xo, floorY + 1.0, 1.6);
+        tank.userData = { rate: 0.4 + i * 0.1, phase: i * 0.7, baseOpacity: 0.55 };
+        grp.add(tank);
+        this.standoff?.windows.push(tank);
+        // Steel base
+        const tankBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.62, 0.70, 0.30, 14),
+          accent,
+        );
+        tankBase.position.set(xo, floorY + 0.15, 1.6);
+        grp.add(tankBase);
+        // Top cap w/ pipes
+        const tankCap = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.62, 0.62, 0.18, 14),
+          steel,
+        );
+        tankCap.position.set(xo, floorY + 1.95, 1.6);
+        grp.add(tankCap);
+        // Pulsing glow inside
+        const tankGlow = this._makeRunningLight(color, 0.30);
+        tankGlow.position.set(xo, floorY + 1.0, 1.6);
+        tankGlow.userData = { rate: 0.6 + i * 0.08, phase: i * 0.7 };
+        grp.add(tankGlow);
+        this.standoff?.strobes.push(tankGlow);
       });
-      // Yellow tape spans (4 sides)
+      // ===== Caution chevron strip along bottom of panel =====
+      for (let i = -5; i <= 5; i++) {
+        const chev = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.20, 0.06),
+          i % 2 === 0 ? yellow : new THREE.MeshBasicMaterial({ color: 0x101218 }));
+        chev.position.set(i * 0.7, -h/2 - 0.30, 0.05);
+        grp.add(chev);
+      }
+      // ===== 4 hazard posts forming a wider perimeter
+      // (s8: shrunk from (±5.5, +2.2/-4.5) to (±4, +0.5/-3.5). Old footprint
+      // diagonally rotated to put front-right post at world z=47.45 (inside
+      // the S-perim road) and back-right at z=34.93 (1.4u inside back-cross
+      // road). New footprint clears both by ≥2u once host-rotated.) =====
+      [[-4, 0.5], [4, 0.5], [-4, -3.5], [4, -3.5]].forEach(([px, pz]) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 4), yellow);
+        post.position.set(px, floorY + 0.90, pz);
+        grp.add(post);
+        // Strobe on top
+        const postStrobe = this._makeRunningLight(0xffaa22, 0.18);
+        postStrobe.position.set(px, floorY + 1.95, pz);
+        postStrobe.userData = { rate: 2.4, phase: Math.random() * 6 };
+        grp.add(postStrobe);
+        this.standoff?.strobes.push(postStrobe);
+      });
+      // Yellow tape spans (s8: matched to the shrunk hazard post coords)
       const tape = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
       [
-        { a: [-3.5, 1.5], b: [3.5, 1.5] },
-        { a: [-3.5, -3.0], b: [3.5, -3.0] },
-        { a: [-3.5, -3.0], b: [-3.5, 1.5] },
-        { a: [3.5, -3.0], b: [3.5, 1.5] },
+        { a: [-4, 0.5], b: [4, 0.5] },
+        { a: [-4, -3.5], b: [4, -3.5] },
+        { a: [-4, -3.5], b: [-4, 0.5] },
+        { a: [4, -3.5], b: [4, 0.5] },
       ].forEach(p => {
         const dx = p.b[0] - p.a[0], dz = p.b[1] - p.a[1];
         const len = Math.hypot(dx, dz);
         const span = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.04), tape);
-        span.position.set((p.a[0] + p.b[0]) / 2, floorY + 1.10, (p.a[1] + p.b[1]) / 2);
+        span.position.set((p.a[0] + p.b[0]) / 2, floorY + 1.30, (p.a[1] + p.b[1]) / 2);
         span.rotation.y = Math.atan2(dz, dx);
         grp.add(span);
       });
-      // 2 specimen tanks outside the greenhouse (between panel and tape line)
-      [-1.5, 1.5].forEach(xo => {
-        const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.4, 12), accent);
-        tank.position.set(xo, floorY + 0.70, 0.95);
-        grp.add(tank);
-        const tankGlow = this._makeRunningLight(0xff5fa8, 0.15);
-        tankGlow.position.set(xo, floorY + 1.30, 0.95);
-        tankGlow.userData = { rate: 0.6, phase: Math.random() * 6 };
-        grp.add(tankGlow);
-        this.standoff?.strobes.push(tankGlow);
+      // Big BIOHAZARD warning sign on a stake in front (s8: x -5.5 → -4 to
+      // match the shrunk perimeter)
+      const signBg = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6),
+        new THREE.MeshBasicMaterial({ color: 0xe8a020 }));
+      signBg.position.set(-4, floorY + 0.90, 1.05);
+      grp.add(signBg);
+      // Trefoil center disk (the bio-hazard symbol — simplified to a ring)
+      const trefoil = new THREE.Mesh(new THREE.RingGeometry(0.20, 0.50, 24),
+        new THREE.MeshBasicMaterial({ color: 0x101218, side: THREE.DoubleSide }));
+      trefoil.position.set(-4, floorY + 0.90, 1.06);
+      grp.add(trefoil);
+      // 3 trefoil lobes (small disks at 120° apart)
+      [0, 2.094, 4.188].forEach(theta => {
+        const lobe = new THREE.Mesh(new THREE.CircleGeometry(0.18, 12),
+          new THREE.MeshBasicMaterial({ color: 0x101218 }));
+        lobe.position.set(-4 + Math.cos(theta) * 0.55, floorY + 0.90 + Math.sin(theta) * 0.55, 1.07);
+        grp.add(lobe);
       });
-      // Warning sign on the front-left post
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), yellow);
-      sign.position.set(-3.5, floorY + 0.45, 1.85);
-      grp.add(sign);
-      // Strobe on greenhouse roof
-      const strobe = this._makeRunningLight(0xff3344, 0.20);
-      strobe.position.set(0, floorY + gH + 1.4, -0.45);
+      // Central trefoil dot
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x101218 }));
+      dot.position.set(-4, floorY + 0.90, 1.08);
+      grp.add(dot);
+      // Roof strobe
+      const strobe = this._makeRunningLight(0xff3344, 0.30);
+      strobe.position.set(0, floorY + 4.6, -domeR - 1.0);
       strobe.userData = { rate: 1.8, phase: Math.random() * 6 };
       grp.add(strobe);
       this.standoff?.strobes.push(strobe);
@@ -5807,6 +5992,7 @@ const ScenesSelector = {
     // Forward-left: 2-story concrete bunker. 18 wide × 12 tall × 14 deep.
     // Sized so its front-face roof sits where the cmdbunker_billboard mounts.
     const grp = new THREE.Group();
+    grp.name = 'cmd_bunker';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const dark   = new THREE.MeshBasicMaterial({ color: 0x191d28 });
@@ -5867,6 +6053,7 @@ const ScenesSelector = {
     // Open-front garage. 14×7×11 with an open front (no front wall) so the
     // parked Warthog inside is visible. Panel mounts on the back interior.
     const grp = new THREE.Group();
+    grp.name = 'vehicle_bay';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
@@ -5931,6 +6118,7 @@ const ScenesSelector = {
   _buildBarracksBig() {
     // Long low building, gable roof. 11×6×16.
     const grp = new THREE.Group();
+    grp.name = 'barracks_big';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
@@ -5974,6 +6162,7 @@ const ScenesSelector = {
     // Stacked shipping-container style — 2 containers stacked, with a
     // vertical screen on the side facing camera.
     const grp = new THREE.Group();
+    grp.name = 'supply_depot';
     const oliveDark = new THREE.MeshBasicMaterial({ color: 0x3a401e });
     const oliveMid = new THREE.MeshBasicMaterial({ color: 0x2e3318 });
     const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
@@ -6015,6 +6204,7 @@ const ScenesSelector = {
      visible through the roof. Reads as a small life-sciences outpost. */
   _buildBioStation() {
     const grp = new THREE.Group();
+    grp.name = 'bio_station';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
@@ -6087,6 +6277,7 @@ const ScenesSelector = {
     // Tall 4-leg lattice tower with a service platform near the top
     // (where the freq-map display mounts) + dish + strobe at the very tip.
     const grp = new THREE.Group();
+    grp.name = 'comm_tower_big';
     const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
     const accent = new THREE.MeshBasicMaterial({ color: 0x363c4a });
 
@@ -6137,6 +6328,7 @@ const ScenesSelector = {
   _buildHelipad() {
     // Round elevated helipad with a control booth on the side.
     const grp = new THREE.Group();
+    grp.name = 'helipad';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
@@ -6202,6 +6394,7 @@ const ScenesSelector = {
     // adjacent to it. Galaxy panel mounts on the side of the control
     // bunker as a free-standing billboard.
     const grp = new THREE.Group();
+    grp.name = 'missile_site';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
@@ -7081,6 +7274,7 @@ const ScenesSelector = {
   _buildRadarBuilding() {
     // Squat operations building with a rotating radar antenna on the roof.
     const grp = new THREE.Group();
+    grp.name = 'radar_building';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
@@ -7163,16 +7357,18 @@ const ScenesSelector = {
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
 
-    /* ===== WEST PROPELLANT TANK FARM ===== centered (-92, -8, -45) =====
-       5 vertical fuel tanks in a row, walkway between them, gantry catwalk
-       on top, hazard placards. The whole structure ~36u long. */
+    /* ===== WEST PROPELLANT TANK FARM ===== centered (-95, -8, -65) =====
+       3 vertical fuel tanks in a row, walkway between them, gantry catwalk
+       on top, hazard placards. (s8: shrunk 5 tanks → 3 + moved from (-92,-45)
+       to (-95,-65) so the 22-wide pad clears both the W-perim road at x=-78
+       (east edge -82.5) AND the cross-road at z=-50 (south edge -53.5).) */
     {
       const grp = new THREE.Group();
-      grp.position.set(-92, -8, -45);
-      // 5 tanks
+      grp.position.set(-95, -8, -65);
+      // 3 tanks
       const tankR = 3.0, tankH = 11;
-      for (let i = 0; i < 5; i++) {
-        const tx = (i - 2) * 6.5;
+      for (let i = 0; i < 3; i++) {
+        const tx = (i - 1) * 6.5;
         const tank = new THREE.Mesh(
           new THREE.CylinderGeometry(tankR, tankR, tankH, 16),
           i % 2 === 0 ? concreteLit : oliveHi,
@@ -7208,30 +7404,30 @@ const ScenesSelector = {
         placard.position.set(tx, tankH * 0.55 + 0.4, tankR + 0.04);
         grp.add(placard);
       }
-      // Gantry catwalk linking dome tops
-      const cat = new THREE.Mesh(new THREE.BoxGeometry(34, 0.20, 1.0), accent);
+      // Gantry catwalk linking dome tops (s8: 34u → 13u for 3 tanks)
+      const cat = new THREE.Mesh(new THREE.BoxGeometry(13, 0.20, 1.0), accent);
       cat.position.set(0, tankH + 0.4 + tankR + 0.12, 0);
       grp.add(cat);
       [-0.50, 0.50].forEach(zo => {
-        const railTop = new THREE.Mesh(new THREE.BoxGeometry(34, 0.06, 0.06), steel);
+        const railTop = new THREE.Mesh(new THREE.BoxGeometry(13, 0.06, 0.06), steel);
         railTop.position.set(0, tankH + 0.4 + tankR + 1.1, zo);
         grp.add(railTop);
-        const railMid = new THREE.Mesh(new THREE.BoxGeometry(34, 0.04, 0.04), steel);
+        const railMid = new THREE.Mesh(new THREE.BoxGeometry(13, 0.04, 0.04), steel);
         railMid.position.set(0, tankH + 0.4 + tankR + 0.6, zo);
         grp.add(railMid);
       });
-      // Concrete pad under tanks
-      const pad = new THREE.Mesh(new THREE.BoxGeometry(36, 0.30, 8), concrete);
+      // Concrete pad under tanks (s8: 36u → 22u for 3 tanks)
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(22, 0.30, 8), concrete);
       pad.position.set(0, 0.15, 0);
       grp.add(pad);
-      // Containment berm around the pad
-      [[-1, 0, 0, 8.4], [1, 0, 0, 8.4], [0, 0, -1, 36.4], [0, 0, 1, 36.4]].forEach(([sx, _sy, sz, len]) => {
+      // Containment berm around the pad (s8: 36.4 → 22.4, sx*18 → sx*11)
+      [[-1, 0, 0, 8.4], [1, 0, 0, 8.4], [0, 0, -1, 22.4], [0, 0, 1, 22.4]].forEach(([sx, _sy, sz, len]) => {
         const isLong = sz === 0;
         const curb = new THREE.Mesh(
           new THREE.BoxGeometry(isLong ? 0.40 : len, 0.45, isLong ? 8.4 : 0.40),
           concreteLit,
         );
-        curb.position.set(sx * 18, 0.22, sz * 4);
+        curb.position.set(sx * 11, 0.22, sz * 4);
         grp.add(curb);
       });
       // Service ladder up the middle tank
@@ -7241,20 +7437,20 @@ const ScenesSelector = {
         rung.position.set(0, h, tankR + 0.10);
         grp.add(rung);
       }
-      // Pumphouse shed at the south end
+      // Pumphouse shed at the south end (s8: x -19 → -13)
       const shed = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3.0, 4.0), concrete);
-      shed.position.set(-19, 1.5, 0);
+      shed.position.set(-13, 1.5, 0);
       grp.add(shed);
       const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.20, 4.4), concreteLit);
-      shedRoof.position.set(-19, 3.10, 0);
+      shedRoof.position.set(-13, 3.10, 0);
       grp.add(shedRoof);
       const shedDoor = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.7), winMat(0.55));
-      shedDoor.position.set(-19, 0.85, 2.04);
+      shedDoor.position.set(-13, 0.85, 2.04);
       shedDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
       grp.add(shedDoor);
       this.standoff?.windows.push(shedDoor);
-      // 2 service vehicles parked alongside
-      [{ x: 14, z: -5.5, c: olive }, { x: 17, z: -5.5, c: oliveHi }].forEach(v => {
+      // 2 service vehicles parked alongside (s8: x 14/17 → 8/11)
+      [{ x: 8, z: -5.5, c: olive }, { x: 11, z: -5.5, c: oliveHi }].forEach(v => {
         const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 4.5), v.c);
         body.position.set(v.x, 0.95, v.z);
         body.rotation.y = -0.1;
@@ -7267,14 +7463,16 @@ const ScenesSelector = {
       this.scene.add(grp);
     }
 
-    /* ===== EAST AIRCRAFT MAINTENANCE HANGAR ===== centered (+92, -8, -45) =====
-       Long arch hangar w/ open south door, lit interior, parked silhouette
-       inside, antenna mast on roof, side personnel doors. Reads as a real
-       maintenance hangar from any front POI. */
+    /* ===== EAST AIRCRAFT MAINTENANCE HANGAR ===== centered (+95, -8, -25) =====
+       Arch hangar w/ open south door, lit interior, parked silhouette
+       inside, antenna mast on roof, side personnel doors. (s8: shrunk
+       18×28 → 14×22 hangar w/ 20×30 apron, moved (+92,-45) → (+95,-25)
+       so the apron clears the E-perim road at x=+78 (west edge +82.5)
+       AND the cross-road at z=-50 (south edge -53.5).) */
     {
       const grp = new THREE.Group();
-      grp.position.set(92, -8, -45);
-      const hW = 18, hH = 9, hD = 28;
+      grp.position.set(95, -8, -25);
+      const hW = 14, hH = 9, hD = 22;
       // Concrete apron
       const apron = new THREE.Mesh(new THREE.BoxGeometry(hW + 6, 0.25, hD + 8), concrete);
       apron.position.set(0, 0.12, 0);
@@ -7617,6 +7815,1052 @@ const ScenesSelector = {
     }
   },
 
+  /* ---------- s5: NW quadrant fill (broken-dish POI) ----------
+     User feedback: "we have this area from broken dish fill it out i don't
+     want empty space anywhere". From the BROKEN DISH POI cam at (-38, 8,
+     -14) yaw -0.98 the foreground asphalt and mid-distance flanks read
+     as empty road between the deck and the broken-dish host at (-66, -35).
+     6 layered clusters at FOREGROUND (8-15u), MID (20-35u), FAR (40-65u)
+     so every depth band has silhouette. */
+  _buildNWQuadrantFill() {
+    const olive = new THREE.MeshBasicMaterial({ color: 0x3a4030 });
+    const oliveHi = new THREE.MeshBasicMaterial({ color: 0x4d5440 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x424c64 });
+    const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
+    const winMat = (op = 0.72) => new THREE.MeshBasicMaterial({
+      color: 0xffaa55, transparent: true, opacity: op,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+
+    /* ----- FOREGROUND (8-15u from broken-dish cam): field maintenance pad
+       w/ Warthog up on jack stands, tool crates, work lamp ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_maintenance_pad';
+      grp.position.set(-22, -8, -22);
+      // Concrete pad
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(7, 0.2, 6), concreteLit);
+      pad.position.set(0, 0.10, 0);
+      grp.add(pad);
+      // Yellow caution border
+      [[-3.5, 0, 0.30, 6.0], [3.5, 0, 0.30, 6.0], [0, -3.0, 7.0, 0.30], [0, 3.0, 7.0, 0.30]].forEach(([x, z, w, d]) => {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), yellow);
+        stripe.position.set(x, 0.22, z);
+        grp.add(stripe);
+      });
+      // Warthog up on jack stands (raised 0.4u)
+      const car = this._buildWarthogMesh(olive, oliveHi, steel, dark);
+      car.position.set(0, 0.40, 0);
+      car.rotation.y = Math.PI * 0.5;
+      grp.add(car);
+      // 4 jack stands under the wheels (visible triangular bases)
+      [[-1.30, -1.50], [1.30, -1.50], [-1.30, 1.40], [1.30, 1.40]].forEach(([wx, wz]) => {
+        const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.30, 0.45, 6), steel);
+        stand.position.set(wz, 0.225, -wx);  // rotated 90° to match car
+        grp.add(stand);
+      });
+      // Tool crates
+      [[-2.8, -2.2, oliveHi], [-2.8, -1.0, olive], [2.8, -1.6, olive]].forEach(([cx, cz, c]) => {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 1.0), c);
+        crate.position.set(cx, 0.45, cz);
+        crate.rotation.y = (Math.random() - 0.5) * 0.20;
+        grp.add(crate);
+      });
+      // Work lamp on telescoping pole
+      const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.6, 5), steel);
+      lampPole.position.set(2.5, 1.90, 1.8);
+      grp.add(lampPole);
+      const lampHead = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.30, 0.40), accent);
+      lampHead.position.set(2.5, 3.55, 1.8);
+      grp.add(lampHead);
+      const lampLens = this._makeRunningLight(0xfff0c8, 0.30);
+      lampLens.position.set(2.5, 3.40, 2.10);
+      grp.add(lampLens);
+      // Mechanic's tool chest (red)
+      const chest = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 1.0, 0.55),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }),
+      );
+      chest.position.set(-2.6, 0.60, 1.6);
+      grp.add(chest);
+      this.scene.add(grp);
+    }
+
+    /* ----- MID-LEFT (20-30u): SIGINT mobile listening post — 3 vans
+       parallel-parked w/ rooftop antennas, lit windscreens, cable runs ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_sigint_vans';
+      grp.position.set(-38, -8, -28);  // s7: shifted west off the x=-30 walkway
+      [{ z: -6, c: olive }, { z: 0, c: oliveHi }, { z: 6, c: olive }].forEach((v, i) => {
+        // Body
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.8, 4.6), v.c);
+        body.position.set(0, 1.10, v.z);
+        grp.add(body);
+        // Cab
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.3, 1.5), accent);
+        cab.position.set(0, 1.55, v.z + 1.85);
+        grp.add(cab);
+        // Lit windscreen
+        const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.55), winMat(0.78));
+        ws.position.set(0, 1.65, v.z + 2.61);
+        ws.userData = { rate: 4.4 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.78 };
+        grp.add(ws);
+        this.standoff?.windows.push(ws);
+        // Body side panel light strip
+        const sideStrip = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.18), winMat(0.55));
+        sideStrip.position.set(1.31, 1.30, v.z);
+        sideStrip.rotation.y = -Math.PI / 2;
+        sideStrip.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+        grp.add(sideStrip);
+        this.standoff?.windows.push(sideStrip);
+        // Wheels
+        [[-1.30, -1.5], [1.30, -1.5], [-1.30, 1.5], [1.30, 1.5]].forEach(([wx, wz]) => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.30, 10), dark);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(wx, 0.45, v.z + wz);
+          grp.add(wheel);
+        });
+        // Rooftop dish (different angle per van)
+        const dish = new THREE.Mesh(
+          new THREE.SphereGeometry(0.65, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.42),
+          accent,
+        );
+        dish.position.set(0, 2.4, v.z - 0.6);
+        dish.rotation.x = -Math.PI * 0.40 + i * 0.15;
+        dish.rotation.z = -Math.PI / 2 + i * 0.20;
+        grp.add(dish);
+        // Vertical whip antenna
+        const whip = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 2.4, 4), steel);
+        whip.position.set(-0.9, 3.20, v.z + 0.3);
+        grp.add(whip);
+        // Tip strobe
+        const tipS = this._makeRunningLight(0x4488ff, 0.10);
+        tipS.position.set(-0.9, 4.40, v.z + 0.3);
+        tipS.userData = { rate: 2.8, phase: i * 1.3 };
+        grp.add(tipS);
+      });
+      // Cable run between vans (low-profile bundle along the ground)
+      const cable = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.10, 14), accent);
+      cable.position.set(-1.6, 0.05, 0);
+      grp.add(cable);
+      // Diesel generator beside the convoy
+      const gen = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 2.6), olive);
+      gen.position.set(-3.0, 0.65, -3);
+      grp.add(gen);
+      const genStack = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.2, 5), steel);
+      genStack.position.set(-3.0 + 0.55, 1.85, -3 - 0.6);
+      grp.add(genStack);
+      this.scene.add(grp);
+    }
+
+    /* ----- MID-CENTER (35-45u): tactical aid station — GP-medium tent
+       w/ red cross, medics' jeep, fuel cans ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_aid_station';
+      grp.position.set(-50, -8, -10);
+      // Tent — long ridge tent (6u long)
+      const tentL = 6.5, tentW = 4.0, tentH = 2.4;
+      // Front wall (triangular)
+      const frontPts = [
+        new THREE.Vector3(-tentW / 2, 0, 0),
+        new THREE.Vector3(tentW / 2, 0, 0),
+        new THREE.Vector3(0, tentH, 0),
+      ];
+      const buildTri = (z) => {
+        const tri = new THREE.BufferGeometry();
+        tri.setAttribute('position', new THREE.Float32BufferAttribute([
+          frontPts[0].x, frontPts[0].y, z,
+          frontPts[1].x, frontPts[1].y, z,
+          frontPts[2].x, frontPts[2].y, z,
+        ], 3));
+        tri.setIndex([0, 1, 2]);
+        tri.computeVertexNormals();
+        return new THREE.Mesh(tri, oliveHi);
+      };
+      grp.add(buildTri(-tentL / 2));
+      grp.add(buildTri(tentL / 2));
+      // Sloped sides (2 quads from ridge to ground)
+      [-1, 1].forEach(s => {
+        const slope = new THREE.Mesh(
+          new THREE.PlaneGeometry(Math.hypot(tentW / 2, tentH), tentL),
+          olive,
+        );
+        slope.position.set(s * tentW / 4, tentH / 2, 0);
+        slope.rotation.y = Math.PI / 2;
+        slope.rotation.x = -s * Math.atan2(tentW / 2, tentH);
+        grp.add(slope);
+      });
+      // Ridge pole
+      const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, tentL + 0.2, 5), steel);
+      ridge.rotation.x = Math.PI / 2;
+      ridge.position.set(0, tentH, 0);
+      grp.add(ridge);
+      // Front door panel (lit warm interior)
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.6), winMat(0.65));
+      door.position.set(0, 0.80, -tentL / 2 - 0.04);
+      door.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.65 };
+      grp.add(door);
+      this.standoff?.windows.push(door);
+      // Red cross panel on the side
+      const crossBg = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), stencil);
+      crossBg.position.set(tentW / 2 - 0.05, 1.4, 0);
+      crossBg.rotation.y = -Math.PI / 2;
+      grp.add(crossBg);
+      const crossV = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.7),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }));
+      crossV.position.set(tentW / 2 - 0.04, 1.4, 0);
+      crossV.rotation.y = -Math.PI / 2;
+      grp.add(crossV);
+      const crossH = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.25),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }));
+      crossH.position.set(tentW / 2 - 0.04, 1.4, 0);
+      crossH.rotation.y = -Math.PI / 2;
+      grp.add(crossH);
+      // Medics' jeep parked beside
+      const jeep = this._buildWarthogMesh(olive, oliveHi, steel, dark);
+      jeep.position.set(-tentW - 1, 0, 1.5);
+      jeep.rotation.y = Math.PI * 0.45;
+      // Mark roof w/ red cross too
+      const jeepCross = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), stencil);
+      jeepCross.position.set(0, 2.2, -0.2);
+      jeepCross.rotation.x = -Math.PI / 2;
+      jeep.add(jeepCross);
+      const jcV = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.55),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }));
+      jcV.position.set(0, 2.21, -0.2);
+      jcV.rotation.x = -Math.PI / 2;
+      jeep.add(jcV);
+      const jcH = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.20),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }));
+      jcH.position.set(0, 2.21, -0.2);
+      jcH.rotation.x = -Math.PI / 2;
+      jeep.add(jcH);
+      grp.add(jeep);
+      // Fuel cans rack beside tent
+      [[3.5, -2.5], [3.8, -2.0], [3.5, -1.5]].forEach(([cx, cz]) => {
+        const can = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.50, 0.40), olive);
+        can.position.set(cx, 0.25, cz);
+        grp.add(can);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ----- MID-FAR (40-55u): signal-relay tower — tall lattice w/
+       slewing dish on platform, vertical antennas, base equipment ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_signal_relay_tower';
+      grp.position.set(-58, -8, -22);
+      const towerH = 22, baseW = 3.0;
+      // 4 lattice legs
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, towerH, 5), steel);
+        leg.position.set(Math.cos(a) * baseW * 0.5, towerH / 2, Math.sin(a) * baseW * 0.5);
+        grp.add(leg);
+      }
+      // Cross-bracing rings every 2u
+      for (let h = 1.5; h < towerH - 0.5; h += 2.0) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(baseW * 0.55, 0.05, 4, 16), steel);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(0, h, 0);
+        grp.add(ring);
+      }
+      // Diagonal X-bracing per face per tier
+      for (let tier = 0; tier < 8; tier++) {
+        const yBase = tier * (towerH / 8);
+        const tierH = towerH / 8;
+        [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
+          const x1 = Math.cos(theta) * baseW * 0.5;
+          const z1 = Math.sin(theta) * baseW * 0.5;
+          const x2 = Math.cos(theta + Math.PI / 2) * baseW * 0.5;
+          const z2 = Math.sin(theta + Math.PI / 2) * baseW * 0.5;
+          const len = Math.hypot(x2 - x1, z2 - z1);
+          const diag = Math.hypot(len, tierH);
+          [+1, -1].forEach(dir => {
+            const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, diag, 4), steel);
+            bar.position.set((x1 + x2) / 2, yBase + tierH / 2, (z1 + z2) / 2);
+            bar.rotation.order = 'YXZ';
+            bar.rotation.y = Math.atan2(z2 - z1, x2 - x1);
+            bar.rotation.z = Math.PI / 2 - dir * Math.atan2(tierH, len);
+            grp.add(bar);
+          });
+        });
+      }
+      // Service platform at 2/3 height
+      const plat = new THREE.Mesh(new THREE.BoxGeometry(baseW * 1.8, 0.12, baseW * 1.6), accent);
+      plat.position.set(0, towerH * 0.66, 0.30);
+      grp.add(plat);
+      // Slewing dish on platform (rotates via _radarBuildingPivots)
+      const dishPivot = new THREE.Group();
+      dishPivot.position.set(0.6, towerH * 0.66 + 0.6, 0.50);
+      grp.add(dishPivot);
+      const dish = new THREE.Mesh(
+        new THREE.SphereGeometry(1.4, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.42),
+        accent,
+      );
+      dish.rotation.x = -Math.PI * 0.40;
+      dishPivot.add(dish);
+      const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.18, 0.55, 6), steel);
+      feed.position.set(0, 0.6, 0.6);
+      feed.rotation.x = Math.PI / 2;
+      dishPivot.add(feed);
+      this._radarBuildingPivots ??= [];
+      this._radarBuildingPivots.push(dishPivot);
+      // Top mast w/ aviation strobe
+      const topMast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.10, 4.5, 5), steel);
+      topMast.position.set(0, towerH + 2.25, 0);
+      grp.add(topMast);
+      const topStrobe = this._makeRunningLight(0xff3344, 0.55);
+      topStrobe.position.set(0, towerH + 4.7, 0);
+      topStrobe.userData = { rate: 1.4, phase: Math.random() * 6 };
+      grp.add(topStrobe);
+      this.standoff?.strobes.push(topStrobe);
+      // Mid-mast strobes (red)
+      [towerH * 0.40, towerH * 0.80].forEach(yh => {
+        const ms = this._makeRunningLight(0xff3344, 0.30);
+        ms.position.set(baseW * 0.5 + 0.20, yh, 0);
+        ms.userData = { rate: 1.6, phase: Math.random() * 6 };
+        grp.add(ms);
+        this.standoff?.strobes.push(ms);
+      });
+      // Base equipment shed
+      const shed = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.6, 3.6), concrete);
+      shed.position.set(3.5, 1.30, 0);
+      grp.add(shed);
+      const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.20, 3.9), concreteLit);
+      shedRoof.position.set(3.5, 2.70, 0);
+      grp.add(shedRoof);
+      const shedDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.6), winMat(0.55));
+      shedDoor.position.set(3.5, 0.85, 1.84);
+      shedDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+      grp.add(shedDoor);
+      this.standoff?.windows.push(shedDoor);
+      // Cable from shed to tower base
+      const cableTray = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.08, 0.30), accent);
+      cableTray.position.set(2.0, 0.10, 0);
+      grp.add(cableTray);
+      // 2 vertical whip antennas flanking the tower
+      [-baseW - 1, baseW + 1].forEach(xo => {
+        const whip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 8, 5), steel);
+        whip.position.set(xo, 4.0, -2);
+        grp.add(whip);
+        const whipTip = this._makeRunningLight(0x4488ff, 0.18);
+        whipTip.position.set(xo, 8.1, -2);
+        grp.add(whipTip);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ----- MID-FAR-LEFT (40-55u): conex container depot — stacked
+       containers, forklift, hazard light ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_conex_depot';
+      grp.position.set(-92, -8, -18);  // s7: shifted west off the W-perim road at x=-78
+      const cW = 4.5, cH = 2.5, cD = 8.5;
+      // Bottom row of 3
+      [{ x: -5, c: olive }, { x: 0, c: oliveHi }, { x: 5, c: olive }].forEach(({ x, c }) => {
+        const cont = new THREE.Mesh(new THREE.BoxGeometry(cW, cH, cD), c);
+        cont.position.set(x, cH / 2, 0);
+        grp.add(cont);
+        // Vertical ribs
+        for (let i = -3; i <= 3; i++) {
+          const rib = new THREE.Mesh(new THREE.BoxGeometry(0.06, cH, 0.08), oliveHi);
+          rib.position.set(x + cW / 2 + 0.04, cH / 2, i * 1.2);
+          grp.add(rib);
+        }
+      });
+      // Top row of 2 (offset)
+      [{ x: -2.5, c: oliveHi }, { x: 2.5, c: olive }].forEach(({ x, c }) => {
+        const cont = new THREE.Mesh(new THREE.BoxGeometry(cW, cH, cD * 0.92), c);
+        cont.position.set(x, cH * 1.5 + 0.10, 0.3);
+        grp.add(cont);
+      });
+      // 3rd-tier single
+      const top = new THREE.Mesh(new THREE.BoxGeometry(cW, cH, cD * 0.85), olive);
+      top.position.set(0, cH * 2.5 + 0.20, -0.1);
+      grp.add(top);
+      // Stencil mark on bottom-row mid container
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.30, 0.04), stencil);
+      mark.position.set(0, cH * 0.7, cD / 2 + 0.03);
+      grp.add(mark);
+      // Open container door (lit)
+      const cDoor = new THREE.Mesh(new THREE.PlaneGeometry(2.0, cH * 0.75), winMat(0.70));
+      cDoor.position.set(-5, cH * 0.45, cD / 2 + 0.03);
+      cDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.70 };
+      grp.add(cDoor);
+      this.standoff?.windows.push(cDoor);
+      // Forklift parked in front
+      {
+        const fl = new THREE.Group();
+        const fbody = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 2.4), yellow);
+        fbody.position.set(0, 0.80, 0);
+        fl.add(fbody);
+        const fcab = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 1.2), accent);
+        fcab.position.set(0, 1.90, 0.3);
+        fl.add(fcab);
+        // Mast
+        const mast = new THREE.Mesh(new THREE.BoxGeometry(0.20, 2.6, 0.20), steel);
+        mast.position.set(0, 2.10, -1.4);
+        fl.add(mast);
+        // Forks
+        [-0.35, 0.35].forEach(fx => {
+          const fork = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.10, 1.8), steel);
+          fork.position.set(fx, 0.30, -2.3);
+          fl.add(fork);
+        });
+        // Wheels
+        [[-0.65, -1.0], [0.65, -1.0], [-0.65, 1.0], [0.65, 1.0]].forEach(([wx, wz]) => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.25, 8), dark);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(wx, 0.30, wz);
+          fl.add(wheel);
+        });
+        // Roof beacon
+        const beacon = this._makeRunningLight(0xffaa22, 0.22);
+        beacon.position.set(0, 2.55, 0);
+        beacon.userData = { rate: 2.8, phase: Math.random() * 6 };
+        fl.add(beacon);
+        fl.position.set(-2, 0, 6.5);
+        fl.rotation.y = -0.3;
+        grp.add(fl);
+      }
+      // Hazard light pole
+      const hPole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 6, 5), steel);
+      hPole.position.set(8, 3.0, 5);
+      grp.add(hPole);
+      const hLamp = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.30, 0.40), accent);
+      hLamp.position.set(8 - 0.4, 5.85, 5 - 0.4);
+      grp.add(hLamp);
+      const hLens = this._makeRunningLight(0xffaa55, 0.30);
+      hLens.position.set(8 - 0.7, 5.7, 5 - 0.7);
+      grp.add(hLens);
+      // Loose pallets on the ground
+      [[7.5, 1.5], [9, 1.0], [-9, -1.5]].forEach(([px, pz]) => {
+        const pallet = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.18, 1.4), oliveHi);
+        pallet.position.set(px, 0.09, pz);
+        pallet.rotation.y = Math.random() * 0.4;
+        grp.add(pallet);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ----- FAR-LEFT (50-65u): perimeter watchtower w/ rotating searchlight,
+       lit cabin, ladder ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_perimeter_watchtower';
+      grp.position.set(-92, -8, -8);  // s7: shifted west off the W-perim road at x=-78
+      const towH = 9;
+      // 4 legs
+      [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]].forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.20, towH, 5), steel);
+        leg.position.set(lx, towH / 2, lz);
+        grp.add(leg);
+      });
+      // Cross-braces
+      for (let h = 2; h < towH - 1; h += 2) {
+        [[-1.4, -1.4, 1.4, -1.4], [1.4, -1.4, 1.4, 1.4], [1.4, 1.4, -1.4, 1.4], [-1.4, 1.4, -1.4, -1.4]].forEach(([x1, z1, x2, z2]) => {
+          const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.0, 4), steel);
+          b1.position.set((x1 + x2) / 2, h, (z1 + z2) / 2);
+          b1.rotation.order = 'YXZ';
+          b1.rotation.y = Math.atan2(z2 - z1, x2 - x1);
+          b1.rotation.z = Math.PI / 2;
+          grp.add(b1);
+        });
+      }
+      // Cabin floor
+      const cabFloor = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.20, 3.6), accent);
+      cabFloor.position.set(0, towH, 0);
+      grp.add(cabFloor);
+      // Cabin walls (4 sides)
+      [[0, 1.7, -3.4 / 2 - 0.05, 3.4, 1.5], [0, 1.7, 3.4 / 2 + 0.05, 3.4, 1.5], [-3.4 / 2 - 0.05, 1.7, 0, 1.5, 3.4], [3.4 / 2 + 0.05, 1.7, 0, 1.5, 3.4]].forEach(([x, _y, z, w, d]) => {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 1.4, d), olive);
+        wall.position.set(x, towH + 0.85, z);
+        grp.add(wall);
+      });
+      // Roof
+      const cabRoof = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.20, 3.8), oliveHi);
+      cabRoof.position.set(0, towH + 1.65, 0);
+      grp.add(cabRoof);
+      // Lit windows on all 4 sides
+      [[0, towH + 1.0, 1.71], [0, towH + 1.0, -1.71], [1.71, towH + 1.0, 0, true], [-1.71, towH + 1.0, 0, true]].forEach(([wx, wy, wz, rotY]) => {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.55), winMat(0.78));
+        w.position.set(wx, wy, wz);
+        if (rotY) w.rotation.y = Math.PI / 2;
+        w.userData = { rate: 4.4, phase: Math.random() * 6, baseOpacity: 0.78 };
+        grp.add(w);
+        this.standoff?.windows.push(w);
+      });
+      // Searchlight (rotates) on roof
+      const slPivot = new THREE.Group();
+      slPivot.position.set(0, towH + 2.0, 0);
+      grp.add(slPivot);
+      const slBase = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.30, 0.20, 8), steel);
+      slPivot.add(slBase);
+      const slHead = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 1.0), accent);
+      slHead.position.set(0, 0.40, 0.45);
+      slPivot.add(slHead);
+      const slLens = this._makeRunningLight(0xffe6a0, 0.40);
+      slLens.position.set(0, 0.40, 1.05);
+      slPivot.add(slLens);
+      this._radarBuildingPivots ??= [];
+      this._radarBuildingPivots.push(slPivot);
+      // Ladder up one side
+      for (let h = 0.5; h < towH - 0.3; h += 0.4) {
+        const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 4), steel);
+        rung.rotation.z = Math.PI / 2;
+        rung.position.set(1.4, h, 1.7);
+        grp.add(rung);
+      }
+      // Aviation strobe at very top
+      const tipStrobe = this._makeRunningLight(0xff3344, 0.40);
+      tipStrobe.position.set(0, towH + 3.2, 0);
+      tipStrobe.userData = { rate: 1.5, phase: Math.random() * 6 };
+      grp.add(tipStrobe);
+      this.standoff?.strobes.push(tipStrobe);
+      this.scene.add(grp);
+    }
+
+    /* ----- BACK-CENTER (between broken dish + freq map): radio shack +
+       barracks w/ lit windows ----- */
+    {
+      const grp = new THREE.Group();
+      grp.name = 'nw_radio_shack';
+      grp.position.set(-58, -8, -60);  // s7: shifted south to clear cross-road at z=-50
+      // Long barracks
+      const bW = 9, bH = 3.2, bD = 4.0;
+      const barracks = new THREE.Mesh(new THREE.BoxGeometry(bW, bH, bD), oliveHi);
+      barracks.position.set(0, bH / 2, 0);
+      grp.add(barracks);
+      const bRoof = new THREE.Mesh(new THREE.BoxGeometry(bW + 0.4, 0.25, bD + 0.4), olive);
+      bRoof.position.set(0, bH + 0.13, 0);
+      grp.add(bRoof);
+      // 4 lit windows per long side
+      [-bD / 2 - 0.05, bD / 2 + 0.05].forEach(zo => {
+        for (let i = -1; i <= 1; i++) {
+          const w = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), winMat(0.78));
+          w.position.set(i * 2.6, bH * 0.55, zo);
+          if (zo < 0) w.rotation.y = Math.PI;
+          w.userData = { rate: 4.6 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.78 };
+          grp.add(w);
+          this.standoff?.windows.push(w);
+        }
+      });
+      // Door at one end (warm glow)
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.7), winMat(0.55));
+      door.position.set(-bW / 2 - 0.05, 0.85, 0);
+      door.rotation.y = -Math.PI / 2;
+      door.userData = { rate: 3.6, phase: Math.random() * 6, baseOpacity: 0.55 };
+      grp.add(door);
+      this.standoff?.windows.push(door);
+      // Roof whip antennas
+      [[-2, 0], [2, 0]].forEach(([wx, wz]) => {
+        const whip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 4, 5), steel);
+        whip.position.set(wx, bH + 2, wz);
+        grp.add(whip);
+      });
+      // Smaller radio shack beside it
+      const rW = 3.6, rH = 2.6, rD = 3.2;
+      const radio = new THREE.Mesh(new THREE.BoxGeometry(rW, rH, rD), concrete);
+      radio.position.set(bW / 2 + 3, rH / 2, 0);
+      grp.add(radio);
+      const rRoof = new THREE.Mesh(new THREE.BoxGeometry(rW + 0.3, 0.20, rD + 0.3), concreteLit);
+      rRoof.position.set(bW / 2 + 3, rH + 0.10, 0);
+      grp.add(rRoof);
+      const rDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.6), winMat(0.65));
+      rDoor.position.set(bW / 2 + 3, 0.80, rD / 2 + 0.04);
+      rDoor.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.65 };
+      grp.add(rDoor);
+      this.standoff?.windows.push(rDoor);
+      // Roof dish array (3 small dishes)
+      [-1.0, 0, 1.0].forEach((xo, i) => {
+        const d = new THREE.Mesh(
+          new THREE.SphereGeometry(0.55, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45),
+          accent,
+        );
+        d.position.set(bW / 2 + 3 + xo, rH + 0.7, -0.5);
+        d.rotation.x = -Math.PI * 0.40;
+        d.rotation.z = -Math.PI / 2 + i * 0.2;
+        grp.add(d);
+      });
+      this.scene.add(grp);
+    }
+  },
+
+  /* ---------- s6: SW quadrant fill (biostation POI) ----------
+     User feedback: "biostation is completely empty give it cool building
+     colors etc". The biostation host itself was rebuilt in `_buildPanels`
+     with neon pink/cyan/purple/green colored pods + airlock dome + 6
+     bio-luminescent specimen tanks. This function adds the surrounding
+     SW quadrant fill: research lab, decontamination unit, refrigerated
+     specimen yard, geodesic greenhouse cluster, incinerator stack,
+     waste-water clarifier — all keyed to the same neon bio palette so
+     the whole quadrant reads as a xenobio research zone. */
+  _buildSWQuadrantFill() {
+    const labWhite   = new THREE.MeshBasicMaterial({ color: 0xb8c4d4 });
+    const labWhiteHi = new THREE.MeshBasicMaterial({ color: 0xd4dce8 });
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x424c64 });
+    const yellow = new THREE.MeshBasicMaterial({ color: 0x5a4a14 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
+    const neonPink = (op = 0.85) => new THREE.MeshBasicMaterial({ color: 0xff5fa8, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+    const neonCyan = (op = 0.85) => new THREE.MeshBasicMaterial({ color: 0x44ddee, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+    const neonGreen = (op = 0.85) => new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+    const neonPurple = (op = 0.85) => new THREE.MeshBasicMaterial({ color: 0xaa44ee, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+    const winMat = (op = 0.72) => new THREE.MeshBasicMaterial({
+      color: 0xffaa55, transparent: true, opacity: op,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+
+    /* ===== BIO-RESEARCH LAB ===== centered (-25, -8, 30) =====
+       Multi-story clean-white concrete building w/ neon-cyan window grid,
+       neon-green airlock door, animated rooftop equipment. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-25, -8, 20);  // s11: reverted s10 — splitting it east just made a 2nd distant cluster that looked worse
+      const bW = 9, bH = 6.5, bD = 6;
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(bW, bH, bD), labWhite);
+      shell.position.set(0, bH / 2, 0);
+      grp.add(shell);
+      // Roof
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(bW + 0.4, 0.30, bD + 0.4), labWhiteHi);
+      roof.position.set(0, bH + 0.15, 0);
+      grp.add(roof);
+      // Cyan window grid on the front face (3 cols × 2 rows)
+      for (let row = 0; row < 2; row++) {
+        for (let col = -1; col <= 1; col++) {
+          const w = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.4), neonCyan(0.78));
+          w.position.set(col * 2.6, bH * 0.30 + row * 2.4, bD / 2 + 0.04);
+          w.userData = { rate: 4.0 + Math.random(), phase: Math.random() * 6, baseOpacity: 0.78 };
+          grp.add(w);
+          this.standoff?.windows.push(w);
+        }
+      }
+      // Neon-green airlock door (camera-facing centered)
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.4), neonGreen(0.72));
+      door.position.set(0, 1.2, bD / 2 + 0.05);
+      door.userData = { rate: 3.6, phase: Math.random() * 6, baseOpacity: 0.72 };
+      grp.add(door);
+      this.standoff?.windows.push(door);
+      // Door frame
+      const dframe = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.7, 0.18), steel);
+      dframe.position.set(0, 1.35, bD / 2 + 0.10);
+      grp.add(dframe);
+      // Side accent strip (vertical pink, full height)
+      [-bW / 2 - 0.05, bW / 2 + 0.05].forEach((xo, i) => {
+        const accentStrip = new THREE.Mesh(new THREE.PlaneGeometry(0.45, bH * 0.85), i === 0 ? neonPink(0.65) : neonPurple(0.65));
+        accentStrip.position.set(xo, bH * 0.5, 0);
+        accentStrip.rotation.y = i === 0 ? -Math.PI / 2 : Math.PI / 2;
+        accentStrip.userData = { rate: 2.0, phase: i * 1.5, baseOpacity: 0.65 };
+        grp.add(accentStrip);
+        this.standoff?.windows.push(accentStrip);
+      });
+      // Roof equipment — HVAC + fume hood stacks
+      const hvac = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 1.8), accent);
+      hvac.position.set(-bW * 0.30, bH + 0.90, -bD * 0.20);
+      grp.add(hvac);
+      const hvacFan = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.14, 12), steel);
+      hvacFan.rotation.x = Math.PI / 2;
+      hvacFan.position.set(-bW * 0.30, bH + 1.55, -bD * 0.20);
+      grp.add(hvacFan);
+      // 2 fume hood stacks (cyan glow at tip)
+      [-0.5, 0.5].forEach(xo => {
+        const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.25, 2.6, 6), steel);
+        stack.position.set(bW * 0.30 + xo, bH + 1.30, -bD * 0.30);
+        grp.add(stack);
+        const stackTip = this._makeRunningLight(0x44ddee, 0.20);
+        stackTip.position.set(bW * 0.30 + xo, bH + 2.65, -bD * 0.30);
+        stackTip.userData = { rate: 1.6, phase: Math.random() * 6 };
+        grp.add(stackTip);
+      });
+      // Roof strobe (red aviation)
+      const rstrobe = this._makeRunningLight(0xff3344, 0.30);
+      rstrobe.position.set(bW * 0.30, bH + 1.0, bD * 0.30);
+      rstrobe.userData = { rate: 1.5, phase: Math.random() * 6 };
+      grp.add(rstrobe);
+      this.standoff?.strobes.push(rstrobe);
+      // BIOHAZARD label on south wall (visible from biostation POI looking back)
+      const labelBg = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.55),
+        new THREE.MeshBasicMaterial({ color: 0xe8a020 }));
+      labelBg.position.set(0, bH * 0.78, bD / 2 + 0.06);
+      grp.add(labelBg);
+      // Concrete pad surrounding the building
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(bW + 4, 0.20, bD + 4), concreteLit);
+      pad.position.set(0, 0.10, 0);
+      grp.add(pad);
+      this.scene.add(grp);
+    }
+
+    /* ===== DECONTAMINATION UNIT ===== centered (-15, -8, 38) =====
+       4-stall shower row w/ steam glow, drainage grates, supply tanks. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-15, -8, 30);  // s9: pushed north to 15u from S-perim road (real road, was 7u)
+      const stallW = 1.5, stallH = 2.5, stallD = 1.8;
+      // Concrete base pad
+      const base = new THREE.Mesh(new THREE.BoxGeometry(stallW * 4 + 0.6, 0.20, stallD + 1.2), concreteLit);
+      base.position.set(0, 0.10, 0);
+      grp.add(base);
+      // 4 shower stalls
+      for (let i = 0; i < 4; i++) {
+        const sx = (i - 1.5) * (stallW + 0.05);
+        // Stall walls (3-sided box)
+        const back = new THREE.Mesh(new THREE.BoxGeometry(stallW, stallH, 0.10), labWhite);
+        back.position.set(sx, stallH / 2 + 0.20, -stallD / 2);
+        grp.add(back);
+        [-stallW / 2 + 0.05, stallW / 2 - 0.05].forEach(xo => {
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(0.10, stallH, stallD), labWhite);
+          wall.position.set(sx + xo, stallH / 2 + 0.20, 0);
+          grp.add(wall);
+        });
+        // Roof slab
+        const sRoof = new THREE.Mesh(new THREE.BoxGeometry(stallW + 0.12, 0.10, stallD + 0.12), labWhiteHi);
+        sRoof.position.set(sx, stallH + 0.25, 0);
+        grp.add(sRoof);
+        // Steam/water glow inside (cyan)
+        const steam = new THREE.Mesh(new THREE.PlaneGeometry(stallW * 0.85, stallH * 0.90), neonCyan(0.45));
+        steam.position.set(sx, stallH / 2 + 0.20, 0);
+        steam.userData = { rate: 2.0 + i * 0.3, phase: i * 1.1, baseOpacity: 0.45 };
+        grp.add(steam);
+        this.standoff?.windows.push(steam);
+        // Shower head (overhead)
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 0.14, 8), steel);
+        head.position.set(sx, stallH + 0.10, 0);
+        grp.add(head);
+        // Drain grate on floor
+        const grate = new THREE.Mesh(new THREE.BoxGeometry(stallW * 0.55, 0.04, stallD * 0.40), dark);
+        grate.position.set(sx, 0.22, 0);
+        grp.add(grate);
+        // Status LED on stall door (green = ready)
+        const led = this._makeRunningLight(0x66ff88, 0.10);
+        led.position.set(sx, 2.0, stallD / 2 + 0.05);
+        led.userData = { rate: 2.4, phase: i * 0.6 };
+        grp.add(led);
+      }
+      // 2 supply tanks behind the row (decon fluid)
+      [-1.6, 1.6].forEach(xo => {
+        const tank = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.55, 0.55, 2.2, 12),
+          accent,
+        );
+        tank.position.set(xo, 1.30, -stallD / 2 - 0.85);
+        grp.add(tank);
+        // Equator band
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.06, 4, 16), stencil);
+        band.rotation.x = Math.PI / 2;
+        band.position.set(xo, 1.30, -stallD / 2 - 0.85);
+        grp.add(band);
+        // Status placard (green check for ready)
+        const placard = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.30), neonGreen(0.65));
+        placard.position.set(xo, 1.50, -stallD / 2 - 0.85 + 0.60);
+        grp.add(placard);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ===== REFRIGERATED SPECIMEN CONTAINER YARD ===== centered (-58, -8, 32) =====
+       Row of refrigerated containers with cyan cooling glow, condenser units
+       on top, hazard signs. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-58, -8, 20);  // s7: shifted north off back-cross road at z=+30
+      const cW = 4.5, cH = 2.6, cD = 8.5;
+      [-cW - 0.3, 0, cW + 0.3].forEach((xo, i) => {
+        // Container body
+        const cont = new THREE.Mesh(new THREE.BoxGeometry(cW, cH, cD), labWhite);
+        cont.position.set(xo, cH / 2 + 0.2, 0);
+        grp.add(cont);
+        // Vertical ribs
+        for (let j = -3; j <= 3; j++) {
+          const rib = new THREE.Mesh(new THREE.BoxGeometry(0.06, cH, 0.08), labWhiteHi);
+          rib.position.set(xo + cW / 2 + 0.04, cH / 2 + 0.2, j * 1.2);
+          grp.add(rib);
+        }
+        // Condenser unit on roof (refrigeration)
+        const cond = new THREE.Mesh(new THREE.BoxGeometry(cW * 0.85, 0.85, 1.6), accent);
+        cond.position.set(xo, cH + 0.65, -cD * 0.30);
+        grp.add(cond);
+        // Cooling fins
+        for (let f = -0.5; f <= 0.5; f += 0.20) {
+          const fin = new THREE.Mesh(new THREE.BoxGeometry(cW * 0.80, 0.04, 0.08), steel);
+          fin.position.set(xo, cH + 0.85, -cD * 0.30 + f);
+          grp.add(fin);
+        }
+        // Cyan cooling glow under the door
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(cW * 0.85, 1.6), neonCyan(0.55));
+        glow.position.set(xo, cH * 0.45 + 0.2, cD / 2 + 0.04);
+        glow.userData = { rate: 0.8 + i * 0.15, phase: i * 1.3, baseOpacity: 0.55 };
+        grp.add(glow);
+        this.standoff?.windows.push(glow);
+        // Door frame
+        const df = new THREE.Mesh(new THREE.BoxGeometry(cW * 0.92, 1.85, 0.12), steel);
+        df.position.set(xo, cH * 0.50 + 0.2, cD / 2 + 0.08);
+        grp.add(df);
+        // Hazard placard above door
+        const hp = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), yellow);
+        hp.position.set(xo, cH * 0.85 + 0.2, cD / 2 + 0.06);
+        grp.add(hp);
+        // Status LED on condenser (cooling = cyan blink)
+        const led = this._makeRunningLight(0x44ddee, 0.18);
+        led.position.set(xo - cW * 0.30, cH + 1.20, -cD * 0.30);
+        led.userData = { rate: 1.8, phase: i * 0.7 };
+        grp.add(led);
+        this.standoff?.strobes.push(led);
+      });
+      // Concrete pad
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(3 * cW + 2.6, 0.20, cD + 2), concrete);
+      pad.position.set(0, 0.10, 0);
+      grp.add(pad);
+      this.scene.add(grp);
+    }
+
+    /* ===== GEODESIC GREENHOUSE CLUSTER ===== centered (-55, -8, 55) =====
+       4 small geodesic domes (icosahedron approximation) w/ different
+       neon glow colors. Reads as alien-flora research domes. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-55, -8, 70);  // s9: 15u south of S-perim road (was 7u, too close visually)
+      const domes = [
+        { x: -3.5, z: -3, color: 0xff5fa8, r: 2.2 },  // pink
+        { x:  3.5, z: -3, color: 0x66ff88, r: 2.2 },  // green
+        { x: -3.5, z:  3, color: 0xaa44ee, r: 2.0 },  // purple
+        { x:  3.5, z:  3, color: 0x44ddee, r: 2.4 },  // cyan
+      ];
+      domes.forEach(d => {
+        // Dome shell — icosahedron geometry for the geodesic look
+        const shell = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(d.r, 1),
+          new THREE.MeshBasicMaterial({ color: d.color, transparent: true, opacity: 0.40, blending: THREE.AdditiveBlending, depthWrite: false }),
+        );
+        shell.position.set(d.x, d.r * 0.55, d.z);
+        // Squash to half-sphere visually by scaling Y
+        shell.scale.y = 0.65;
+        grp.add(shell);
+        // Geodesic frame — wireframe overlay
+        const frame = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(d.r + 0.04, 1),
+          new THREE.MeshBasicMaterial({ color: 0x2a3142, wireframe: true }),
+        );
+        frame.position.copy(shell.position);
+        frame.scale.copy(shell.scale);
+        grp.add(frame);
+        // Concrete ring base
+        const base = new THREE.Mesh(
+          new THREE.CylinderGeometry(d.r + 0.10, d.r + 0.20, 0.20, 14),
+          concreteLit,
+        );
+        base.position.set(d.x, 0.10, d.z);
+        grp.add(base);
+        // Door slit (warm warm glow at front)
+        const slit = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 1.0), winMat(0.55));
+        slit.position.set(d.x, 0.55, d.z + d.r + 0.06);
+        slit.userData = { rate: 4.0, phase: Math.random() * 6, baseOpacity: 0.55 };
+        grp.add(slit);
+        this.standoff?.windows.push(slit);
+        // Pulsing apex glow
+        const apex = this._makeRunningLight(d.color, 0.30);
+        apex.position.set(d.x, d.r * 0.55 + d.r * 0.65 + 0.25, d.z);
+        apex.userData = { rate: 0.5 + Math.random() * 0.3, phase: Math.random() * 6 };
+        grp.add(apex);
+        this.standoff?.strobes.push(apex);
+      });
+      // Connecting walkway (cement) between the 4 domes
+      [[-3.5, 0, 3.5, 0], [0, -3, 0, 3]].forEach(([x1, z1, x2, z2]) => {
+        const len = Math.hypot(x2 - x1, z2 - z1);
+        const wlk = new THREE.Mesh(new THREE.BoxGeometry(len, 0.12, 0.85), concreteLit);
+        wlk.position.set((x1 + x2) / 2, 0.06, (z1 + z2) / 2);
+        wlk.rotation.y = Math.atan2(z2 - z1, x2 - x1);
+        grp.add(wlk);
+      });
+      this.scene.add(grp);
+    }
+
+    /* ===== BIO-WASTE INCINERATOR STACK ===== centered (-72, -8, 22) =====
+       Tall industrial chimney w/ heat haze, base furnace, hot orange glow. */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-72, -8, 22);
+      // Furnace base (square brick mass)
+      const fW = 4.5, fH = 4.0, fD = 4.5;
+      const furnace = new THREE.Mesh(new THREE.BoxGeometry(fW, fH, fD), concrete);
+      furnace.position.set(0, fH / 2, 0);
+      grp.add(furnace);
+      const furnaceRoof = new THREE.Mesh(new THREE.BoxGeometry(fW + 0.3, 0.25, fD + 0.3), concreteLit);
+      furnaceRoof.position.set(0, fH + 0.12, 0);
+      grp.add(furnaceRoof);
+      // Glowing furnace door (hot orange)
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.6),
+        new THREE.MeshBasicMaterial({ color: 0xff7022, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+      door.position.set(0, 1.0, fD / 2 + 0.04);
+      door.userData = { rate: 3.0, phase: Math.random() * 6, baseOpacity: 0.85 };
+      grp.add(door);
+      this.standoff?.windows.push(door);
+      // Door frame
+      const dFrame = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.0, 0.20), steel);
+      dFrame.position.set(0, 1.05, fD / 2 + 0.10);
+      grp.add(dFrame);
+      // Tall chimney stack
+      const stkH = 14;
+      const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.1, stkH, 12), concreteLit);
+      stack.position.set(0, fH + stkH / 2, -fD * 0.20);
+      grp.add(stack);
+      // Reinforcement bands
+      [0.30, 0.60, 0.90].forEach(f => {
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.10, 4, 18), steel);
+        band.rotation.x = Math.PI / 2;
+        band.position.set(0, fH + stkH * f, -fD * 0.20);
+        grp.add(band);
+      });
+      // Top cap
+      const stackCap = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.85, 0.45, 12), accent);
+      stackCap.position.set(0, fH + stkH + 0.22, -fD * 0.20);
+      grp.add(stackCap);
+      // Hot exhaust glow at top (hazy orange)
+      const exhaust = this._makeRunningLight(0xff7022, 0.50);
+      exhaust.position.set(0, fH + stkH + 0.6, -fD * 0.20);
+      exhaust.userData = { rate: 0.8, phase: Math.random() * 6 };
+      grp.add(exhaust);
+      this.standoff?.strobes.push(exhaust);
+      // Aviation strobe at top
+      const tipS = this._makeRunningLight(0xff3344, 0.45);
+      tipS.position.set(0, fH + stkH + 1.4, -fD * 0.20);
+      tipS.userData = { rate: 1.4, phase: Math.random() * 6 };
+      grp.add(tipS);
+      this.standoff?.strobes.push(tipS);
+      // External ladder
+      for (let h = 0.6; h < fH + stkH - 0.3; h += 0.40) {
+        const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.50, 4), steel);
+        rung.rotation.z = Math.PI / 2;
+        rung.position.set(0.95, h, -fD * 0.20 + 0.85);
+        grp.add(rung);
+      }
+      // Hazard sign on the south wall
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.6),
+        new THREE.MeshBasicMaterial({ color: 0xc83838 }));
+      sign.position.set(-fW * 0.35, 2.2, fD / 2 + 0.05);
+      grp.add(sign);
+      // Ash collection drum at the side
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.0, 12), accent);
+      drum.position.set(fW / 2 + 1.0, 0.50, fD / 2 - 0.5);
+      grp.add(drum);
+      const drumLid = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.05, 12), steel);
+      drumLid.position.set(fW / 2 + 1.0, 1.02, fD / 2 - 0.5);
+      grp.add(drumLid);
+      this.scene.add(grp);
+    }
+
+    /* ===== WASTE-WATER CLARIFIER ===== centered (-38, -8, 60) =====
+       Circular open-top concrete tank w/ central rotating skimmer arm
+       (bio-fluid sloshing; murky cyan surface). */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-38, -8, 68);  // s7: shifted further south to clear S-perim at z=+50
+      const tankR = 4.5;
+      // Outer concrete ring wall
+      const wall = new THREE.Mesh(
+        new THREE.CylinderGeometry(tankR, tankR + 0.20, 1.4, 24, 1, true),
+        concreteLit,
+      );
+      wall.position.set(0, 0.70, 0);
+      grp.add(wall);
+      // Top rim
+      const rim = new THREE.Mesh(
+        new THREE.TorusGeometry(tankR, 0.18, 6, 24),
+        concrete,
+      );
+      rim.rotation.x = Math.PI / 2;
+      rim.position.set(0, 1.40, 0);
+      grp.add(rim);
+      // Floor of the tank (bio-fluid surface — murky cyan glow)
+      const surface = new THREE.Mesh(
+        new THREE.CircleGeometry(tankR - 0.1, 24),
+        new THREE.MeshBasicMaterial({ color: 0x44aabb, transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      surface.rotation.x = -Math.PI / 2;
+      surface.position.set(0, 1.20, 0);
+      surface.userData = { rate: 0.4, phase: 0, baseOpacity: 0.65 };
+      grp.add(surface);
+      this.standoff?.windows.push(surface);
+      // Central support column
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 2.4, 8), steel);
+      col.position.set(0, 2.20, 0);
+      grp.add(col);
+      // Rotating skimmer arm (registered to spin pivots)
+      const skimmerPivot = new THREE.Group();
+      skimmerPivot.position.set(0, 1.50, 0);
+      grp.add(skimmerPivot);
+      const skimArm = new THREE.Mesh(new THREE.BoxGeometry(tankR * 1.85, 0.18, 0.18), steel);
+      skimmerPivot.add(skimArm);
+      const skimBlade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.30, 0.85), steel);
+      skimBlade.position.set(tankR * 0.80, -0.20, 0);
+      skimmerPivot.add(skimBlade);
+      this._radarBuildingPivots ??= [];
+      this._radarBuildingPivots.push(skimmerPivot);
+      // 4 access stairs around the rim
+      [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
+        const stairX = Math.cos(theta) * (tankR + 0.6);
+        const stairZ = Math.sin(theta) * (tankR + 0.6);
+        const stair = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.40, 0.50), accent);
+        stair.position.set(stairX, 0.70, stairZ);
+        stair.lookAt(0, 0.70, 0);
+        grp.add(stair);
+      });
+      // Effluent pipe out (warm metal)
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 4, 8), steel);
+      pipe.rotation.z = Math.PI / 2;
+      pipe.position.set(tankR + 2, 0.60, 0);
+      grp.add(pipe);
+      this.scene.add(grp);
+    }
+
+    /* ===== SOLAR-PANEL CANOPY (efficiency: fills the gap between lab and
+       greenhouse cluster w/ a long low silhouette) ===== centered (-42, -8, 45) ===== */
+    {
+      const grp = new THREE.Group();
+      grp.position.set(-42, -8, 28);  // s9: pushed north of S-perim road by 17u (s7 fix was based on phantom back-cross from BASEMAP doc; only real road in SW is S-perim z=50)
+      const rows = 3, cols = 6;
+      const panelW = 1.8, panelD = 1.0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const px = (c - (cols - 1) / 2) * (panelW + 0.1);
+          const pz = (r - (rows - 1) / 2) * (panelD + 0.4);
+          // Support post
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.4, 5), steel);
+          post.position.set(px, 0.70, pz);
+          grp.add(post);
+          // Panel (dark blue-black w/ subtle shimmer)
+          const panel = new THREE.Mesh(
+            new THREE.BoxGeometry(panelW, 0.06, panelD),
+            new THREE.MeshBasicMaterial({ color: 0x1a2238 }),
+          );
+          panel.position.set(px, 1.45, pz);
+          panel.rotation.x = -Math.PI * 0.18;
+          grp.add(panel);
+          // Cyan grid lines on panel
+          for (let g = -panelW * 0.4; g <= panelW * 0.4; g += panelW * 0.2) {
+            const line = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, panelD * 0.95), neonCyan(0.30));
+            line.position.set(px + g, 1.48, pz);
+            line.rotation.x = -Math.PI * 0.18;
+            grp.add(line);
+          }
+        }
+      }
+      this.scene.add(grp);
+    }
+  },
+
   /* ---------- Pelican landing pad behind the camera ----------
      Fills the back direction so when the user turns around there's a
      clear themed feature instead of a void. Big concrete pad with
@@ -7624,6 +8868,7 @@ const ScenesSelector = {
      deck lights. */
   _buildPelicanPad() {
     const grp = new THREE.Group();
+    grp.name = 'pelican_pad';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x3a4358 });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const stencil = new THREE.MeshBasicMaterial({ color: 0xc6c2a8 });
@@ -7734,6 +8979,7 @@ const ScenesSelector = {
     // off-axis so it doesn't perfectly bisect the panel layout. Big enough
     // to dominate the skyline and silhouette against the moon/nebula.
     const grp = new THREE.Group();
+    grp.name = 'central_dish';
     const concrete = new THREE.MeshBasicMaterial({ color: 0x36404f });
     const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
     const steel  = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
@@ -7933,8 +9179,9 @@ const ScenesSelector = {
       { x: 50, z:  12, yaw:  Math.PI * 1.05 },
       { x: 40, z:  22, yaw: -Math.PI * 0.15 },
     ];
-    parkedSpots.forEach(s => {
+    parkedSpots.forEach((s, i) => {
       const car = this._buildWarthogMesh(olive, oliveHi, steel, dark);
+      car.name = `parked_warthog_motorpool_${i}`;
       car.position.set(s.x, -8, s.z);
       car.rotation.y = s.yaw;
       this.scene.add(car);
@@ -7946,8 +9193,9 @@ const ScenesSelector = {
     // given moment there's almost always one visible from the deck. The
     // Scorpion runs CW so they cross paths every quarter loop.
     this.patrolHogs = [];
-    [0, 197, 395].forEach(phaseOffset => {
+    [0, 197, 395].forEach((phaseOffset, i) => {
       const car = this._buildWarthogMesh(olive, oliveHi, steel, dark);
+      car.name = `patrol_warthog_${i}`;
       car.userData.wheels = car.children.filter(
         c => c.geometry?.type === 'CylinderGeometry' && c.geometry.parameters.height === 0.55
       );
@@ -8219,6 +9467,91 @@ const ScenesSelector = {
     }
   },
 
+  /* ---------- s13: Debug label overlay ----------
+     Walks the scene once after build, finds every node with a non-empty
+     .name, and parents a text-canvas Sprite above it. Toggle via ?labels=1
+     query param OR the L key. depthTest:false so labels read through walls.
+     See docs/scenes/LABEL_OVERLAY_PLAN.md. */
+  _makeLabelTexture(text) {
+    if (this.labels.texCache.has(text)) return this.labels.texCache.get(text);
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.font = 'bold 22px ui-monospace, Menlo, Consolas, monospace';
+    const m = ctx.measureText(text);
+    const padX = 14, padY = 10, textW = Math.min(m.width, 220);
+    const pillW = Math.min(256, textW + padX * 2);
+    const pillH = 36;
+    const pillX = (256 - pillW) / 2, pillY = (64 - pillH) / 2;
+    ctx.fillStyle = 'rgba(8, 12, 20, 0.88)';
+    ctx.fillRect(pillX, pillY, pillW, pillH);
+    ctx.strokeStyle = 'rgba(140, 200, 255, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pillX + 0.5, pillY + 0.5, pillW - 1, pillH - 1);
+    ctx.fillStyle = '#e8f2ff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 32, 220);
+    const tex = new THREE.CanvasTexture(c);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    this.labels.texCache.set(text, tex);
+    return tex;
+  },
+
+  _buildLabels() {
+    if (!this.scene) return;
+    const seen = new Set();
+    this.scene.traverse(node => {
+      if (!node.name) return;
+      // Skip THREE's auto-assigned defaults (empty by default; only user-set
+      // .name strings should label). Also skip the labels themselves.
+      if (node.userData?.__isLabel) return;
+      if (seen.has(node)) return;
+      seen.add(node);
+      // Compute world-space top of the node to position label above it.
+      const box = new THREE.Box3().setFromObject(node);
+      if (!isFinite(box.max.y) || !isFinite(box.min.y)) return;
+      const worldTopY = box.max.y;
+      // Convert worldTopY to node-local Y.
+      const worldPos = new THREE.Vector3();
+      node.getWorldPosition(worldPos);
+      const localTopOffset = worldTopY - worldPos.y;
+      const tex = this._makeLabelTexture(node.name);
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        sizeAttenuation: true,
+      });
+      const sprite = new THREE.Sprite(mat);
+      // Sprite native aspect 256:64 = 4:1. Width 8u → height 2u.
+      sprite.scale.set(8, 2, 1);
+      sprite.position.set(0, localTopOffset + 1.8, 0);
+      sprite.renderOrder = 9999;
+      sprite.userData.__isLabel = true;
+      sprite.visible = this.labels.enabled;
+      node.add(sprite);
+      this.labels.sprites.push(sprite);
+    });
+    this._updateLabelsHud();
+  },
+
+  _setLabelsEnabled(on) {
+    if (!this.labels) return;
+    this.labels.enabled = !!on;
+    this.labels.sprites.forEach(s => { s.visible = this.labels.enabled; });
+    this._updateLabelsHud();
+  },
+
+  _updateLabelsHud() {
+    const el = document.getElementById('ss-labels-hint');
+    if (el) el.textContent = `[L] labels: ${this.labels?.enabled ? 'on' : 'off'}`;
+  },
+
   _buildHud() {
     const root = document.createElement('div');
     root.className = 'ss-hud';
@@ -8238,6 +9571,7 @@ const ScenesSelector = {
       </div>
       <div class="ss-bl">
         <div class="ss-hint" id="ss-hint">— select a panel —</div>
+        <div class="ss-labels-hint" id="ss-labels-hint" style="margin-top:6px;font-size:10px;opacity:0.55;letter-spacing:0.08em">[L] labels: off</div>
       </div>
       <div class="ss-focus" id="ss-focus" style="display:none">
         <div class="ss-focus-num" id="ss-focus-num"></div>
@@ -8378,6 +9712,11 @@ const ScenesSelector = {
     }
     if (this.poi && (e.key === 'p' || e.key === 'P')) {
       this._gotoPOI((this.poi.current - 1 + this.poi.list.length) % this.poi.list.length);
+      return;
+    }
+    // s13: L toggles debug ID labels above named objects
+    if (e.key === 'l' || e.key === 'L') {
+      this._setLabelsEnabled(!this.labels.enabled);
       return;
     }
   },
@@ -8613,6 +9952,15 @@ const ScenesSelector = {
       });
     }
     if (this.hudEl) this.hudEl.remove();
+    if (this.labels) {
+      this.labels.sprites.forEach(s => {
+        try { s.material?.map?.dispose?.(); } catch (e) {}
+        try { s.material?.dispose?.(); } catch (e) {}
+        try { s.parent?.remove(s); } catch (e) {}
+      });
+      this.labels.texCache.forEach(t => { try { t.dispose?.(); } catch (e) {} });
+      this.labels = null;
+    }
     this.scene = null; this.camera = null; this.renderer = null;
     this.composer = null; this.panels = [];
   },

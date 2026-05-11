@@ -2,7 +2,7 @@
 
 **Scope:** the scene-selector observation deck at `/scenes` (military base panorama with 11 holographic experiment panels), plus the legacy 3D scene app at `/scenes/play.html` (Villa / Neural / Deep Sea / Terrain / Living Wall etc.). The `/scenes` page is the active redesign surface.
 
-**Build:** s4
+**Build:** s15
 **Updated:** 2026-05-10
 
 ## Scope-owned files (this chat freely edits these)
