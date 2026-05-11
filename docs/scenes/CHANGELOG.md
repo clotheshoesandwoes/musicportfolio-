@@ -4,6 +4,29 @@ Per-scene history for `/scenes` starting at the post-split point. Build history 
 
 ---
 
+## s16 — 2026-05-11 — Finish label pass: drum clusters, flood poles, in-flight ships
+
+User after s15: "continue pls". Fourth and final extension. The remaining unlabeled targets were three helpers that scene-add'd their parts individually (no parent group to hang a `.name` on) + the five capital-ship designs from `_buildFlybys`.
+
+**Helper refactors (wrap parts in a parent group, then label):**
+- `buildDrumCluster(x, z)` — previously scene-add'd 5 drums + 5 lids as 10 individual top-level meshes. Now wraps all 10 in a `THREE.Group()` positioned at `(x, -8, z)` and named `drum_cluster_<x>_<z>`. 6 clusters across left/right/far flanks.
+- `buildFloodPole(x, z, headDir)` — previously scene-add'd 3 meshes (pole + head + lens). Now wraps in a `THREE.Group()` positioned at `(x, -8, z)` and named `flood_pole_<x>_<z>`. 6 poles across the deck-flank fill zones.
+
+**In-flight ships** (`_buildFlybys`) — 5 capital ships from the design table self-name from their `kind`: `flyby_capital`, `flyby_cruiser`, `flyby_pelican`, `flyby_fighter`, `flyby_forerunner`. Labels are parented to each ship, so they follow it across the sky (and stay hidden when the ship is on respawn cooldown — `_buildLabels` walks the scene once at init and `sprite.visible` inherits from the parent's `.visible`).
+
+**Final intentional skips:**
+- **Floor props** (`_buildFloorProps`) — 18 traffic cones + 9 fusion coils + 2 kill balls + 16 supply crates scattered randomly on the deck (45 props total). At default zoom these clutter the labeled view to the point of unreadability — labels would overlap each other constantly and obscure the actual buildings the user is trying to identify. The deck is clearly the user's vantage point, not a thing they need labels for.
+- **Perimeter streetlamps** (~20 small fixtures along the loop legs in `_buildBaseLighting`) — same reasoning: too dense, too small, too repetitive. The streetlamps read as "lighting infrastructure" not "named landmark."
+- **Building windows / building flood beams / building uplights** — sub-props on already-labeled buildings; labels would double up over their parent.
+- **`_buildBarracksRow`** — dead code (no call site).
+- **`_buildOuterCompounds`, `_buildSWQuadrantFill`** — disabled in `init()` per s12.
+
+Effectively the labeled-screenshot workflow is now complete: every distinct mass on screen carries an ID. Future work (if needed) is the `SCENE_MANIFEST.json` generator → scenes-spatial Skill, per [docs/scenes/LABEL_OVERLAY_PLAN.md](LABEL_OVERLAY_PLAN.md).
+
+Files: js/scenes-selector.js, js/builds/scenes.js (s15 → s16), docs/scenes/FILE_MAP.md.
+
+---
+
 ## s15 — 2026-05-10 — Label naming pass into figures, pelican infra, decoratives, planet
 
 User after s14 screenshot: "label continue, save code update helpers and all". Third extension pass — same overlay subsystem from s13, broadening the `.name` coverage into the construction-site helpers s13/s14 hadn't touched yet.

@@ -1340,18 +1340,22 @@ const ScenesSelector = {
     };
 
     const buildDrumCluster = (x, z) => {
+      const grp = new THREE.Group();
+      grp.name = `drum_cluster_${x}_${z}`;
+      grp.position.set(x, -8, z);
       const positions = [[0, 0], [0.95, 0], [0.48, 0.85], [1.43, 0.85], [-0.05, 1.7]];
       positions.forEach(([dx, dz], i) => {
         const drum = new THREE.Mesh(
           new THREE.CylinderGeometry(0.45, 0.45, 1.0, 10),
           i % 2 === 0 ? olive : oliveHi,
         );
-        drum.position.set(x + dx, -8 + 0.5, z + dz);
-        this.scene.add(drum);
+        drum.position.set(dx, 0.5, dz);
+        grp.add(drum);
         const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10), steel);
-        lid.position.set(x + dx, -8 + 1.02, z + dz);
-        this.scene.add(lid);
+        lid.position.set(dx, 1.02, dz);
+        grp.add(lid);
       });
+      this.scene.add(grp);
     };
 
     const buildPalletStack = (x, z, yaw) => {
@@ -1371,15 +1375,19 @@ const ScenesSelector = {
     };
 
     const buildFloodPole = (x, z, headDir) => {
+      const grp = new THREE.Group();
+      grp.name = `flood_pole_${x}_${z}`;
+      grp.position.set(x, -8, z);
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 9.5, 5), steel);
-      pole.position.set(x, -8 + 4.75, z);
-      this.scene.add(pole);
+      pole.position.y = 4.75;
+      grp.add(pole);
       const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.45, 0.65), accent);
-      head.position.set(x + headDir.x * 0.45, -8 + 9.6, z + headDir.z * 0.45);
-      this.scene.add(head);
+      head.position.set(headDir.x * 0.45, 9.6, headDir.z * 0.45);
+      grp.add(head);
       const lens = this._makeRunningLight(0xfff0c8, 0.32);
-      lens.position.set(x + headDir.x * 0.75, -8 + 9.5, z + headDir.z * 0.75);
-      this.scene.add(lens);
+      lens.position.set(headDir.x * 0.75, 9.5, headDir.z * 0.75);
+      grp.add(lens);
+      this.scene.add(grp);
     };
 
     // ----- Left flank -----
@@ -3249,6 +3257,7 @@ const ScenesSelector = {
     ];
     designs.forEach((d, i) => {
       const ship = this._makeShip(d);
+      ship.name = `flyby_${d.kind}`;
       ship.userData.respawnDelay = i * 6 + Math.random() * 8;  // staggered first appearances
       ship.userData.kind = d.kind;
       this._respawnFlyby(ship);

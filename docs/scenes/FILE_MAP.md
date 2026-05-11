@@ -2,8 +2,8 @@
 
 **Scope:** the scene-selector observation deck at `/scenes` (military base panorama with 11 holographic experiment panels), plus the legacy 3D scene app at `/scenes/play.html` (Villa / Neural / Deep Sea / Terrain / Living Wall etc.). The `/scenes` page is the active redesign surface.
 
-**Build:** s15
-**Updated:** 2026-05-10
+**Build:** s16
+**Updated:** 2026-05-11
 
 ## Scope-owned files (this chat freely edits these)
 - [js/scenes-selector.js](../../js/scenes-selector.js) — the WebGL scene-selector. Mounts as `window.ScenesSelector = { init, destroy }` from `scenes/index.html`. Builds the desert military-base environment (floor shader with road network, ridge silhouette, perimeter fence + razor wire + watchtowers, missile silo + LF compound, antenna farm, conex stacks, hexagonal observation deck at camera, 11 panels in radial arc, post-FX stack, dust motes, back-glow sprites, Cortana wireframe humanoid, scripted patrol activity).
