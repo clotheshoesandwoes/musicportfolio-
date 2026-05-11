@@ -2,7 +2,7 @@
 
 **Scope:** the scene-selector observation deck at `/scenes` (military base panorama with 11 holographic experiment panels), plus the legacy 3D scene app at `/scenes/play.html` (Villa / Neural / Deep Sea / Terrain / Living Wall etc.). The `/scenes` page is the active redesign surface.
 
-**Build:** s16
+**Build:** s17
 **Updated:** 2026-05-11
 
 ## Scope-owned files (this chat freely edits these)
@@ -14,6 +14,9 @@
 - [docs/scenes/FILE_MAP.md](FILE_MAP.md) — this file.
 - [BASEMAP.md](../../BASEMAP.md) — military-base floor plan v2 (radial layout, panel coords, zone catalog, scripted-activity script). Scenes-only doc; lives at root for now.
 - [SCENES_HANDOFF.md](../../SCENES_HANDOFF.md) — fresh-chat catch-up doc for the scenes redesign thread.
+- [docs/scenes/SCENE_MANIFEST.json](SCENE_MANIFEST.json) — **AUTO-GENERATED** ground-truth list of every named object in `js/scenes-selector.js`: id + source line + position. Read this BEFORE touching anything spatial. Regenerate via `node scripts/gen-manifest.js` after every scenes-selector edit that adds/renames/removes a `.name` assignment.
+- [docs/scenes/LABEL_OVERLAY_PLAN.md](LABEL_OVERLAY_PLAN.md) — workflow spec for the `?labels=1` debug overlay + manifest generator. Read once on first visit; not edited per build.
+- [scripts/gen-manifest.js](../../scripts/gen-manifest.js) — Node script that walks `js/scenes-selector.js` and regenerates `SCENE_MANIFEST.json`. No dependencies; runs in <1s.
 
 ## Shared files used (do NOT edit casually — coordinate)
 - `js/player.js` — audio engine. The legacy scene app's audio chrome reads `audio.__floorAnalyser`. **Visual changes go in scene-specific JS files, NOT here.**
@@ -25,6 +28,7 @@
 2. Update the `**Build:**` and `**Updated:**` lines at the top of this file.
 3. Add a CHANGELOG entry at the top of [docs/scenes/CHANGELOG.md](CHANGELOG.md).
 4. Validate before shipping: `cp js/scenes-selector.js c:/tmp/sc.mjs && node -c c:/tmp/sc.mjs`.
+5. If your change added/renamed/removed a `.name` assignment in `js/scenes-selector.js`, regenerate the manifest: `node scripts/gen-manifest.js`. Commit the updated `docs/scenes/SCENE_MANIFEST.json` alongside the code change.
 
 ## Architecture summary
 - Camera at the hex deck origin, looks across a 261° arc of holographic panels.

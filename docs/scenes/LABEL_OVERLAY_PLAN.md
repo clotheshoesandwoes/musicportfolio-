@@ -2,7 +2,14 @@
 
 **Scope:** `/scenes` only. Single file: [js/scenes-selector.js](../../js/scenes-selector.js). Bump `s12 → s13` per [docs/scenes/FILE_MAP.md](FILE_MAP.md) rules.
 
-**Status:** plan, not built. Ship in one focused pass — no other changes.
+**Status:** ✅ shipped s13–s17. Original plan below for reference; the manifest layer (originally listed as out-of-scope) was added in s17. See [docs/scenes/SCENE_MANIFEST.json](SCENE_MANIFEST.json) for the auto-generated ground-truth list.
+
+## Workflow now in use
+
+1. **No screenshot needed.** In a fresh chat, read [docs/scenes/SCENE_MANIFEST.json](SCENE_MANIFEST.json) first. Every named object in the scene is listed with its ID, source line in `js/scenes-selector.js`, and (for ~70% of them) its world position.
+2. **If the user describes a building**, resolve the description to a specific id in the manifest before touching code. If you can't resolve confidently, ASK which id — don't guess.
+3. **If the manifest looks stale** (you edit the scene file and add/rename/remove a `.name` assignment), regenerate: `node scripts/gen-manifest.js`. Takes <1 second; commits the diff alongside the code change.
+4. **Visual ground-truthing still works**: `http://localhost:8000/scenes/?labels=1` or press `L` in-scene shows floating ID pills above every named mesh — useful when you need the visual layout and not just the position list.
 
 ---
 

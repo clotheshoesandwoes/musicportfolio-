@@ -4,6 +4,27 @@ Per-scene history for `/scenes` starting at the post-split point. Build history 
 
 ---
 
+## s17 — 2026-05-11 — Auto-generated SCENE_MANIFEST.json (manifest layer)
+
+User after s16: "continue pls". Labels were exhausted, so picked up the next piece from [LABEL_OVERLAY_PLAN.md](LABEL_OVERLAY_PLAN.md) section 2 — the auto-generated manifest. Converts the labeled-screenshot workflow into a structured JSON any fresh chat can read without needing a screenshot at all.
+
+**What shipped:**
+- [scripts/gen-manifest.js](../../scripts/gen-manifest.js) — Node script (no deps). Walks `js/scenes-selector.js`, regex-extracts every `.name = '<id>'` static assignment, resolves nearest `position.set(...)` or `_placeBuilding(grp, x, y, z)` to an actual `(x, y, z)`, and dumps the result. Also pulls panel-host IDs + positions from the `mounts` table in `_buildPanels()`. Resolver handles simple expressions (`x + 1.6`, `padR + 1.0`, `-65 - 6`) via a per-method symbol table built from `const X = N;` declarations.
+- [docs/scenes/SCENE_MANIFEST.json](SCENE_MANIFEST.json) — the output. Three sections:
+  - `panelHosts` (11) — all radial panel-mount buildings with their world coords from BASEMAP-aligned spec.
+  - `staticObjects` (29) — standalone buildings/vehicles/figures/lighting rigs/backdrops. 21/29 positions resolved automatically; remainder use multi-term expressions or runtime-computed positions (line numbers still point to source).
+  - `dynamicTemplates` (21) — per-instance helpers (`watchtower_*`, `conex_stack_*`, `tent_*`, `flyby_*`, etc.) with a pointer to the helper's source line. Instance positions live in the JS call sites; the runtime label overlay still names each instance via template substitution.
+- [docs/scenes/LABEL_OVERLAY_PLAN.md](LABEL_OVERLAY_PLAN.md) — updated the "status" header and added a Workflow section: read the manifest, resolve the user's description to an id, ask if you can't — don't guess.
+- [docs/scenes/FILE_MAP.md](FILE_MAP.md) — added the manifest + script to the file-pointer list, plus a 5th "always do" rule: regenerate `SCENE_MANIFEST.json` after any `.name`-touching edit.
+
+**Why this matters:** s13–s16 built a *visual* ground-truth layer (screenshot with labels). s17 adds a *structured* ground-truth layer (JSON). Together they fix the original user pain ("I sent you this picture a million times — what do you mean 'I didn't know we had roads'?") at both ends: chat can read the manifest before responding, and the user can screenshot the labels if a visual is faster than scrolling JSON.
+
+**Next layer** (per the original plan, still out-of-scope until needed): a scenes-spatial Skill that fires on edits to `js/scenes-selector.js` / `js/marathon-world.js` / `js/tracks-daw.js` and forces a manifest read before any spatial edit. Won't build until the manifest workflow is actually validated in real use.
+
+Files: scripts/gen-manifest.js (new), docs/scenes/SCENE_MANIFEST.json (new, auto-generated), docs/scenes/{LABEL_OVERLAY_PLAN.md, FILE_MAP.md, CHANGELOG.md}, js/builds/scenes.js (s16 → s17). No js/scenes-selector.js change.
+
+---
+
 ## s16 — 2026-05-11 — Finish label pass: drum clusters, flood poles, in-flight ships
 
 User after s15: "continue pls". Fourth and final extension. The remaining unlabeled targets were three helpers that scene-add'd their parts individually (no parent group to hang a `.name` on) + the five capital-ship designs from `_buildFlybys`.
