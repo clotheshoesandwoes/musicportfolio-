@@ -1,9 +1,9 @@
 # GALAXY — file map
 
-**Scope:** the main page at `/` (and its alias `/world`). Track titles drifting in a 3D void, with permanent landmarks (Marathon ship, Halo ringworld, distant core), audio-reactive shaders, and 24+ scripted scenarios spawnable via the `~` admin panel.
+**Scope:** the main page at `/` (and its alias `/world`). Track titles drifting in a 3D void, with permanent landmarks (Marathon ship, Halo ringworld, distant core), audio-reactive shaders, and 30+ scripted scenarios spawnable via the `~` admin panel.
 
-**Build:** g7
-**Updated:** 2026-05-10
+**Build:** g13
+**Updated:** 2026-05-16
 
 ## Scope-owned files (this chat freely edits these)
 - [js/marathon-world.js](../../js/marathon-world.js) — the entire WebGL galaxy scene. Mounts as `window.MarathonWorld = { init, destroy }` and is booted by `index.html`'s `bootMarathonWorld()`. Builds nebula skybox, starfield, distant core (Saturn-observatory), drift haze, fog patches, fibonacci-sphere title placement, fragments, streaks, satellites, shards, Halo ringworld landmark, Marathon ship landmark, Traveler overhead landmark, nav buoys, flyby ship pool (longsword/banshee/pelican/forerunner), bolt particles, post-FX stack (bloom + CA + scanlines + grain + vignette + halation + DoF + god-rays + lens dirt + anamorphic flares), HUD, admin panel, scripted scenarios. Locked-camera at origin, drag-look only.
@@ -33,5 +33,5 @@
   - The Traveler — high overhead at `(80, 760, -260)`, paneled white sphere R=130 (g2). Drag-look up to discover it.
 - Camera far plane = 2400u (b240, bumped to fit the new ringworld extent).
 - Flyby ships spawn from a pool: longsword (Halo dart), banshee (Covenant fighter), pelican (UNSC dropship), forerunner (geometric ringed orb).
-- 24+ scripted scenarios in the admin panel (`~` overlay): combat, scripted (cinematic / fleet ops / action / debris / micro events), camera, scene element toggles, time controls, post-FX, capture.
+- 30+ scripted scenarios in the admin panel (`~` overlay): combat, scripted (cinematic / fleet ops / action / debris / micro events), cameos (CCS / Keyship / Ring fragment / Monolith / Stargate / Frozen ship / Leviathan / Lensing / MAC / Cargo spill / Salvage tug / Sentinel swarm — g12), camera, scene element toggles, time controls, post-FX, capture.
 - Audio analyser cached on `audio.__floorAnalyser` — reads bass band for shader pulse, full FFT for spectrum displays.

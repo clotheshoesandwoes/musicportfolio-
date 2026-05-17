@@ -363,6 +363,10 @@ const MarathonWorld = {
     this._autoGrade = false;
     this._autoHaloT = 0;
     this._autoGradeT = 0;
+    // g8 — global breath scalar driven by bass. Titles' basePos is multiplied
+    // by (1 + _breath * coef) so the whole constellation inhales/exhales with
+    // music. Smoothed via per-frame lerp to avoid sub-frame jitter.
+    this._breath = 0;
 
     const canvas = document.createElement('canvas');
     canvas.className = 'mw-canvas';
@@ -402,6 +406,7 @@ const MarathonWorld = {
     this._buildHaloRing();
     this._buildTraveler();
     this._buildNavBuoys();
+    this._buildNeuronThreads();
 
     this.clock = new THREE.Clock();
     this.ray = new THREE.Raycaster();
@@ -3213,6 +3218,573 @@ const MarathonWorld = {
     if (this._flashHint) this._flashHint('spawned: silent observer', 'info');
   },
 
+  // ============================================================
+  // g12 CAMEOS — 12 iconic floating scenarios.
+  // Each uses the fake-flyby-ship pattern (push to flybyShips with
+  // _ephemeral=true) so they get follow-cam, follow lifecycle, and
+  // teardown via _disposeEphemeralShip. Tick branches live in
+  // _tickScenario keyed on the scenario string.
+  // ============================================================
+
+  // 1. CCS BATTLECRUISER — purple ribbed Covenant cruiser, gravity-lift glow
+  _spawnCcsBattlecruiser(){
+    const grp = new THREE.Group();
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x2a0a48, transparent: true, opacity: 0 });
+    const ribMat  = new THREE.MeshBasicMaterial({ color: 0x110422, transparent: true, opacity: 0 });
+    const trimMat = new THREE.MeshBasicMaterial({
+      color: 0x6a3acc, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(78, 10, 14), hullMat);
+    grp.add(spine);
+    for (let i = 0; i < 7; i++) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(2.4, 11.6, 16.4), ribMat);
+      rib.position.x = -32 + i * 10.5;
+      grp.add(rib);
+    }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 9), hullMat);
+    bridge.position.set(24, 7, 0); grp.add(bridge);
+    const lift = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 12, 14), trimMat);
+    lift.position.y = -10; grp.add(lift);
+    const liftGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(), color: 0xcc88ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    liftGlow.scale.set(22, 30, 1); liftGlow.position.set(0, -22, 0); grp.add(liftGlow);
+    const engGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(), color: 0x9966ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    engGlow.scale.set(16, 16, 1); engGlow.position.set(-42, 0, 0); grp.add(engGlow);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(170)
+      .addScaledVector(right, sideSign * 200)
+      .addScaledVector(up, 22);
+    const velDir = right.clone().multiplyScalar(-sideSign);
+    grp.rotation.y = Math.atan2(-velDir.z, velDir.x);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'ccs', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: velDir.clone().multiplyScalar(22),
+      rollPhase: 0, life: 0, maxLife: 22,
+      scenario: 'ccs_battlecruiser', scenarioTime: 0,
+      scenarioBase: { hullMat, ribMat, trimMat, liftGlow, engGlow },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: CCS battlecruiser', 'info');
+  },
+
+  // 2. FORERUNNER KEYSHIP — descends from above, hovers, slips away
+  _spawnKeyshipDescent(){
+    const grp = new THREE.Group();
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x8a7e5a, transparent: true, opacity: 0 });
+    const accentMat = new THREE.MeshBasicMaterial({
+      color: 0xd8c478, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(8, 14, 44, 12), hullMat);
+    grp.add(hull);
+    const ringA = new THREE.Mesh(new THREE.TorusGeometry(17, 0.9, 8, 48), accentMat);
+    ringA.rotation.x = Math.PI / 2; grp.add(ringA);
+    const ringB = new THREE.Mesh(new THREE.TorusGeometry(20, 0.6, 8, 48), accentMat);
+    ringB.rotation.x = Math.PI / 2; ringB.rotation.z = Math.PI / 4; grp.add(ringB);
+    const pointGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(), color: 0xffe69a, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    pointGlow.scale.set(10, 10, 1); pointGlow.position.y = -24; grp.add(pointGlow);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    const finalPos = fwd.clone().multiplyScalar(140)
+      .addScaledVector(right, sideSign * 35)
+      .addScaledVector(up, 18);
+    grp.position.copy(finalPos).addScaledVector(up, 80);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'keyship', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: new THREE.Vector3(0, 0, 0),
+      rollPhase: 0, life: 0, maxLife: 13,
+      scenario: 'keyship_descent', scenarioTime: 0,
+      scenarioBase: { hullMat, accentMat, pointGlow, ringA, ringB, finalPos, upVec: up.clone() },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: keyship descent', 'info');
+  },
+
+  // 3. HALO RING FRAGMENT — broken ring arc tumbling across the void
+  _spawnRingFragment(){
+    const grp = new THREE.Group();
+    const alloyMat = new THREE.MeshBasicMaterial({ color: 0x4a4854, transparent: true, opacity: 0 });
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0x6acfff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const arcOuter = new THREE.Mesh(
+      new THREE.TorusGeometry(48, 4, 10, 28, Math.PI / 4),
+      alloyMat,
+    );
+    grp.add(arcOuter);
+    const arcInner = new THREE.Mesh(
+      new THREE.TorusGeometry(46, 0.6, 6, 28, Math.PI / 4),
+      innerMat,
+    );
+    grp.add(arcInner);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(140)
+      .addScaledVector(right, sideSign * 130)
+      .addScaledVector(up, 8);
+    grp.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'ring_frag', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: right.clone().multiplyScalar(-sideSign * 12).addScaledVector(up, -0.4),
+      rollPhase: 0, life: 0, maxLife: 20,
+      scenario: 'ring_fragment', scenarioTime: 0,
+      scenarioBase: {
+        alloyMat, innerMat,
+        tumble: new THREE.Vector3(0.07, 0.12, 0.05),
+      },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: ring fragment', 'info');
+  },
+
+  // 4. MONOLITH — black 1:4:9 slab drifts past in silence
+  _spawnMonolith(){
+    const grp = new THREE.Group();
+    // Very dark — just barely picks up against the nebula
+    const slabMat = new THREE.MeshBasicMaterial({ color: 0x050510, transparent: true, opacity: 0 });
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(2, 8, 18), slabMat);
+    grp.add(slab);
+    // Cyan edge silhouette so the slab reads against the void
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x2a4a68, transparent: true, opacity: 0 });
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(slab.geometry), edgesMat);
+    grp.add(edges);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(110)
+      .addScaledVector(right, sideSign * 90)
+      .addScaledVector(up, 4);
+    grp.rotation.set(0.2, Math.random() * Math.PI * 2, 0.15);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'monolith', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: right.clone().multiplyScalar(-sideSign * 8),
+      rollPhase: 0, life: 0, maxLife: 18,
+      scenario: 'monolith', scenarioTime: 0,
+      scenarioBase: { slabMat, edgesMat },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: monolith', 'info');
+  },
+
+  // 5. STARGATE KAWOOSH — vertical ring forms, kawoosh splashes, collapses
+  _spawnStargateKawoosh(){
+    const grp = new THREE.Group();
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x5a5848, transparent: true, opacity: 0 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(14, 1.0, 10, 36), ringMat);
+    grp.add(ring);
+    const chevMat = new THREE.MeshBasicMaterial({
+      color: 0xcc6a2a, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    for (let i = 0; i < 9; i++) {
+      const ang = (i / 9) * Math.PI * 2;
+      const stud = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.6), chevMat);
+      stud.position.set(Math.cos(ang) * 14, Math.sin(ang) * 14, 0);
+      grp.add(stud);
+    }
+    const horizonMat = new THREE.MeshBasicMaterial({
+      color: 0x4a98ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const horizon = new THREE.Mesh(new THREE.CircleGeometry(13.5, 40), horizonMat);
+    grp.add(horizon);
+    const kawooshMat = new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(),
+      color: 0x88c8ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const kawoosh = new THREE.Sprite(kawooshMat);
+    kawoosh.scale.set(2, 2, 1); kawoosh.position.z = 1; grp.add(kawoosh);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    grp.position.copy(fwd).multiplyScalar(80)
+      .addScaledVector(right, (Math.random() - 0.5) * 30)
+      .addScaledVector(up, 6);
+    grp.lookAt(0, 0, 0);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'stargate', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: new THREE.Vector3(0, 0, 0),
+      rollPhase: 0, life: 0, maxLife: 6.5,
+      scenario: 'stargate_kawoosh', scenarioTime: 0,
+      scenarioBase: { ringMat, chevMat, horizon, horizonMat, kawoosh, kawooshMat },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: stargate kawoosh', 'info');
+  },
+
+  // 6. FROZEN CAPITAL — dark powered-down warship tumbles end-over-end
+  _spawnFrozenCapital(){
+    const grp = new THREE.Group();
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x12131a, transparent: true, opacity: 0 });
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x1c1d28, transparent: true, opacity: 0 });
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(74, 8, 12), hullMat); grp.add(spine);
+    for (let i = 0; i < 4; i++) {
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 11), hullMat);
+      pod.position.set(-26 + i * 17, -5, 0); grp.add(pod);
+    }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(11, 7, 8), accentMat);
+    bridge.position.set(20, 7, 0); grp.add(bridge);
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x223040, transparent: true, opacity: 0 });
+    const wire = new THREE.LineSegments(new THREE.EdgesGeometry(spine.geometry), wireMat);
+    grp.add(wire);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(170)
+      .addScaledVector(right, sideSign * 130)
+      .addScaledVector(up, 14);
+    grp.rotation.set(0.3, Math.random() * Math.PI * 2, 0.2);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'frozen', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: right.clone().multiplyScalar(-sideSign * 10),
+      rollPhase: 0, life: 0, maxLife: 22,
+      scenario: 'frozen_capital', scenarioTime: 0,
+      scenarioBase: {
+        hullMat, accentMat, wireMat,
+        tumble: new THREE.Vector3(0.05, 0.08, 0.04),
+      },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: frozen capital', 'info');
+  },
+
+  // 7. LEVIATHAN — long bioluminescent creature, bass-reactive spots
+  _spawnLeviathan(){
+    const grp = new THREE.Group();
+    const SEG = 10;
+    const segs = [];
+    const spots = [];
+    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x081428, transparent: true, opacity: 0 });
+    const spotTex = this._makeSatLightTexture();
+    for (let i = 0; i < SEG; i++) {
+      const k = i / (SEG - 1);
+      const r = 2.6 * (1 - k * 0.55);
+      const sph = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), bodyMat);
+      sph.position.x = -i * 3.2;
+      grp.add(sph);
+      segs.push({ mesh: sph, basePos: sph.position.clone(), phase: i * 0.6 });
+      if (i % 2 === 1) {
+        const spot = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: spotTex, color: 0x6aeaff, transparent: true, opacity: 0,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        }));
+        spot.scale.set(1.6, 1.6, 1);
+        spot.position.set(sph.position.x, r * 0.9, 0);
+        grp.add(spot);
+        spots.push(spot);
+      }
+    }
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(130)
+      .addScaledVector(right, sideSign * 150)
+      .addScaledVector(up, 6);
+    const velDir = right.clone().multiplyScalar(-sideSign);
+    grp.rotation.y = Math.atan2(-velDir.z, velDir.x);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'leviathan', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: velDir.clone().multiplyScalar(11),
+      rollPhase: 0, life: 0, maxLife: 22,
+      scenario: 'leviathan', scenarioTime: 0,
+      scenarioBase: { bodyMat, segs, spots },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: leviathan', 'info');
+  },
+
+  // 8. GRAVITATIONAL LENSING — black core + cyan halo crosses with scale wobble
+  _spawnLensingPatch(){
+    const grp = new THREE.Group();
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 });
+    const core = new THREE.Mesh(new THREE.SphereGeometry(4.5, 18, 14), coreMat);
+    grp.add(core);
+    const haloMat = new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(),
+      color: 0x5298c8, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const halo = new THREE.Sprite(haloMat);
+    halo.scale.set(18, 18, 1); grp.add(halo);
+    const rimMat = new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(),
+      color: 0xaaeaff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const rim = new THREE.Sprite(rimMat);
+    rim.scale.set(11, 11, 1); grp.add(rim);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(115)
+      .addScaledVector(right, sideSign * 110)
+      .addScaledVector(up, (Math.random() - 0.5) * 30);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'lensing', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: right.clone().multiplyScalar(-sideSign * 14),
+      rollPhase: 0, life: 0, maxLife: 14,
+      scenario: 'lensing_patch', scenarioTime: 0,
+      scenarioBase: { coreMat, haloMat, rimMat },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: lensing patch', 'info');
+  },
+
+  // 9. MAC BROADSIDE — distant cruiser charges, fires thick plasma line, fades
+  _spawnMacBroadside(){
+    const grp = new THREE.Group();
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x1a2030, transparent: true, opacity: 0 });
+    const cruiser = new THREE.Mesh(new THREE.BoxGeometry(18, 4, 4), hullMat);
+    grp.add(cruiser);
+    const chargeMat = new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(),
+      color: 0xb0d8ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const charge = new THREE.Sprite(chargeMat);
+    charge.scale.set(0.5, 0.5, 1); charge.position.x = 11; grp.add(charge);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xeaf5ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), beamMat);
+    beam.position.x = 11;
+    grp.add(beam);
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(220)
+      .addScaledVector(right, sideSign * 80)
+      .addScaledVector(up, -6);
+    // Aim cruiser so beam fires across the visible space
+    const aimDir = right.clone().multiplyScalar(-sideSign).addScaledVector(fwd, -0.2).normalize();
+    grp.rotation.y = Math.atan2(-aimDir.z, aimDir.x);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'mac', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: new THREE.Vector3(0, 0, 0),
+      rollPhase: 0, life: 0, maxLife: 5.5,
+      scenario: 'mac_broadside', scenarioTime: 0,
+      scenarioBase: { hullMat, chargeMat, charge, beam, beamMat },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: MAC broadside', 'info');
+  },
+
+  // 10. CARGO SPILL — broken hulk releases tumbling crates
+  _spawnCargoSpill(){
+    const grp = new THREE.Group();
+    const hulkMat = new THREE.MeshBasicMaterial({ color: 0x2a2228, transparent: true, opacity: 0 });
+    const hulk = new THREE.Mesh(new THREE.BoxGeometry(16, 6, 8), hulkMat); grp.add(hulk);
+    const crateMat = new THREE.MeshBasicMaterial({ color: 0xa07c4a, transparent: true, opacity: 0 });
+    const crates = [];
+    const N = 14;
+    for (let i = 0; i < N; i++) {
+      const c = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), crateMat);
+      c.position.set((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6);
+      c.userData = {
+        released: false, releaseAt: 1.0 + i * 0.32,
+        tumble: new THREE.Vector3((Math.random()-0.5)*1.4, (Math.random()-0.5)*1.4, (Math.random()-0.5)*1.4),
+        drift:  new THREE.Vector3((Math.random()-0.5)*8,  (Math.random()-0.5)*6,  (Math.random()-0.5)*8),
+      };
+      grp.add(c);
+      crates.push(c);
+    }
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(140)
+      .addScaledVector(right, sideSign * 90)
+      .addScaledVector(up, 6);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'spill', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: right.clone().multiplyScalar(-sideSign * 9),
+      rollPhase: 0, life: 0, maxLife: 14,
+      scenario: 'cargo_spill', scenarioTime: 0,
+      scenarioBase: {
+        hulkMat, crateMat, crates, hulk,
+        hulkTumble: new THREE.Vector3(0.18, 0.22, 0.12),
+      },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: cargo spill', 'info');
+  },
+
+  // 11. SALVAGE TUG — small ship dragging a much bigger wreck via tethers
+  _spawnSalvageTug(){
+    const grp = new THREE.Group();
+    const tugMat   = new THREE.MeshBasicMaterial({ color: 0x3a3a48, transparent: true, opacity: 0 });
+    const wreckMat = new THREE.MeshBasicMaterial({ color: 0x1c1820, transparent: true, opacity: 0 });
+    const tug = new THREE.Mesh(new THREE.BoxGeometry(10, 4, 4), tugMat);
+    tug.position.x = 22; grp.add(tug);
+    const tugEng = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._makeSatLightTexture(), color: 0x88c8ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    tugEng.scale.set(3, 3, 1); tugEng.position.set(16, 0, 0); grp.add(tugEng);
+    const wreck = new THREE.Mesh(new THREE.BoxGeometry(28, 10, 11), wreckMat);
+    wreck.position.x = -12; wreck.rotation.z = 0.06; grp.add(wreck);
+    const tetherMat = new THREE.LineBasicMaterial({ color: 0x6aaad8, transparent: true, opacity: 0 });
+    const tetherGeoA = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(17, -1, 1), new THREE.Vector3(2, 1, 1),
+    ]);
+    const tetherGeoB = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(17, -1, -1), new THREE.Vector3(2, 1, -1),
+    ]);
+    grp.add(new THREE.Line(tetherGeoA, tetherMat));
+    grp.add(new THREE.Line(tetherGeoB, tetherMat));
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(150)
+      .addScaledVector(right, sideSign * 130)
+      .addScaledVector(up, 8);
+    const velDir = right.clone().multiplyScalar(-sideSign);
+    grp.rotation.y = Math.atan2(-velDir.z, velDir.x);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'tug', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: velDir.clone().multiplyScalar(8),
+      rollPhase: 0, life: 0, maxLife: 20,
+      scenario: 'salvage_tug', scenarioTime: 0,
+      scenarioBase: { tugMat, wreckMat, tetherMat, tugEng },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: salvage tug', 'info');
+  },
+
+  // 12. SENTINEL SWARM SCAN — 6 drones in formation firing scanning beams
+  _spawnSentinelSwarm(){
+    const grp = new THREE.Group();
+    const drones = [];
+    const beams = [];
+    const droneMat = new THREE.MeshBasicMaterial({ color: 0x6a6a78, transparent: true, opacity: 0 });
+    const eyeTex = this._makeSatLightTexture();
+    const beamMat = new THREE.LineBasicMaterial({ color: 0xff8a3a, transparent: true, opacity: 0 });
+    const positions = [
+      [-5,  1.6, 0], [0,  1.6, 0], [5,  1.6, 0],
+      [-5, -1.6, 0], [0, -1.6, 0], [5, -1.6, 0],
+    ];
+    positions.forEach(p => {
+      const d = new THREE.Mesh(new THREE.IcosahedronGeometry(1.0, 0), droneMat);
+      d.position.set(p[0], p[1], p[2]); grp.add(d);
+      const eye = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: eyeTex, color: 0xff8a3a, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      eye.scale.set(1.0, 1.0, 1); eye.position.set(p[0], p[1], p[2] + 0.6); grp.add(eye);
+      const bgeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(p[0], p[1], p[2]),
+        new THREE.Vector3(0, 0, -22),
+      ]);
+      const beam = new THREE.Line(bgeo, beamMat);
+      grp.add(beam);
+      drones.push(d);
+      beams.push({ line: beam, geo: bgeo });
+    });
+
+    const fwd = this._forwardVec();
+    const { right, up } = this._basisFromDir(fwd);
+    const sideSign = Math.random() < 0.5 ? 1 : -1;
+    grp.position.copy(fwd).multiplyScalar(120)
+      .addScaledVector(right, sideSign * 90)
+      .addScaledVector(up, 12);
+    const velDir = right.clone().multiplyScalar(-sideSign);
+    grp.rotation.y = Math.atan2(-velDir.z, velDir.x);
+    this.scene.add(grp);
+
+    const fake = {
+      type: 'sentinels', outer: grp, inner: grp,
+      active: true, _ephemeral: true,
+      velocity: velDir.clone().multiplyScalar(13),
+      rollPhase: 0, life: 0, maxLife: 11,
+      scenario: 'sentinel_swarm', scenarioTime: 0,
+      scenarioBase: { droneMat, beamMat, drones, beams },
+      scenarioCleanup: null,
+    };
+    this.flybyShips.push(fake);
+    if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
+    if (this._flashHint) this._flashHint('spawned: sentinel swarm', 'info');
+  },
+
   _tickScenario(s, t, dt){
     if (!s.scenario) return;
 
@@ -4069,6 +4641,252 @@ const MarathonWorld = {
       base.lineGeo.attributes.position.needsUpdate = true;
       return;
     }
+
+    // ============================================================
+    // g12 CAMEO TICKS — 12 iconic floating scenarios.
+    // Each branch handles its own fade in/out + per-frame animation.
+    // Materials are stored on scenarioBase so we can drive opacity
+    // for envelope-style fades regardless of how many meshes share
+    // each material in the group.
+    // ============================================================
+
+    if (s.scenario === 'ccs_battlecruiser') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const fadeIn  = Math.min(1, tt / 4);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 4));
+      const op = Math.min(fadeIn, fadeOut);
+      base.hullMat.opacity = op * 0.95;
+      base.ribMat.opacity  = op * 0.95;
+      base.trimMat.opacity = op * 0.65;
+      base.liftGlow.material.opacity = op * 0.70;
+      base.engGlow.material.opacity  = op * 0.90;
+      s.outer.rotation.y += dt * 0.008;
+      return;
+    }
+
+    if (s.scenario === 'keyship_descent') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const descT = 3, hoverT = 5, ascT = 3;
+      let yK;
+      if (tt < descT) yK = 1 - tt / descT;
+      else if (tt < descT + hoverT) yK = 0;
+      else yK = Math.min(1, (tt - descT - hoverT) / ascT);
+      s.outer.position.copy(base.finalPos).addScaledVector(base.upVec, 80 * yK);
+      base.ringA.rotation.z += dt * 1.4;
+      base.ringB.rotation.z -= dt * 1.1;
+      const fadeIn  = Math.min(1, tt / 1.0);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 1.0));
+      const op = Math.min(fadeIn, fadeOut);
+      base.hullMat.opacity = op * 0.95;
+      base.accentMat.opacity = op * 0.85;
+      base.pointGlow.material.opacity = op * (0.7 + Math.sin(tt * 2.4) * 0.2);
+      return;
+    }
+
+    if (s.scenario === 'ring_fragment') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      s.outer.rotation.x += base.tumble.x * dt;
+      s.outer.rotation.y += base.tumble.y * dt;
+      s.outer.rotation.z += base.tumble.z * dt;
+      const fadeIn  = Math.min(1, tt / 3);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 3));
+      const op = Math.min(fadeIn, fadeOut);
+      base.alloyMat.opacity = op * 0.92;
+      base.innerMat.opacity = op * 0.80;
+      return;
+    }
+
+    if (s.scenario === 'monolith') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      s.outer.rotation.y += dt * 0.05;
+      s.outer.rotation.z += dt * 0.02;
+      const fadeIn  = Math.min(1, tt / 4);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 4));
+      const op = Math.min(fadeIn, fadeOut);
+      base.slabMat.opacity = op * 1.0;
+      base.edgesMat.opacity = op * 0.55;
+      return;
+    }
+
+    if (s.scenario === 'stargate_kawoosh') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const ringIn = Math.min(1, tt / 0.6);
+      const chevK  = Math.min(1, Math.max(0, (tt - 0.4) / 0.6));
+      base.ringMat.opacity = ringIn * 0.90;
+      base.chevMat.opacity = chevK * 0.85;
+      if (tt < 1.2) {
+        const k = Math.min(1, Math.max(0, (tt - 0.6) / 0.6));
+        base.kawoosh.scale.set(2 + k * 24, 2 + k * 24, 1);
+        base.kawoosh.position.z = 1 + k * 14;
+        base.kawooshMat.opacity = k * 1.4 * (1 - k * 0.3);
+      } else {
+        base.kawooshMat.opacity = Math.max(0, base.kawooshMat.opacity - dt * 4);
+      }
+      const hzIn  = Math.min(1, Math.max(0, (tt - 0.9) / 0.4));
+      const hzOut = Math.min(1, Math.max(0, (s.maxLife - 0.5 - tt) / 1.0));
+      const hzOp  = Math.min(hzIn, hzOut);
+      base.horizonMat.opacity = hzOp * (0.6 + Math.sin(tt * 4) * 0.15);
+      base.horizon.scale.set(
+        1 + Math.sin(tt * 3) * 0.04,
+        1 + Math.cos(tt * 2.6) * 0.04,
+        1,
+      );
+      return;
+    }
+
+    if (s.scenario === 'frozen_capital') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      s.outer.rotation.x += base.tumble.x * dt;
+      s.outer.rotation.y += base.tumble.y * dt;
+      s.outer.rotation.z += base.tumble.z * dt;
+      const fadeIn  = Math.min(1, tt / 3);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 3));
+      const op = Math.min(fadeIn, fadeOut);
+      base.hullMat.opacity = op * 0.92;
+      base.accentMat.opacity = op * 0.92;
+      base.wireMat.opacity = op * 0.45;
+      return;
+    }
+
+    if (s.scenario === 'leviathan') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      // Body undulates — sin wave on Y across the segments
+      base.segs.forEach((seg, i) => {
+        const decay = 1 - i / base.segs.length;
+        seg.mesh.position.y = seg.basePos.y + Math.sin(tt * 1.4 + seg.phase) * 0.6 * decay;
+      });
+      const fadeIn  = Math.min(1, tt / 3);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 3));
+      const op = Math.min(fadeIn, fadeOut);
+      base.bodyMat.opacity = op * 0.95;
+      // Bass-reactive bioluminescent spots
+      const bass = this._readBass ? this._readBass() : 0;
+      const spotOp = (0.35 + bass * 0.8) * op;
+      base.spots.forEach((spot, i) => {
+        spot.material.opacity = spotOp * (0.7 + Math.sin(tt * 2 + i) * 0.3);
+      });
+      return;
+    }
+
+    if (s.scenario === 'lensing_patch') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const fadeIn  = Math.min(1, tt / 3);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 3));
+      const op = Math.min(fadeIn, fadeOut);
+      base.coreMat.opacity = op * 0.95;
+      base.haloMat.opacity = op * 0.55;
+      base.rimMat.opacity  = op * 0.30;
+      // Subtle scale wobble implies "warp"
+      const wob = 1 + Math.sin(tt * 1.3) * 0.08;
+      s.outer.scale.setScalar(wob);
+      return;
+    }
+
+    if (s.scenario === 'mac_broadside') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const fadeIn  = Math.min(1, tt / 1.5);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 1.5));
+      const op = Math.min(fadeIn, fadeOut);
+      base.hullMat.opacity = op * 0.85;
+      // Charge ramp -> muzzle flash -> fade
+      if (tt < 2.0) {
+        const k = tt / 2.0;
+        base.chargeMat.opacity = k * k * 1.3;
+        base.charge.scale.setScalar(0.5 + k * 2.4);
+      } else if (tt < 2.2) {
+        base.chargeMat.opacity = 2.0;
+        base.charge.scale.setScalar(4.0);
+      } else {
+        base.chargeMat.opacity = Math.max(0, base.chargeMat.opacity - dt * 3);
+      }
+      // Beam stretches 2.0 -> 2.5, fades to 3.5
+      if (tt >= 2.0 && tt < 3.5) {
+        const bk = Math.min(1, (tt - 2.0) / 0.5);
+        const beamLen = bk * 240;
+        base.beam.scale.set(beamLen, 1.6, 1.6);
+        base.beam.position.x = 11 + beamLen / 2;
+        const bFade = tt < 2.6 ? 1 : Math.max(0, (3.5 - tt) / 0.9);
+        base.beamMat.opacity = bFade * 1.4;
+      } else {
+        base.beamMat.opacity = 0;
+      }
+      return;
+    }
+
+    if (s.scenario === 'cargo_spill') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const fadeIn  = Math.min(1, tt / 2);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 3));
+      const op = Math.min(fadeIn, fadeOut);
+      base.hulkMat.opacity = op * 0.88;
+      base.crateMat.opacity = op * 0.85;
+      base.hulk.rotation.x += base.hulkTumble.x * dt;
+      base.hulk.rotation.y += base.hulkTumble.y * dt;
+      base.hulk.rotation.z += base.hulkTumble.z * dt;
+      base.crates.forEach(c => {
+        const ud = c.userData;
+        if (!ud.released && tt >= ud.releaseAt) ud.released = true;
+        if (ud.released) {
+          c.position.addScaledVector(ud.drift, dt);
+          c.rotation.x += ud.tumble.x * dt;
+          c.rotation.y += ud.tumble.y * dt;
+          c.rotation.z += ud.tumble.z * dt;
+        }
+      });
+      return;
+    }
+
+    if (s.scenario === 'salvage_tug') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const fadeIn  = Math.min(1, tt / 3);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 3));
+      const op = Math.min(fadeIn, fadeOut);
+      base.tugMat.opacity = op * 0.90;
+      base.wreckMat.opacity = op * 0.92;
+      base.tetherMat.opacity = op * 0.65;
+      base.tugEng.material.opacity = op * (0.7 + Math.sin(tt * 6) * 0.18);
+      s.outer.position.y += Math.sin(tt * 0.6) * 0.04;
+      return;
+    }
+
+    if (s.scenario === 'sentinel_swarm') {
+      const tt = s.scenarioTime;
+      const base = s.scenarioBase;
+      const fadeIn  = Math.min(1, tt / 1.5);
+      const fadeOut = Math.min(1, Math.max(0, (s.maxLife - tt) / 1.5));
+      const op = Math.min(fadeIn, fadeOut);
+      base.droneMat.opacity = op * 0.90;
+      base.beamMat.opacity = op * (0.45 + Math.sin(tt * 8) * 0.18);
+      base.drones.forEach((d, i) => {
+        d.rotation.x += dt * (1.2 + i * 0.15);
+        d.rotation.y += dt * (0.9 + i * 0.10);
+      });
+      // Eye sprites brighten in pulses
+      const eyeOp = op * (0.6 + Math.sin(tt * 9) * 0.3);
+      s.outer.children.forEach(ch => {
+        if (ch.isSprite) ch.material.opacity = eyeOp;
+      });
+      // Convergence point wobbles so the beams look "scanning"
+      const cx = Math.sin(tt * 1.7) * 1.4;
+      const cy = Math.cos(tt * 1.3) * 1.0;
+      base.beams.forEach(b => {
+        const arr = b.geo.attributes.position.array;
+        arr[3] = cx; arr[4] = cy; arr[5] = -22;
+        b.geo.attributes.position.needsUpdate = true;
+      });
+      return;
+    }
   },
 
   _spawnFlyby(){
@@ -4266,7 +5084,7 @@ const MarathonWorld = {
     this._tickScenarioScheduler(t);
   },
 
-  /* b189: scenario auto-fire — picks one of the 18 scripted scenarios
+  /* b189 / g12: scenario auto-fire — picks one of ~30 scripted scenarios
      every 22–40s, biased away from the last 5 so the user sees variety.
      Skips firing if we're already inside an active scripted scenario
      (to avoid heavy-on-heavy stacking like fleet-jump-in + convoy). */
@@ -4305,6 +5123,19 @@ const MarathonWorld = {
       ['patrol',       () => this._spawnPatrolPair()],
       ['comet',        () => this._spawnComet()],
       ['eva',          () => this._spawnEvaTether()],
+      // g12 cameos — iconic floating one-shots
+      ['ccs',          () => this._spawnCcsBattlecruiser()],
+      ['keyship',      () => this._spawnKeyshipDescent()],
+      ['ringfrag',     () => this._spawnRingFragment()],
+      ['monolith',     () => this._spawnMonolith()],
+      ['stargate',     () => this._spawnStargateKawoosh()],
+      ['frozen',       () => this._spawnFrozenCapital()],
+      ['leviathan',    () => this._spawnLeviathan()],
+      ['lensing',      () => this._spawnLensingPatch()],
+      ['mac',          () => this._spawnMacBroadside()],
+      ['spill',        () => this._spawnCargoSpill()],
+      ['tug',          () => this._spawnSalvageTug()],
+      ['sentinels',    () => this._spawnSentinelSwarm()],
     ];
     // Focus-required scenarios — only included when a title is locked
     if (this.focused) {
@@ -5464,27 +6295,30 @@ const MarathonWorld = {
       }
 
       void main(){
-        // ----- OUTER FACE: dark Forerunner alloy + structural plate seams -----
-        // b240: outer cyan trim pulled even further (0.30 → 0.18, 0.18 → 0.10)
-        // — the bright outline was dominating the silhouette and outshining
-        // the inner terrain that the user explicitly wanted to see better.
+        // g9: dark "lip" band on the silhouette rim — creates a clear edge
+        // line where inner and outer faces meet. Bloom can't smear dark
+        // pixels, so this band stays as a structural separator no matter
+        // how aggressive halation gets. Applied to both faces below.
+        // g11: reverted g10's cross-ribs — they broke the torus illusion,
+        // making the ring look like a slatted tube instead of a megastructure
+        // with a continuous inhabited inner surface.
+        float lip = smoothstep(0.74, 0.96, vRimMix);
+        float lipMul = mix(1.0, 0.18, lip);
+
+        // ----- OUTER FACE: Forerunner alloy, slight violet bias -----
         if (vInnerFace < 0.5) {
           float seam = step(0.985, fract(vUv.x * 60.0));
           float ridge = fbm(vec2(vUv.x * 14.0, vUv.y * 3.0));
-          vec3 base = vec3(0.085, 0.092, 0.110) * (0.55 + 0.45 * ridge);
-          base += vec3(0.18, 0.45, 0.62) * seam * 0.18;
-          base += vec3(0.16, 0.36, 0.56) * smoothstep(0.55, 0.95, vRimMix) * 0.10;
-          base *= (1.0 + uBass * 0.08);
+          vec3 base = vec3(0.075, 0.078, 0.135) * (0.55 + 0.45 * ridge);
+          base += vec3(0.18, 0.50, 0.75) * seam * 0.10;
+          base += vec3(0.14, 0.30, 0.50) * smoothstep(0.55, 0.95, vRimMix) * 0.06;
+          base *= (1.0 + uBass * 0.06);
+          base *= lipMul;
           gl_FragColor = vec4(base, 1.0);
           return;
         }
 
-        // ----- INNER FACE: terrain band (oceans, continents, ice, clouds) -----
-        // b240 vibrancy pass: user said they "loved seeing the blue water and
-        // green land" but wanted to see it BETTER. Saturated ocean + forest +
-        // desert palette, thinned the cloud layer so the land/ocean mosaic
-        // shows through, dropped the rim haze further, and bumped the overall
-        // surface brightness ×1.08 → ×1.30 so the inner face reads sun-lit.
+        // ----- INNER FACE: terrain band, kept under halation threshold -----
         float lat = (vUv.y - 0.5) * 2.0;
 
         float cont = fbm(vec2(vUv.x * 4.5, lat * 1.2));
@@ -5492,42 +6326,26 @@ const MarathonWorld = {
         cont *= 0.71;
 
         float landMask = smoothstep(0.40, 0.49, cont);
-        float ice = smoothstep(0.82, 0.97, abs(lat));
+        float ice = smoothstep(0.86, 0.98, abs(lat));
 
-        // Brighter, more saturated ocean (richer royal-blue → cyan-blue gradient).
-        vec3 oceanDeep = vec3(0.040, 0.18, 0.45);
-        vec3 oceanSh   = vec3(0.18,  0.50, 0.85);
+        vec3 oceanDeep = vec3(0.020, 0.10, 0.38);
+        vec3 oceanSh   = vec3(0.09,  0.32, 0.62);
         vec3 ocean = mix(oceanDeep, oceanSh, smoothstep(0.16, 0.40, cont));
 
-        // Brighter forest + warmer desert for clearer land contrast.
-        vec3 forest = vec3(0.22, 0.58, 0.24);
-        vec3 desert = vec3(0.65, 0.52, 0.24);
+        vec3 forest = vec3(0.14, 0.42, 0.18);
+        vec3 desert = vec3(0.48, 0.36, 0.16);
         vec3 land   = mix(forest, desert, smoothstep(0.55, 0.78, cont));
 
         vec3 surface = mix(ocean, land, landMask);
-        surface = mix(surface, vec3(0.92, 0.96, 1.00), ice);
+        surface = mix(surface, vec3(0.62, 0.68, 0.78), ice);
 
-        // Cloud cover thinned so terrain shows through.
         float clouds = fbm(vec2(vUv.x * 16.0 + uTime * 0.020, lat * 4.5 + uTime * 0.006));
-        clouds = smoothstep(0.60, 0.90, clouds);
-        // g3: cloud-mix dropped 0.32 → 0.20. The bright cloud pixels were
-        // dominating the post-fx bloom feedback and smearing into a halation
-        // ring around the silhouette that obscured the terrain underneath.
-        surface = mix(surface, vec3(0.95, 0.96, 1.00), clouds * 0.20);
+        clouds = smoothstep(0.62, 0.92, clouds);
+        surface = mix(surface, vec3(0.55, 0.58, 0.62), clouds * 0.16);
 
-        // Atmosphere rim — kept low so it doesn't smear over the terrain.
-        // g3: 0.12 → 0.05.
-        float rim = smoothstep(0.88, 1.00, abs(lat));
-        surface += vec3(0.42, 0.58, 0.92) * rim * 0.05;
+        surface += vec3(0.04, 0.14, 0.24) * uBass * 0.10;
 
-        // Bass-driven cyan energy on the inner face.
-        // g3: 0.40 → 0.18 — same bloom-feedback reason.
-        surface += vec3(0.05, 0.18, 0.30) * uBass * 0.18;
-
-        // g3: removed the *1.30 sun-lit multiplier. It was pushing cloud +
-        // ice highlights well above 1.0, which the bloom pass then exploded
-        // into a giant halation crescent obscuring everything inside the
-        // ring. Surface now sits firmly in LDR so terrain reads cleanly.
+        surface *= lipMul;
 
         gl_FragColor = vec4(surface, 1.0);
       }
@@ -5694,6 +6512,101 @@ const MarathonWorld = {
     tr.grp.rotation.y += 0.00018;
     // Gentle halo breathe with bass.
     tr.haloMat.opacity = 0.30 + bass * 0.18;
+  },
+
+  /* ---------- Neuron threads — ambient firing between title pairs ---------- */
+  // Pool of N short additive line segments. Every 200–350ms a free thread
+  // claims two random nearby titles as endpoints, fades over ~500ms via a
+  // sin-bell envelope. Constant background firing makes the constellation
+  // read as a living organism — neurons sparking between songs even when no
+  // scenarios are active. Endpoints follow title drift each frame so threads
+  // don't lag behind their titles.
+  _buildNeuronThreads(){
+    const POOL = 8;
+    this.neuronGroup = new THREE.Group();
+    this.neuronThreads = [];
+    for (let i = 0; i < POOL; i++) {
+      const geo = new THREE.BufferGeometry();
+      const positions = new Float32Array(6);  // 2 endpoints × 3 coords
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x88c8ff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      });
+      const line = new THREE.Line(geo, mat);
+      line.visible = false;
+      this.neuronGroup.add(line);
+      this.neuronThreads.push({
+        line, geo, mat,
+        active: false, life: 0, maxLife: 0,
+        a: null, b: null,
+      });
+    }
+    this.scene.add(this.neuronGroup);
+    this._neuronNextAt = null;
+  },
+
+  _tickNeuronThreads(t, dt, bass){
+    if (!this.neuronThreads || !this.neuronGroup.visible) return;
+    // Tick active threads: fade via sin envelope, update endpoints to track
+    // their titles' current drifted positions.
+    for (let i = 0; i < this.neuronThreads.length; i++) {
+      const n = this.neuronThreads[i];
+      if (!n.active) continue;
+      n.life += dt;
+      const k = n.life / n.maxLife;
+      if (k >= 1) {
+        n.active = false;
+        n.line.visible = false;
+        n.mat.opacity = 0;
+        continue;
+      }
+      const env = Math.sin(k * Math.PI);
+      // Slight bass boost so loud passages light the brain up more.
+      n.mat.opacity = env * (0.35 + bass * 0.40);
+      const pos = n.geo.attributes.position.array;
+      pos[0] = n.a.mesh.position.x;
+      pos[1] = n.a.mesh.position.y;
+      pos[2] = n.a.mesh.position.z;
+      pos[3] = n.b.mesh.position.x;
+      pos[4] = n.b.mesh.position.y;
+      pos[5] = n.b.mesh.position.z;
+      n.geo.attributes.position.needsUpdate = true;
+    }
+    // Scheduler — fire a new thread every 180–360ms while one's free.
+    if (this._neuronNextAt == null) this._neuronNextAt = t + 0.5;
+    if (t < this._neuronNextAt) return;
+    const free = this.neuronThreads.find(n => !n.active);
+    if (free && this.titles && this.titles.length >= 2) {
+      const a = this.titles[(Math.random() * this.titles.length) | 0];
+      let b = null;
+      // Up to 6 attempts to find a nearby partner (≤ 95 units apart). After
+      // that, accept whatever — a long thread reads as a "deep connection"
+      // and is just as cool, just rarer.
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const cand = this.titles[(Math.random() * this.titles.length) | 0];
+        if (cand === a) continue;
+        if (a.basePos.distanceTo(cand.basePos) <= 95) { b = cand; break; }
+        if (!b) b = cand;
+      }
+      if (b && b !== a) {
+        free.active = true;
+        free.life = 0;
+        free.maxLife = 0.42 + Math.random() * 0.28;
+        free.a = a;
+        free.b = b;
+        free.line.visible = true;
+        free.mat.opacity = 0;
+        // Random cyan→violet hue per firing so the brain isn't monochrome.
+        const hue = 0.52 + Math.random() * 0.18;   // 0.52 (cyan) → 0.70 (lavender)
+        free.mat.color.setHSL(hue, 0.55 + Math.random() * 0.20, 0.72);
+      }
+    }
+    this._neuronNextAt = t + 0.18 + Math.random() * 0.18;
   },
 
   /* ---------- Nav buoys (b174) — small drifting blinking beacons ---------- */
@@ -5891,7 +6804,19 @@ const MarathonWorld = {
 
   /* ---------- Titles ---------- */
   _buildTitles(){
-    const all = this.ctx.tracks || [];
+    // Tracks hidden from the galaxy view (still playable elsewhere — they
+    // just don't get a title plane on the sphere).
+    const HIDDEN_TITLES = new Set([
+      'filip',
+      'warzone',
+      '10 miles',
+      'gunning',
+      "uh, i'm sick",
+      'bluff caller',
+    ]);
+    const all = (this.ctx.tracks || []).filter(t =>
+      !HIDDEN_TITLES.has((t.title || '').toLowerCase().trim())
+    );
     if (!all.length) return;
 
     // Show every track. All on a SHARED fibonacci sphere — one shell, one
@@ -6003,20 +6928,33 @@ const MarathonWorld = {
 
   _makeTitleTexture(title, fontSize){
     const text = title.toUpperCase();
-    const padding = Math.floor(fontSize * 0.4);
+    const MAX_W = 2048;
     const measureCanvas = document.createElement('canvas');
     const mctx = measureCanvas.getContext('2d');
-    mctx.font = `800 ${fontSize}px "Space Grotesk", Inter, system-ui, sans-serif`;
-    const m = mctx.measureText(text);
-    const tw = Math.ceil(m.width) + padding * 2;
-    const th = Math.ceil(fontSize * 1.40) + padding;
-    const w = Math.min(2048, Math.max(256, tw));
+    // Measure at requested size, then shrink fontSize if the laid-out width
+    // would exceed the texture cap — otherwise long titles get clipped (the
+    // canvas hard-caps at MAX_W and the text gets centered + sliced).
+    let fs = fontSize;
+    mctx.font = `800 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+    let measured = mctx.measureText(text).width;
+    let padding = Math.floor(fs * 0.4);
+    let tw = Math.ceil(measured) + padding * 2;
+    if (tw > MAX_W) {
+      const scale = MAX_W / tw;
+      fs = Math.max(40, Math.floor(fs * scale));
+      mctx.font = `800 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+      measured = mctx.measureText(text).width;
+      padding = Math.floor(fs * 0.4);
+      tw = Math.ceil(measured) + padding * 2;
+    }
+    const th = Math.ceil(fs * 1.40) + padding;
+    const w = Math.min(MAX_W, Math.max(256, tw));
     const h = Math.min(640, Math.max(96, th));
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, w, h);
-    ctx.font = `800 ${fontSize}px "Space Grotesk", Inter, system-ui, sans-serif`;
+    ctx.font = `800 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
@@ -6330,6 +7268,7 @@ const MarathonWorld = {
         <button data-act="el-haloring"  id="mw-el-haloring">halo ring: <span>ON</span></button>
         <button data-act="el-traveler"  id="mw-el-traveler" data-since="g2">traveler: <span>ON</span></button>
         <button data-act="el-buoys"     id="mw-el-buoys">nav buoys: <span>ON</span></button>
+        <button data-act="el-neurons"   id="mw-el-neurons" data-since="g8">neuron threads: <span>ON</span></button>
       </div>
 
       <!-- IMAGE: post-process pipeline + global hue -->
@@ -6415,6 +7354,23 @@ const MarathonWorld = {
         <button data-act="micro-drone">drone dart</button>
       </div>
 
+      <!-- g12 — CAMEOS — iconic floating one-shots (Halo ring / Marathon-ship energy) -->
+      <div class="mw-admin-section" data-cat="scripted" data-key="cameos">
+        <div class="mw-admin-label">cameos</div>
+        <button data-act="cam-ccs"       data-since="g12">CCS battlecruiser pass</button>
+        <button data-act="cam-keyship"   data-since="g12">forerunner keyship descent</button>
+        <button data-act="cam-ringfrag"  data-since="g12">halo ring fragment</button>
+        <button data-act="cam-monolith"  data-since="g12">2001 monolith</button>
+        <button data-act="cam-stargate"  data-since="g12">stargate kawoosh</button>
+        <button data-act="cam-frozen"    data-since="g12">frozen capital ship</button>
+        <button data-act="cam-leviathan" data-since="g12">space whale · leviathan</button>
+        <button data-act="cam-lensing"   data-since="g12">gravitational lensing patch</button>
+        <button data-act="cam-mac"       data-since="g12">MAC round broadside</button>
+        <button data-act="cam-spill"     data-since="g12">cargo container spill</button>
+        <button data-act="cam-tug"       data-since="g12">salvage tug</button>
+        <button data-act="cam-sentinels" data-since="g12">sentinel swarm scan</button>
+      </div>
+
       <div class="mw-admin-foot">~ to toggle</div>
     `;
     root.addEventListener('click', e => {
@@ -6471,6 +7427,19 @@ const MarathonWorld = {
         else if (act === 'micro-comm')        this._spawnCommStaticMicro();
         else if (act === 'micro-emp')         this._spawnEmpFlashMicro();
         else if (act === 'micro-drone')       this._spawnDroneDartMicro();
+        // g12 cameos
+        else if (act === 'cam-ccs')           this._spawnCcsBattlecruiser();
+        else if (act === 'cam-keyship')       this._spawnKeyshipDescent();
+        else if (act === 'cam-ringfrag')      this._spawnRingFragment();
+        else if (act === 'cam-monolith')      this._spawnMonolith();
+        else if (act === 'cam-stargate')      this._spawnStargateKawoosh();
+        else if (act === 'cam-frozen')        this._spawnFrozenCapital();
+        else if (act === 'cam-leviathan')     this._spawnLeviathan();
+        else if (act === 'cam-lensing')       this._spawnLensingPatch();
+        else if (act === 'cam-mac')           this._spawnMacBroadside();
+        else if (act === 'cam-spill')         this._spawnCargoSpill();
+        else if (act === 'cam-tug')           this._spawnSalvageTug();
+        else if (act === 'cam-sentinels')     this._spawnSentinelSwarm();
         else if (act === 'fx-flares')   this._adminToggleFx('uFlaresOn');
         else if (act === 'fx-dirt')     this._adminToggleFx('uDirtOn');
         else if (act === 'fx-godrays')  this._adminToggleFx('uGodraysOn');
@@ -6563,6 +7532,7 @@ const MarathonWorld = {
       elState('mw-el-haloring',   this.haloRing ? this.haloRing.grp.visible : true);
       elState('mw-el-traveler',   this.traveler ? this.traveler.grp.visible : true);
       elState('mw-el-buoys',      this.navBuoys ? this.navBuoys.every(b => b.grp.visible) : true);
+      elState('mw-el-neurons',    this.neuronGroup ? this.neuronGroup.visible : true);
       // HUD hidden state
       const hudBtn = root.querySelector('#mw-cap-hud');
       if (hudBtn) {
@@ -6672,6 +7642,7 @@ const MarathonWorld = {
       haloring:   () => this.haloRing ? this.haloRing.grp : null,
       traveler:   () => this.traveler ? this.traveler.grp : null,
       buoys:      () => this.navBuoys,
+      neurons:    () => this.neuronGroup,
     };
     const getter = map[key];
     if (!getter) return;
@@ -7124,6 +8095,14 @@ const MarathonWorld = {
     this._tickHaloRing(t, bass);
     this._tickTraveler(t, bass);
     this._tickNavBuoys(t, bass);
+    this._tickNeuronThreads(t, dt, bass);
+
+    // g8 — constellation breath. Lerp _breath toward current bass with a
+    // ~165ms half-life so the response is punchy but not jittery. Title
+    // positions read this and multiply basePos by (1 + _breath * 0.06) →
+    // peak bass ≈ 0.45 (post-gain) gives ~2.7% radial expansion across the
+    // whole sphere. The galaxy literally inhales with the music.
+    this._breath += (bass - this._breath) * Math.min(1, dt * 6.0);
     this._tickStarfield(t);
     this._tickMicroFx(t, dt);
     this._tickMicroScheduler(t);
@@ -7231,14 +8210,16 @@ const MarathonWorld = {
         targetPos = fwdNow.clone().multiplyScalar(n.showcaseDist || 18);
       } else {
         // Idle drift OR look-mode focus: title stays at its constellation slot
-        // with gentle bobbing.
+        // with gentle bobbing + global breath that radially expands the whole
+        // sphere on bass impacts (g8).
         const ph = n.flickerSeed;
         tmpDrift.set(
           Math.sin(t * 0.42 + ph)        * 1.4,
           Math.cos(t * 0.31 + ph * 1.7)  * 1.0,
           Math.sin(t * 0.27 + ph * 0.8)  * 1.2
         );
-        targetPos = n.basePos.clone().add(tmpDrift);
+        const breathScale = 1 + (this._breath || 0) * 0.06;
+        targetPos = n.basePos.clone().multiplyScalar(breathScale).add(tmpDrift);
       }
       n.mesh.position.lerp(targetPos, Math.min(1, dt * (isFocus ? 9 : 3)));
     });

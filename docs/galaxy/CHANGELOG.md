@@ -4,6 +4,154 @@ Per-scene history for the main page (`/`) starting at the post-split point. Buil
 
 ---
 
+## g13 — 2026-05-16 — Hide 6 titles from galaxy view + fix long-title clipping
+
+User: "in galaxy main view: remove filip, warzone, 10 miles, gunning, uh im sick, bluff caller, also fix titles being cut off if song title is too long" (with a screenshot showing "LL (SHIFT PERCEP" — "The Fall (Shift Perceptions)" clipped on both sides).
+
+**Removals.** Added a `HIDDEN_TITLES` set at the top of `_buildTitles()` that filters six tracks out of the galaxy sphere before slot assignment: `filip`, `warzone`, `10 miles`, `gunning`, `uh, i'm sick`, `bluff caller`. Matched on lowercase title so it survives any case-renames in config.json. Tracks stay in `config.json` and remain reachable by other scenes (tracks DAW, scenes selector) — they just don't get a title plane on the fibonacci sphere anymore. Total title planes dropped from 117 to 111.
+
+**Long-title clipping.** `_makeTitleTexture` had a hard `canvas.width = Math.min(2048, ...)` cap. At featured fontSize (220) with weight 800, anything past ~16 chars overflowed — `ctx.fillText(text, w/2, h/2)` then centered the glyphs and the canvas sliced off both ends. "The Fall (Shift Perceptions)" / "Random Song After David's" / "Fucking Up His Liver" were the worst offenders.
+
+Fix: measure the text at the requested fontSize, and if `tw > 2048` shrink fontSize by `2048/tw` (floor; clamped to 40px minimum) and re-measure before allocating the canvas. The plane's world-space width (`widthUnits`) is unchanged, so long titles now appear at the same on-screen width as short ones but with slightly thinner glyphs — far better than half the title vanishing into the void. `planeH = w / aspect` keeps the aspect-correct.
+
+The two other `_makeTitleTexture` callers (drift fragments at fontSize 96, scripted-comm fragments at fontSize 64) use 2-6 char strings so they never hit the cap — no change in behavior for them.
+
+**Files touched:**
+- `js/marathon-world.js` — `_buildTitles` filter + `_makeTitleTexture` auto-shrink.
+- `js/builds/galaxy.js` — `g12` → `g13`.
+- `docs/galaxy/FILE_MAP.md` — build/date bumped.
+
+Validation: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` → OK.
+
+---
+
+## g12 — 2026-05-12 — 12 new cameos (CCS / Keyship / Monolith / Stargate / Leviathan / MAC / etc.)
+
+User: "on our main page, we have halo ring, and the marathon ship. what else can we have thats not like a constant event? cool scenario floating about" → picked all 12 from my pitch list → "fan of all listed, make sure to add to admin and highlight as new" → "phase out if needed".
+
+Added 12 new "cameo" scenarios — iconic floating one-shots that match the Halo-ring / Marathon-ship silhouette energy but as occasional events, not constants. Each uses the existing fake-flyby-ship pattern (`_ephemeral=true` push into `flybyShips`) so they get follow-cam, lifecycle cleanup, and admin spawn buttons exactly like the other 24+ scenarios.
+
+1. **CCS battlecruiser pass** (`_spawnCcsBattlecruiser`) — purple ribbed Covenant cruiser, gravity-lift glow underneath, slow majestic cruise. Counterpart to the existing UNSC `mothership_reveal`.
+2. **Forerunner Keyship descent** (`_spawnKeyshipDescent`) — tapered spire drops in from above (`80u` along world-up), hovers 5s with two counter-rotating rings, lifts back out.
+3. **Halo ring fragment** (`_spawnRingFragment`) — `Math.PI/4` arc of a `TorusGeometry(48, 4)` with cyan inner trim, tumbles across the void.
+4. **2001 monolith** (`_spawnMonolith`) — very dark `BoxGeometry(2, 8, 18)` slab (1:4:9 proportions) with cyan `EdgesGeometry` rim so it reads against the nebula. Slow drift, silent. No engines.
+5. **Stargate kawoosh** (`_spawnStargateKawoosh`) — stone-grey torus ring forms with 9 amber chevron studs, additive blue kawoosh sprite splashes forward toward camera, then a shimmering event horizon disc holds for ~4s before collapsing.
+6. **Frozen capital ship** (`_spawnFrozenCapital`) — UNSC-shaped warship (spine + 4 pods + bridge) completely dark, no lights, slow end-over-end tumble.
+7. **Space whale · leviathan** (`_spawnLeviathan`) — chain of 10 spheres along `-X`, each scaled smaller toward tail, undulating sin-wave body. Bioluminescent dorsal spot sprites that brighten with `_readBass()` — actively reactive to the playing track.
+8. **Gravitational lensing patch** (`_spawnLensingPatch`) — black sphere core + additive cyan halo sprite + bright inner rim sprite, group-level scale wobble implies "warp distortion".
+9. **MAC round broadside** (`_spawnMacBroadside`) — distant cruiser silhouette far across the void, charge glow ramps for 2s, muzzle flash, thick `BoxGeometry(1,1,1)` plasma beam scales out to `240u` length over 0.5s, fades.
+10. **Cargo container spill** (`_spawnCargoSpill`) — broken hulk drifts, 14 crate boxes release one-by-one over 5s and tumble off in random directions.
+11. **Salvage tug** (`_spawnSalvageTug`) — small tug (`10u`) pulling a much larger wreck (`28u`) via 2 `BufferGeometry` tether lines. Size mismatch reads as the joke.
+12. **Sentinel swarm scan** (`_spawnSentinelSwarm`) — 2×3 grid of `IcosahedronGeometry(1.0)` drones with orange eye sprites, each firing a thin scanning beam to a converging point that wobbles in local space.
+
+**Wiring:**
+- New "cameos" admin section (between micro and footer), `data-cat="scripted"` lavender. Each button has `data-since="g12"` so `_decorateNewBadges` paints the "NEW" pill (full opacity now, fades over the next 5 builds).
+- Added 12 click-handler branches in the admin event delegate.
+- Added all 12 to `_fireRandomScenario`'s pool — they auto-fire alongside the existing scenarios every 22–40s, with the same recent-5 dedupe.
+- Updated FILE_MAP scenario count: 24+ → 30+.
+
+Phasing: User said "phase out if needed". Nothing phased out — none of the existing scenarios duplicate these. `mothership_reveal` and `ccs_battlecruiser` are deliberate UNSC/Covenant pair; `silent_observer` (stationary forerunner orb) and `keyship_descent` (descending forerunner spire with rings) are different silhouettes; `comet` and `monolith`/`lensing` are different feels entirely.
+
+**Files touched:**
+- `js/marathon-world.js` — 12 `_spawn*` methods after `_spawnSilentObserver`; 12 tick branches in `_tickScenario`; admin section + 12 click handlers + 12 pool entries.
+- `js/builds/galaxy.js` — `g11` → `g12`.
+- `docs/galaxy/FILE_MAP.md` — build/date/scenario-count bumped, cameos listed.
+
+Validation: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` → OK.
+
+---
+
+## g11 — 2026-05-10 — Revert g10 ring ribs (broke the torus illusion)
+
+User: "It does not look like a halo ring anymore. Because the inner part is almost like protruding outwards."
+
+The 30 cross-ribs from g10 wrapped completely around the torus tube — same dark band at the same `vUv.x` on both inner and outer faces. Visually they read as a slatted barrel / hollow tube broken into separate slabs, not as a continuous torus megastructure with a curving inhabited inner plate. Each rib looked like an independent segment "protruding" sideways instead of the inside curving inward away from the camera.
+
+Reverted the rib mechanic entirely. Also reverted the other g10 tweaks (sharper coastline threshold, dimmer cyan seam, deeper ocean palette, stronger lip) back to g9 values — g10 was a package and the user said "undo what we did now", so back to g9's settled state.
+
+**Files touched:**
+- `js/marathon-world.js` — `_buildHaloRing` shader restored to g9 form.
+- `js/builds/galaxy.js` — bumped `g10` → `g11`.
+
+Validation: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` → OK.
+
+---
+
+## g10 — 2026-05-10 — Halo ring: structural ribs + sharper coastlines
+
+User: g9 helped but cyan seam still bloomed wide and inner terrain was a green wash. Three more changes:
+
+1. **30 dark structural cross-ribs** every 12° around the ring (`fract(vUv.x * 30.0) > 0.94` → multiply surface by 0.32). Reads as service-bay supports / engineering segments. Applied to both inner and outer faces so the silhouette has continuous structural detail. Dark pixels can't bloom, so the ribs hold up under heavy post-fx.
+2. **Sharper land/ocean transition** — smoothstep band tightened from `(0.40, 0.49)` to `(0.43, 0.47)`. Continents now read as distinct shapes with definite coastlines instead of fading into ocean. Ocean palette dropped further (royal blue → deeper royal blue) to push contrast.
+3. **Cyan seam dialled back further** on the outer face (0.10 → 0.06). The bright cyan band wrapping the outer was blooming into a thick halo that competed with the actual ring silhouette. Plus the lip-band darkening factor tightened (0.18 → 0.10) so the silhouette edge is even crisper.
+
+Net: ring should read as a Forerunner megastructure with visible engineering — clear silhouette, structural cross-bars all the way around, terrain inside with distinguishable continents/oceans/clouds. Coherent under bloom + halation + grade.
+
+**Files touched:**
+- `js/marathon-world.js` — `_buildHaloRing` shader (ribMul factor on both faces, sharper landMask, dimmer cyan seam, stronger lipMul).
+- `js/builds/galaxy.js` — bumped `g9` → `g10`.
+
+Validation: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` → OK.
+
+---
+
+## g9 — 2026-05-10 — Halo ring legibility under heavy post-FX
+
+User screenshot: with all post-fx on (bloom + halation auto-cycling + grade), the halo ring read as a uniform white/yellow glow — you couldn't tell inner terrain from outer alloy, ring silhouette from background.
+
+Root cause: the inner face had peak pixels (clouds, ice, atmosphere rim, bass cyan) well above 0.55 luma, which is the halation extract threshold. Halation grabbed those highlights and convolved them into the silhouette as a uniform haze. The outer face was nearly neutral grey, so even when bloom hit, there was no hue contrast to anchor "this is outside vs inside".
+
+Three fixes in the ring shader:
+
+1. **Dark "lip" band on the silhouette rim.** Used `vRimMix` (peaks at the inner/outer transition) to multiply both face outputs by 0.18 in a thin band around the silhouette edge. Bloom can't smear dark pixels, so the lip survives heavy post-fx as a structural separator — you always see where the ring ends.
+
+2. **Capped all inner pixels under the halation threshold.** Inner face peaks were near 1.0 (clouds, ice); now < 0.55:
+   - Cloud mix-target: pure white → mid-grey `(0.55, 0.58, 0.62)`, cover dropped 0.20 → 0.16
+   - Ice mix-target: near-white → mid-blue-grey `(0.62, 0.68, 0.78)`, threshold tightened 0.82 → 0.86
+   - Atmosphere rim term removed entirely
+   - Bass cyan term dropped 0.18 → 0.10
+   - Ocean / land palettes more saturated to compensate for lower luma (deeper royal blue, deeper forest green, deeper desert)
+
+3. **Outer alloy biased violet.** Was neutral grey `(0.085, 0.092, 0.110)`; now `(0.075, 0.078, 0.135)` — slight violet tinge. Even when bloom partially washes the ring, the inner reads as blue-green and the outer reads as violet-grey — distinct enough hues that you see them as separate surfaces. Outer cyan trim saturated more but dimmed (0.18 → 0.10) so it doesn't bloom on its own.
+
+Net: with halation maxed, the ring now reads as a clear ring with a dark silhouette edge, inner terrain visible in saturated blue-green, outer alloy distinct in violet-grey. No more uniform glow blob.
+
+**Files touched:**
+- `js/marathon-world.js` — `_buildHaloRing` shader (both face branches, lip multiplier).
+- `js/builds/galaxy.js` — bumped `g8` → `g9`.
+
+Validation: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` → OK.
+
+---
+
+## g8 — 2026-05-10 — Neuron threads + constellation breath (always-happening titles)
+
+User: "what else can we add to galaxy to make it cooler? anything we can do our about our song titles? make them more living dynamic cooler always breathing environment taking on that far cry always happening feeling" → "sure lets try it"
+
+Two complementary ambient effects on top of the title sphere:
+
+### Neuron threads
+Pool of 8 additive line segments. Every 180–360ms, a free thread is claimed, given two random titles as endpoints (preferring pairs within 95u of each other, but accepting any if no nearby found within 6 attempts), and faded in/out over 420–700ms via a `sin(πk)` bell envelope. Endpoints follow the titles' drifted positions each frame so threads don't lag behind. Color cycles per firing across cyan→lavender (HSL hue 0.52–0.70) so the brain isn't monochrome. Bass boosts opacity: silent peaks at 0.35, loud peaks at 0.75.
+
+Net effect: 4–6 visible faint sparks across the sphere at any moment, constantly winking in and out. Makes the constellation read as a single living brain rather than 117 individual labels.
+
+Admin toggle: scene-elements → "neuron threads".
+
+### Constellation breath
+Global `this._breath` scalar lerped toward `bass` at ~165ms half-life (`dt * 6.0` lerp factor). Title position computation multiplies `basePos` by `(1 + _breath * 0.06)` → peak bass (~0.45 post-gain) gives ~2.7% radial expansion. The entire sphere inhales outward on sub-bass hits and exhales back. Idle bobbing layered on top so the breath doesn't replace per-title motion.
+
+Felt result: when music plays, the galaxy isn't just emitting reactive shaders — it's physically breathing with the beat. With audio paused, breath stays at 0 (no dead-state shift). Far Cry "always happening" ambient delivered.
+
+**Files touched:**
+- `js/marathon-world.js` — `_buildNeuronThreads`, `_tickNeuronThreads`, constructor + animate hooks, title basePos breath multiplier, admin button + visibility map + hint state. `_breath` init.
+- `js/builds/galaxy.js` — bumped `g7` → `g8`.
+
+Validation: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` → OK.
+
+Possible follow-ups: tier personalities (featured / new / archive each behave differently in the shader), title-orbiter particles around featured titles, spectrum bars on the focused title.
+
+---
+
 ## g7 — 2026-05-10 — Mothership orientation, hop-random snap, revert g6 auto-orient
 
 User: "hop to random title doesnt bring the title up. ships get stuck in the halo ring and flip tf out, our marathon or mothership fly diagonally backwards in the direction of their exhjaust flame shaking my head"
