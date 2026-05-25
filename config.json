@@ -145,19 +145,6 @@
       "date": "2026-01-24"
     },
     {
-      "title": "Uh, I'm Sick",
-      "file": "uh im sick.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "hard"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2026-01-22"
-    },
-    {
       "title": "Sickboi",
       "file": "sickboi2.mp3",
       "description": "",
@@ -285,19 +272,6 @@
       "date": "2025-02-17"
     },
     {
-      "title": "Gunning",
-      "file": "gunning.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "hard"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2025-02-16"
-    },
-    {
       "title": "Love Easily",
       "file": "Project_song_june27_loveeasily.mp3",
       "description": "",
@@ -370,45 +344,6 @@
       "date": "2023-04-14"
     },
     {
-      "title": "Emo Rock II",
-      "file": "Project_song_Mar26_emorock2.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "grunge"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2023-03-27"
-    },
-    {
-      "title": "Bluff Caller",
-      "file": "Project_song_emo_bluff_caller.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "grunge"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2023-03-18"
-    },
-    {
-      "title": "Birthday Freestyle",
-      "file": "Project_song_birthdayfreestyle.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "hard"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2023-03-12"
-    },
-    {
       "title": "Days Get Longer",
       "file": "Project_9 days get longer.mp3",
       "description": "",
@@ -418,28 +353,6 @@
       "isNew": false,
       "isFeatured": false,
       "date": "2023-03-07"
-    },
-    {
-      "title": "Ohohohohoho",
-      "file": "Project_8 ohohohohoho.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2023-03-04"
-    },
-    {
-      "title": "Kani Demarco's Memoir",
-      "file": "KANI DEMARCO's MEMOIR- 2.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2023-02-22"
     },
     {
       "title": "The Fall (Shift Perceptions)",
@@ -510,32 +423,6 @@
       "isNew": false,
       "isFeatured": false,
       "date": "2022-10-22"
-    },
-    {
-      "title": "Soul",
-      "file": "soul.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "chill"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2022-10-18"
-    },
-    {
-      "title": "Remember",
-      "file": "remember yogicbeats.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "chill"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2022-10-11"
     },
     {
       "title": "Fall Away",
@@ -656,19 +543,6 @@
       "date": "2022-04-18"
     },
     {
-      "title": "Hotel California",
-      "file": "HOTEL CALIFORNIA.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "hard"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2022-04-15"
-    },
-    {
       "title": "Wired",
       "file": "dannz0 wired.mp3",
       "description": "",
@@ -785,19 +659,6 @@
       "date": "2022-03-07"
     },
     {
-      "title": "Nirvana",
-      "file": "nirvana dannz0-original.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "grunge"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2022-03-06"
-    },
-    {
       "title": "Uh Huh",
       "file": "uh huh.mp3",
       "description": "",
@@ -866,39 +727,6 @@
       "date": "2021-11-04"
     },
     {
-      "title": "If I Had (Full v2)",
-      "file": "sean x dannz0 _if i had_ full song v2.0.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2021-09-25"
-    },
-    {
-      "title": "If I Had (Universal)",
-      "file": "If i had Universal.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2021-09-18"
-    },
-    {
-      "title": "Best Day Ever (Clarity)",
-      "file": "best day ever10 clarity.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2021-09-01"
-    },
-    {
       "title": "Sean USB",
       "file": "sean usb 3.mp3",
       "description": "",
@@ -910,52 +738,6 @@
       "date": "2020-09-04"
     },
     {
-      "title": "Warzone",
-      "file": "warzone.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "hard"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2020-06-23"
-    },
-    {
-      "title": "Streets",
-      "file": "streets.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": "2020-06-17"
-    },
-    {
-      "title": "4-5 Years",
-      "file": "4 5 years.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Akira World - I'm Next Up",
-      "file": "Akira World Im Next Up.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
       "title": "Chilly Nites",
       "file": "chilly nites dannz0.mp3",
       "description": "",
@@ -964,17 +746,6 @@
       "tags": [
         "chill"
       ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Clarity",
-      "file": "CLARITY bloomberg 5 effects only.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
       "isNew": false,
       "isFeatured": false,
       "date": ""
@@ -991,78 +762,8 @@
       "date": ""
     },
     {
-      "title": "Formidable",
-      "file": "Formidable Dannz03.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Indie Time",
-      "file": "indie time2.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "chill"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Beachouse",
-      "file": "kaniburn - beachouse (prod.dannz0) final mix.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
       "title": "Car Mixtape",
       "file": "Kaniburn car mixtape (prod.dannz0).mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Lemonade",
-      "file": "LemonadeGucciKane.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Little Indie Valentine",
-      "file": "little indie valentine mf2.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [
-        "chill"
-      ],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Need New",
-      "file": "NEED NEW SEAN X DANNZ0.mp3",
       "description": "",
       "credits": "",
       "links": {},
@@ -1085,30 +786,8 @@
       "date": ""
     },
     {
-      "title": "Nice Beat",
-      "file": "nice beat.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
       "title": "On Tour Soon",
       "file": "ON TOUR soon.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "10 Miles",
-      "file": "Project_song__Apr4_10miles.mp3",
       "description": "",
       "credits": "",
       "links": {},
@@ -1133,28 +812,6 @@
     {
       "title": "Money Ain't a Thing",
       "file": "Project_song_june16_moneymoneyaintathing.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Shroomy",
-      "file": "Project_song_may24_shroomy2.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Capz",
-      "file": "quickexportCapz.mp3",
       "description": "",
       "credits": "",
       "links": {},
@@ -1201,41 +858,8 @@
       "date": ""
     },
     {
-      "title": "Underrated",
-      "file": "UNDER RATED.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
       "title": "Work Smart",
       "file": "work smart.mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Filip",
-      "file": "filip+gay+(1).mp3",
-      "description": "",
-      "credits": "",
-      "links": {},
-      "tags": [],
-      "isNew": false,
-      "isFeatured": false,
-      "date": ""
-    },
-    {
-      "title": "Gay K",
-      "file": "gay k.mp3",
       "description": "",
       "credits": "",
       "links": {},

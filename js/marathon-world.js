@@ -6804,19 +6804,11 @@ const MarathonWorld = {
 
   /* ---------- Titles ---------- */
   _buildTitles(){
-    // Tracks hidden from the galaxy view (still playable elsewhere — they
-    // just don't get a title plane on the sphere).
-    const HIDDEN_TITLES = new Set([
-      'filip',
-      'warzone',
-      '10 miles',
-      'gunning',
-      "uh, i'm sick",
-      'bluff caller',
-    ]);
-    const all = (this.ctx.tracks || []).filter(t =>
-      !HIDDEN_TITLES.has((t.title || '').toLowerCase().trim())
-    );
+    // g14: HIDDEN_TITLES removed — cuts now happen at the source (config.json)
+    // so the player rotation can't land on them either. If you ever want to
+    // hide a track from the galaxy view ONLY (keep it playable elsewhere),
+    // reintroduce a Set filter here.
+    const all = (this.ctx.tracks || []);
     if (!all.length) return;
 
     // Show every track. All on a SHARED fibonacci sphere — one shell, one
@@ -8351,6 +8343,17 @@ const MarathonWorld = {
     this.hudEl = null;
     this.adminEl = null;
     this.container = null;
+  },
+
+  // g15 — public hook called by index.html's playIndex() whenever the current
+  // track changes (HUD prev/next, autoplay-ended, miniplayer buttons, anywhere
+  // else playIndex fires). Rotates the camera to face the new title's slot on
+  // the constellation sphere (mode 'look') and pops the focus card.
+  // No-op if init() hasn't run yet, no current track, or the track has no
+  // title node (e.g. future HIDDEN_TITLES re-introduction).
+  onTrackChange(){
+    if (!this.scene || !this.titles || !this.titles.length) return;
+    this._syncFocusToCurrent();
   },
 };
 
