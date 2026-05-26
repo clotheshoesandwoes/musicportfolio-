@@ -37,6 +37,9 @@ const POST_FRAGMENT = `
   // DoF focus target (UV space, 0..1) and falloff radius
   uniform vec2  uFocusUv;
   uniform float uFocusRadius;
+  // g41 — focus dim. 0 = no dimming, 1 = full dim outside focus radius.
+  // Lerped in animate based on whether a title is focused.
+  uniform float uFocusDim;
   varying vec2 vUv;
 
   float rand(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -201,6 +204,17 @@ const POST_FRAGMENT = `
       col = pow(max(col + lift, vec3(0.001)), 1.0 / gamma) * gain;
     }
 
+    // g41 — focus dim. When a title is focused, darken everything outside
+    // a soft radial mask around the focused title so the title pops against
+    // a dimmed scene. User: "when i have a song selected, maybe dim the
+    // background a bit otherwise its impossible to even see the title".
+    if (uFocusDim > 0.005) {
+      float distFromFocus = length((uv - uFocusUv) * vec2(uResolution.x / uResolution.y, 1.0));
+      float focusMask = 1.0 - smoothstep(0.10, 0.55, distFromFocus);
+      float dimAmt = uFocusDim * (1.0 - focusMask);
+      col *= mix(1.0, 0.40, dimAmt);
+    }
+
     // Scanline + grain + vignette (pre-existing)
     col *= 0.94 + 0.06 * sin(uv.y * uResolution.y * 1.4);
     col += (rand(uv + fract(uTime * 0.7)) - 0.5) * 0.045;
@@ -233,6 +247,7 @@ const TITLE_FRAGMENT = `
   uniform float uHueShift;
   uniform float uBreath;    // b192: ±~0.05 brightness offset for slow per-title breathing
   uniform float uTwinkle;   // b192: 0..1 brief brightness flash for one-at-a-time twinkles
+  uniform float uDist;      // g26: distance from camera in world units — drives atmospheric perspective
   varying vec2 vUv;
   float rand(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   // Rodrigues hue rotation around the (1,1,1) luminance axis.
@@ -244,14 +259,22 @@ const TITLE_FRAGMENT = `
   }
   void main(){
     vec2 uv = vUv;
-    float gAmt = 0.30 + uHover * 1.10 + uBass * 0.55 + uFocus * 0.35;
+    // g17: lower ambient + much lower focus contribution. User said the
+    // constant glitch was killing legibility, especially on the focused
+    // title in the center of the screen. Was: 0.30 + ... + uFocus * 0.35.
+    // Now: focused titles glitch barely more than idle (uFocus * 0.05),
+    // and idle baseline is lower (0.30 → 0.18). Hover still cranks for
+    // mouse-over discoverability. Bass-react slightly trimmed too.
+    float gAmt = 0.18 + uHover * 1.10 + uBass * 0.45 + uFocus * 0.05;
     float strips = 28.0;
     float blockY = floor(uv.y * strips) / strips;
     float blockSeed = rand(vec2(blockY * 7.31, floor(uTime * 14.0)));
     float dispActive = step(1.0 - 0.18 * gAmt, blockSeed);
     float disp = (rand(vec2(blockY, floor(uTime * 12.0))) - 0.5) * 0.06 * gAmt;
     uv.x += disp * dispActive;
-    float ca = 0.0018 + 0.012 * gAmt;
+    // g17: RGB chromatic-aberration scale halved (0.012 → 0.005). Was the
+    // most visually-jarring glitch artifact on focused titles.
+    float ca = 0.0012 + 0.005 * gAmt;
     float r = texture2D(uTex, uv + vec2(ca, 0.0)).r;
     float gC = texture2D(uTex, uv).g;
     float b = texture2D(uTex, uv - vec2(ca, 0.0)).b;
@@ -261,7 +284,8 @@ const TITLE_FRAGMENT = `
     col *= sl;
     float dropY = floor(uv.y * 110.0) / 110.0;
     float dropoutSeed = rand(vec2(dropY * 13.0, floor(uTime * 24.0)));
-    if (dropoutSeed > 1.0 - 0.05 * gAmt) a *= 0.0;
+    // g17: dropout chance 0.05 → 0.03 — fewer holes punched in the glyphs.
+    if (dropoutSeed > 1.0 - 0.03 * gAmt) a *= 0.0;
     vec3 tint = clamp(hueShift(uTint, uHueShift), 0.0, 1.5);
     col *= tint;
     // b192: gentle breath + rare twinkle. Breath gives every title a slow,
@@ -269,6 +293,18 @@ const TITLE_FRAGMENT = `
     // is a brief one-at-a-time flash from the scheduler.
     col *= (1.0 + uBreath + uTwinkle * 0.85);
     a *= uOpacity * (1.0 + uBreath * 0.6 + uTwinkle * 0.25);
+
+    // g26 — atmospheric perspective. Far titles desaturate toward the
+    // ambient void haze and lose ~40% alpha. Close titles untouched.
+    // Real depth cue: foreground featured titles read SHARP, background
+    // archive titles read FADED. fade ramps from 50u (no fade) to 230u
+    // (full fade) so featured (r=90) stays clean, archive (r=188) clearly
+    // hazes back. Haze tint matches the dim nebula void color.
+    float fade = smoothstep(50.0, 230.0, uDist);
+    vec3 hazeCol = vec3(0.05, 0.06, 0.10);
+    col = mix(col, hazeCol, fade * 0.55);
+    a *= 1.0 - fade * 0.40;
+
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -387,15 +423,22 @@ const MarathonWorld = {
     // Mild fog to give depth without obscuring far titles
     this.scene.fog = new THREE.FogExp2(0x040406, 0.0035);
 
-    this.camera = new THREE.PerspectiveCamera(80, 1, 0.1, 2400);
+    this.camera = new THREE.PerspectiveCamera(92, 1, 0.1, 2700);   // g46: 2400 → 2700 to fit moon at z=2550
     this.camera.position.copy(this.cam.pos);
 
     this._buildNebula();
+    // g25 — auroras disabled. The 5 ribbons (even toned-down) competed
+    // with titles for attention; for a music portfolio the titles must
+    // dominate. Function kept in source so we can re-enable later if a
+    // different approach calls for them.
+    // this._buildAuroras();
     this._buildStarfield();
+    this._buildForegroundDust();   // g27 — dense near dust, makes the void feel inhabited
     this._buildCore();
     this._buildHaze();
     this._buildFogPatches();
     this._buildTitles();
+    this._buildTitleAuras();   // g27 — halos + orbital particles around featured titles
     this._buildFragments();
     this._buildStreaks();
     this._buildSatellites();
@@ -405,6 +448,10 @@ const MarathonWorld = {
     this._buildMarathonShip();
     this._buildHaloRing();
     this._buildTraveler();
+    this._buildPyramid();      // g39 — Destiny Darkness monument
+    this._buildBinaryStars();  // g40 — orbiting binary star pair
+    this._buildBlackHole();    // g40 — live black hole with suction + ship pull
+    this._buildCelestials();   // g42 — Halo's host gas giant + 2 moons
     this._buildNavBuoys();
     this._buildNeuronThreads();
 
@@ -485,6 +532,11 @@ const MarathonWorld = {
       <div class="tg-tr">
         <div class="tg-mark">cantmute.me</div>
         ${socialsHtml}
+        <div class="tg-sites">
+          <a href="https://seankani.com" target="_blank" rel="noopener">seankani.com</a>
+          <a href="https://gridon.life" target="_blank" rel="noopener">gridon.life</a>
+          <a href="https://seankani.com/studio" target="_blank" rel="noopener">kani.studio</a>
+        </div>
       </div>
       <div class="tg-bl">
         <div class="tg-hint" id="tg-hint">drag to look around &nbsp;·&nbsp; click a title</div>
@@ -614,7 +666,7 @@ const MarathonWorld = {
         r * Math.sin(phi) * 0.4,
         r * Math.cos(phi) * Math.sin(theta)
       );
-      sp.userData = { seed, baseY: sp.position.y };
+      sp.userData = { seed, baseX: sp.position.x, baseY: sp.position.y, baseZ: sp.position.z };
       this.scene.add(sp);
       this.fogPatches.push(sp);
     }
@@ -680,6 +732,7 @@ const MarathonWorld = {
           uHueShift: { value: 0 },
           uBreath:   { value: 0 },   // b192 (kept zero on fragments; TITLE_FRAGMENT shader expects it)
           uTwinkle:  { value: 0 },   // b192
+          uDist:     { value: 0 },   // g26 — kept zero on fragments (no atmospheric fade)
         },
         vertexShader: TITLE_VERTEX,
         fragmentShader: TITLE_FRAGMENT,
@@ -921,6 +974,13 @@ const MarathonWorld = {
           for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
           return v;
         }
+        // Higher-frequency fbm tuned for tight features (stellar nurseries,
+        // sharp ribbons). Two octaves only — we want sparseness, not mush.
+        float fbm2(vec3 p){
+          float v = 0.0; float a = 0.5;
+          for (int i = 0; i < 3; i++) { v += a * noise(p); p *= 2.41; a *= 0.55; }
+          return v;
+        }
 
         // HSL → RGB (h in [0,1])
         vec3 hsl2rgb(float h, float s, float l){
@@ -937,44 +997,64 @@ const MarathonWorld = {
           float n2 = fbm(d * 3.4 + vec3(0.0,      -t * 0.8,  t * 0.55));
           float n3 = fbm(d * 6.0 + vec3(t * 0.3,   0.0,     -t * 0.4));
 
-          float cloud = smoothstep(-0.10, 0.55, n1 * 0.75 + n2 * 0.40);
-          float wisps = smoothstep(0.40, 0.90, n2 + n3 * 0.5);
+          // g23 — brighter, more defined cloud / wisp thresholds.
+          float cloud = smoothstep(-0.18, 0.50, n1 * 0.80 + n2 * 0.45);
+          float wisps = smoothstep(0.36, 0.86, n2 + n3 * 0.55);
 
-          // Slow-orbiting hue axis — direction in space whose alignment with
-          // the view direction biases hue. Combined with a global hue rotation,
-          // this gives a full rainbow gradient that flows across the sphere.
-          vec3 hueAxis = normalize(vec3(
-            sin(uTime * 0.025),
-            0.30 * sin(uTime * 0.011),
-            cos(uTime * 0.025)
-          ));
-          float axisAlign = dot(d, hueAxis) * 0.5 + 0.5;       // 0..1 across sphere
-          float baseHue   = uTime * 0.011;                      // full cycle ~9.5 min
-          // Hue varies only ~20% across the sphere (was 55%) so the whole sky
-          // reads as a cohesive 1–2 color family at any moment, not a full rainbow.
-          // Time still rotates through every hue slowly.
-          float hue = fract(baseHue + axisAlign * 0.18 + n1 * 0.06);
+          // g38 — REGIONAL hue assignment instead of one rotating axis.
+          // Previous logic used a single rotating hueAxis with ~22% spread
+          // across the sphere — at any moment the whole sky read as ONE
+          // color family ("green all over" / "magenta all over"). Now hue
+          // is driven by a low-frequency noise field of the view direction,
+          // so different REGIONS of the sphere have their own dominant
+          // hue — magenta in one quadrant, cyan in another, amber elsewhere,
+          // all visible simultaneously. Slow time drift keeps it alive.
+          float hueRegion = fbm(d * 0.85 + vec3(uTime * 0.012, 0.0, uTime * 0.008));
+          float hueDetail = fbm(d * 3.20 + vec3(0.0, uTime * 0.006, 0.0));
+          float hue = fract(uTime * 0.006 + hueRegion * 0.85 + hueDetail * 0.22);
 
-          // Cloud / wisp / rim hue offsets stay close so the sphere reads
-          // unified at any given second.
-          vec3 cloudCol = hsl2rgb(hue,                    0.55, 0.26);
-          vec3 wispCol  = hsl2rgb(fract(hue + 0.06),      0.72, 0.42);
-          vec3 rimCol   = hsl2rgb(fract(hue + 0.50),      0.45, 0.32);   // complementary accent
+          // g23 — saturation + lightness pumped.
+          vec3 cloudCol = hsl2rgb(hue,                    0.72, 0.32);
+          vec3 wispCol  = hsl2rgb(fract(hue + 0.08),      0.85, 0.52);
+          vec3 rimCol   = hsl2rgb(fract(hue + 0.50),      0.60, 0.45);
 
-          vec3 colVoid = vec3(0.018, 0.012, 0.030);
+          vec3 colVoid = vec3(0.014, 0.010, 0.028);   // g38 — darker void between features for more contrast
 
           vec3 col = mix(colVoid, cloudCol, cloud);
-          col = mix(col, wispCol, wisps * 0.55);
-          col = mix(col, rimCol, smoothstep(0.72, 1.00, n2) * 0.30);
+          col = mix(col, wispCol, wisps * 0.70);
+          col = mix(col, rimCol, smoothstep(0.70, 1.00, n2) * 0.40);
+
+          // g38 — DUST LANES. Real nebulae have dark dust filaments
+          // obscuring light from behind. Independent noise field thresholded
+          // for narrow dark bands that cross the cloud structure. Reads as
+          // "real space" rather than "uniform haze."
+          float dustLaneNoise = fbm(d * 4.5 + vec3(uTime * 0.010, 0.0, uTime * 0.014));
+          float dustLane = smoothstep(0.48, 0.32, dustLaneNoise);
+          col *= mix(1.0, 0.35, dustLane);
+
+          // g25 — STELLAR NURSERIES kept but heavily dimmed (0.55 → 0.22)
+          // so they're punctate background texture, not bloom-feeders.
+          float starField = fbm2(d * 14.0 + vec3(0.0, t * 0.4, t * 0.3));
+          float starHot   = smoothstep(0.45, 0.62, starField);
+          float starCore  = pow(starHot, 4.0);
+          float twinkle   = 0.7 + 0.3 * sin(uTime * 1.7 + (n2 + n3) * 9.0);
+          vec3  starHue   = hsl2rgb(fract(hue + 0.12 + n3 * 0.30), 0.75, 0.55);
+          vec3  starCol   = starHue * starCore * twinkle * (1.0 + uBass * 0.4);
+          col += starCol * 0.22;
+
+          // g25 — pulsar sweep removed. Was a constant moving spotlight that
+          // washed parts of the dome; titles need a quiet backdrop, not a
+          // rotating broadcast lamp competing for the eye.
 
           // Mild vertical falloff
           col *= 0.55 + 0.50 * (1.0 - abs(d.y));
 
-          // Bass-react brightness
-          col *= 1.0 + uBass * 0.25;
+          // Bass-react brightness on the whole sphere.
+          col *= 1.0 + uBass * 0.15;
 
-          // Overall trim
-          col *= 0.85;
+          // g25 — trim 0.88 → 0.55. Nebula is now a dim atmospheric backdrop,
+          // not a co-star. Titles dominate the scene.
+          col *= 0.55;
 
           gl_FragColor = vec4(col, 1.0);
         }
@@ -987,6 +1067,154 @@ const MarathonWorld = {
     this.nebula = new THREE.Mesh(geo, mat);
     this.nebula.renderOrder = -10;
     this.scene.add(this.nebula);
+  },
+
+  /* ---------- Aurora ribbons (g23) ----------
+     5 large curved translucent sheets at mid-distance (r=185–260) with
+     noise-distorted alpha and waveform vertex displacement. Fills the
+     volume between archive title shell (r=188) and nebula skybox (r=600)
+     with painterly hue sheets — that band was empty before. Additive
+     blending so they layer over nebula without darkening anything.
+     ---------- */
+  _buildAuroras(){
+    this.auroras = [];
+    // g24 — pushed FAR out (was 195–255, now 320–420) so they don't dominate
+    // the field of view, and shrunk (was 150–190 wide, now 95–125). Combined
+    // with NormalBlending + lower alpha in the fragment shader, they now
+    // read as atmospheric color hints in the background rather than bright
+    // walls bleeding through bloom.
+    const SETUPS = [
+      { r: 330, hue: 0.55, phase: 0.0, w: 115, h: 30, tilt:  0.40, rot:  0.0014 },  // cyan
+      { r: 380, hue: 0.86, phase: 0.7, w: 125, h: 32, tilt: -0.55, rot: -0.0011 },  // hot magenta
+      { r: 350, hue: 0.10, phase: 1.4, w: 100, h: 26, tilt:  1.20, rot:  0.0009 },  // amber
+      { r: 420, hue: 0.65, phase: 2.1, w: 135, h: 36, tilt: -1.05, rot: -0.0016 },  // lavender
+      { r: 320, hue: 0.32, phase: 2.8, w: 105, h: 28, tilt:  0.80, rot:  0.0012 },  // green
+    ];
+
+    const VERTEX = `
+      uniform float uTime;
+      uniform float uSeed;
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        vec3 p = position;
+        // Drifting sin waves along length — turns the flat rectangle into
+        // a billowing ribbon. Two periods so the curve isn't pendulum-y.
+        float wave = sin(uv.x * 7.0 + uTime * 0.45 + uSeed)         * 1.4
+                   + sin(uv.x * 2.6 - uTime * 0.28 + uSeed * 2.3)   * 2.0;
+        float curl = cos(uv.y * 5.5 + uTime * 0.38 + uSeed * 1.7)   * 0.7;
+        p.z += wave;
+        p.x += curl;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `;
+
+    const FRAGMENT = `
+      uniform float uTime;
+      uniform float uSeed;
+      uniform float uHue;
+      uniform float uBass;
+      varying vec2 vUv;
+
+      float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n2(vec2 p){
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f*f*(3.0-2.0*f);
+        return mix(mix(hash2(i),               hash2(i+vec2(1.0,0.0)), u.x),
+                   mix(hash2(i+vec2(0.0,1.0)), hash2(i+vec2(1.0,1.0)), u.x), u.y);
+      }
+      float fbm2d(vec2 p){
+        float v = 0.0; float a = 0.5;
+        for (int i = 0; i < 4; i++) { v += a * n2(p); p *= 2.1; a *= 0.55; }
+        return v;
+      }
+      vec3 hsl2rgb(float h, float s, float l){
+        vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+        return l + s * (rgb - 0.5) * (1.0 - abs(2.0 * l - 1.0));
+      }
+
+      void main(){
+        vec2 uv = vUv;
+
+        // Soft top/bottom and left/right edge fadeout so the ribbon doesn't
+        // read as a hard rectangle.
+        float vEdge = smoothstep(0.0, 0.22, uv.y) * smoothstep(1.0, 0.78, uv.y);
+        float hEdge = smoothstep(0.0, 0.06, uv.x) * smoothstep(1.0, 0.94, uv.x);
+
+        // Drifting noise — gives the ribbon its wispy striated structure.
+        float n = fbm2d(vec2(uv.x * 4.5 + uTime * 0.16 + uSeed,
+                             uv.y * 2.2 + uSeed * 1.4 + uTime * 0.06));
+        float bands = smoothstep(0.28, 0.82, n);
+
+        // Hue drifts globally with time, then varies along the ribbon length
+        // + noise so each ribbon shifts through a band of related hues
+        // rather than reading as one flat color. g24 — lightness 0.58 → 0.42
+        // (less blown-out), bands multiplier 1.0 → 0.55.
+        float hue = fract(uHue + uTime * 0.018 + uv.x * 0.18 + n * 0.16);
+        vec3 col = hsl2rgb(hue, 0.78, 0.42);
+        col *= 0.8 + bands * 0.55;
+
+        // g24 — alpha 0.65 → 0.22 (and bass term 0.35 → 0.15). Combined
+        // with NormalBlending below, ribbons now TINT the background
+        // instead of piling additive brightness into the bloom pass.
+        float a = vEdge * hEdge * bands * 0.22;
+        a *= 1.0 + uBass * 0.15;
+
+        gl_FragColor = vec4(col, a);
+      }
+    `;
+
+    const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+    SETUPS.forEach((s, i) => {
+      const geo = new THREE.PlaneGeometry(s.w, s.h, 60, 8);
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uSeed: { value: s.phase },
+          uHue:  { value: s.hue },
+          uBass: { value: 0 },
+        },
+        vertexShader: VERTEX,
+        fragmentShader: FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        // g24 — was AdditiveBlending; that fed bloom and washed the frame
+        // into glow soup. NormalBlending keeps them as soft hue tints over
+        // the nebula instead of bright sources.
+        blending: THREE.NormalBlending,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      // Fibonacci-spread direction, then push out to radius r.
+      const yRaw = 1 - (i + 0.5) / SETUPS.length * 2;
+      const yClamped = yRaw * 0.6;
+      const ringR = Math.sqrt(Math.max(0, 1 - yClamped * yClamped));
+      const theta = GOLDEN_ANGLE * i + s.phase;
+      mesh.position.set(
+        s.r * ringR * Math.cos(theta),
+        s.r * yClamped,
+        s.r * ringR * Math.sin(theta)
+      );
+      // Face the camera (origin), then tilt around radial axis for variety.
+      mesh.lookAt(0, 0, 0);
+      mesh.rotateZ(s.tilt);
+      mesh.renderOrder = -5;  // after nebula (-10), before titles/landmarks (0)
+      mesh.userData = { rotSpeed: s.rot };
+      this.scene.add(mesh);
+      this.auroras.push(mesh);
+    });
+  },
+
+  _tickAuroras(t, bass){
+    if (!this.auroras) return;
+    this.auroras.forEach((m) => {
+      m.material.uniforms.uTime.value = t;
+      m.material.uniforms.uBass.value = bass;
+      // Slow continuous rotation around radial axis — ribbons twist like
+      // real auroras instead of sitting fixed in space.
+      m.rotateZ(m.userData.rotSpeed);
+    });
   },
 
   /* ---------- Ambient streak meteors (bright, visible eye-catchers) ---------- */
@@ -3209,8 +3437,13 @@ const MarathonWorld = {
     f.outer.scale.setScalar(0.01);
     f.outer.lookAt(pos.clone().addScaledVector(fwd, -1));
     f.inner.rotation.set(0, Math.PI, 0);
-    f.velocity.set(0, 0, 0);
-    f.life = 0; f.maxLife = 10; f.active = true; f.outer.visible = true;
+    // g44 — was stationary (velocity 0). User asked for stationary scenarios
+    // to drift. Slow lateral drift so the observer slowly tracks across the
+    // user's field of view rather than parking in one spot.
+    const obsDrift = right.clone().multiplyScalar((Math.random() < 0.5 ? -1 : 1) * 4)
+      .addScaledVector(up, (Math.random() - 0.5) * 1.5);
+    f.velocity.copy(obsDrift);
+    f.life = 0; f.maxLife = 11; f.active = true; f.outer.visible = true;
     f.scenario = 'silent_observer'; f.scenarioTime = 0;
     f.scenarioBase = {};
     f.scenarioCleanup = () => { f.outer.scale.setScalar(1); };
@@ -3624,11 +3857,16 @@ const MarathonWorld = {
     grp.rotation.y = Math.atan2(-aimDir.z, aimDir.x);
     this.scene.add(grp);
 
+    // g44 — was stationary (velocity 0,0,0). User: "this with lightning bolt
+    // ... should move too same with the sentry gun". MAC cruiser now drifts
+    // slowly perpendicular to its aim direction (broadside maneuvering).
+    // Lifetime extended slightly to keep the beam visible during traversal.
+    const driftDir = aimDir.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
     const fake = {
       type: 'mac', outer: grp, inner: grp,
       active: true, _ephemeral: true,
-      velocity: new THREE.Vector3(0, 0, 0),
-      rollPhase: 0, life: 0, maxLife: 5.5,
+      velocity: driftDir.multiplyScalar(7),
+      rollPhase: 0, life: 0, maxLife: 6.0,
       scenario: 'mac_broadside', scenarioTime: 0,
       scenarioBase: { hullMat, chargeMat, charge, beam, beamMat },
       scenarioCleanup: null,
@@ -3774,7 +4012,10 @@ const MarathonWorld = {
     const fake = {
       type: 'sentinels', outer: grp, inner: grp,
       active: true, _ephemeral: true,
-      velocity: velDir.clone().multiplyScalar(13),
+      // g44 — speed bumped 13 → 18 so the formation actually traverses
+      // the screen instead of crawling. User asked for the sentry-gun
+      // scenario to move more.
+      velocity: velDir.clone().multiplyScalar(18),
       rollPhase: 0, life: 0, maxLife: 11,
       scenario: 'sentinel_swarm', scenarioTime: 0,
       scenarioBase: { droneMat, beamMat, drones, beams },
@@ -4894,20 +5135,18 @@ const MarathonWorld = {
     const free = { longsword: [], banshee: [], pelican: [], forerunner: [] };
     this.flybyShips.forEach(s => { if (!s.active) free[s.type].push(s); });
 
-    const weights = { longsword: 0.45, banshee: 0.18, pelican: 0.20, forerunner: 0.17 };
+    // g43 — Pelican removed from random flyby pool ("remove this helicopter
+    // one" — its top-mounted engine pods read as rotors at a glance). Code
+    // for the Pelican mesh + pelican-combat scenario kept so explicit
+    // scripted cameos can still use it; just no more random ambient
+    // helicopter-looking spawns.
+    const weights = { longsword: 0.45, banshee: 0.28, forerunner: 0.27 };
     const available = Object.keys(weights).filter(t => free[t] && free[t].length > 0);
     if (!available.length) return;
     const totalW = available.reduce((sum, t) => sum + weights[t], 0);
     let r = Math.random() * totalW;
     let chosen = available[0];
     for (const t of available) { r -= weights[t]; if (r <= 0) { chosen = t; break; } }
-
-    // SCRIPTED SCENARIO: when a Pelican is chosen and a Banshee is free, 70%
-    // of the time we trigger the combat scenario instead of a normal flyby.
-    if (chosen === 'pelican' && free.banshee.length > 0 && Math.random() < 0.70) {
-      this._spawnPelicanCombat(free.pelican[0], free.banshee[0]);
-      return;
-    }
 
     // Group size — only longswords patrol in 2–3
     let groupSize = 1;
@@ -4933,10 +5172,25 @@ const MarathonWorld = {
     };
     const speed       = speedMap[chosen];
     const spawnRadius = 240 + Math.random() * 80;
-    const offset      = 50 + Math.random() * 90;
+    // g35 — when a title is focused, bias the flyby trajectory to pass
+    // NEAR the focused title.
+    // g40 — when NOT focused, 8% chance to bias the trajectory to pass
+    // close to the black hole so ships occasionally get caught and pulled
+    // in by its gravity. Without this the natural random flybys almost
+    // never enter the BH's 500u influence zone.
+    const focusedT = this.focused ? this.focused.mesh.position.clone() : null;
+    const blackHoleBait = !focusedT && this.blackHole && Math.random() < 0.08
+      ? this.blackHole.grp.position.clone()
+      : null;
+    const anchor = focusedT || blackHoleBait;
+    const offsetMag = anchor
+      ? (focusedT ? 8 + Math.random() * 20 : 60 + Math.random() * 80)
+      : 50 + Math.random() * 90;
+    const offsetSign = Math.random() < 0.5 ? -1 : 1;
     const baseStart = new THREE.Vector3()
       .copy(dir).multiplyScalar(-spawnRadius)
-      .add(perp.clone().multiplyScalar(offset));
+      .add(perp.clone().multiplyScalar(offsetMag * (anchor ? offsetSign : 1)));
+    if (anchor) baseStart.add(anchor);
 
     const slots = [
       { p:  0,    s:  0,   t:  0   },
@@ -5072,11 +5326,17 @@ const MarathonWorld = {
     // repeat for 5 cycles.
     if (this._nextFlybyAt == null) this._nextFlybyAt = t + 4;
     if (t >= this._nextFlybyAt) {
-      // Allow up to 2 concurrent random flybys so the sky feels alive
+      // g27 — up to 3 concurrent flybys + 2–5s cadence.
+      // g35 — when a title is focused, cap goes to 4 and gap drops to 1–2.5s
+      // so ships visibly stream around / across / past the focused title.
+      const focused = !!this.focused;
       const activeFlybys = this.flybyShips.filter(s => s.active && !s.scenario).length;
-      if (activeFlybys < 2) {
+      const cap = focused ? 4 : 3;
+      if (activeFlybys < cap) {
         this._spawnFlyby();
-        this._nextFlybyAt = t + 3 + Math.random() * 4;   // 3–7s gap
+        this._nextFlybyAt = focused
+          ? t + 1.0 + Math.random() * 1.5    // 1.0–2.5s gap
+          : t + 2.0 + Math.random() * 3.0;   // 2.0–5.0s gap
       } else {
         this._nextFlybyAt = t + 0.5;
       }
@@ -5084,12 +5344,11 @@ const MarathonWorld = {
     this._tickScenarioScheduler(t);
   },
 
-  /* b189 / g12: scenario auto-fire — picks one of ~30 scripted scenarios
-     every 22–40s, biased away from the last 5 so the user sees variety.
-     Skips firing if we're already inside an active scripted scenario
-     (to avoid heavy-on-heavy stacking like fleet-jump-in + convoy). */
+  /* g35 — scenario interval is focus-aware now:
+       focused:   4–9s gap  (~2× faster — busier action around the focused track)
+       unfocused: 10–18s gap (g27 baseline) */
   _tickScenarioScheduler(t){
-    if (this._nextScenarioAt == null) this._nextScenarioAt = t + 10;
+    if (this._nextScenarioAt == null) this._nextScenarioAt = t + 6;
     if (t < this._nextScenarioAt) return;
     const sceneActive = this.flybyShips.some(s => s.active && s.scenario);
     if (sceneActive) {
@@ -5097,7 +5356,9 @@ const MarathonWorld = {
       return;
     }
     this._fireRandomScenario();
-    this._nextScenarioAt = t + 22 + Math.random() * 18;   // 22–40s gap
+    this._nextScenarioAt = this.focused
+      ? t + 4 + Math.random() * 5     // 4–9s when focused
+      : t + 10 + Math.random() * 8;   // 10–18s when not
   },
 
   _fireRandomScenario(){
@@ -5163,7 +5424,12 @@ const MarathonWorld = {
     if (this._nextMicroAt == null) this._nextMicroAt = t + 4 + Math.random() * 4;
     if (t < this._nextMicroAt) return;
     this._fireRandomMicro();
-    this._nextMicroAt = t + 5 + Math.random() * 7;   // 5–12s gap
+    // g35 — micro tier interval halved when focused (2–6s vs 5–12s).
+    // Comm fragments, meteor passes, drone darts cluster around the
+    // focused title much more frequently.
+    this._nextMicroAt = this.focused
+      ? t + 2 + Math.random() * 4
+      : t + 5 + Math.random() * 7;
   },
 
   _fireRandomMicro(){
@@ -5349,6 +5615,7 @@ const MarathonWorld = {
         uHueShift: { value: 0 },
         uBreath:   { value: 0 },
         uTwinkle:  { value: 0 },
+        uDist:     { value: 0 },   // g26 — kept zero (no atmospheric fade on comm-static)
       },
       vertexShader: TITLE_VERTEX,
       fragmentShader: TITLE_FRAGMENT,
@@ -5523,10 +5790,13 @@ const MarathonWorld = {
         float hue = fract(uTime * 0.025 + uHueOffset);
         vec3 edge = hsl2rgb(hue, 0.70, 0.60);
         edge *= 1.0 + uBass * 0.35;
-        // Dark glass body, bright iridescent edges
-        vec3 body = vec3(0.04, 0.06, 0.10);
+        // g26 — body brightened (0.04/0.06/0.10 → 0.08/0.11/0.18). Was so dark
+        // shards read as edge-wireframes against the void; now the body has a
+        // faint volume read. Still well below bloom threshold so it doesn't
+        // blob.
+        vec3 body = vec3(0.08, 0.11, 0.18);
         vec3 col = mix(body, edge, fres);
-        float a = 0.34 + fres * 0.75;
+        float a = 0.40 + fres * 0.75;
         gl_FragColor = vec4(col, a);
       }
     `;
@@ -5556,17 +5826,34 @@ const MarathonWorld = {
       });
       const m = new THREE.Mesh(geo, mat);
 
-      // Distribute on a sphere shell at varied radii
+      // g26 — distance distribution rebalanced for real depth perception.
+      // Was 32 shards all at 50–270u (title-shell range), so the entire
+      // shard field sat at one depth and contributed zero foreground
+      // parallax. Now: 25% near (14–32u, drift visibly past the camera
+      // as it floats), 50% mid (50–130u, title-shell territory), 25%
+      // far (140–280u, back-field). Near shards scaled smaller so they
+      // don't dominate at proximity; far shards scaled larger so they
+      // read across the void.
       const u  = Math.random() * 2 - 1;
       const th = Math.random() * Math.PI * 2;
       const rr = Math.sqrt(1 - u * u);
-      const dist = 50 + Math.random() * 220;
+      const tierRoll = Math.random();
+      let dist, scale;
+      if (tierRoll < 0.25) {
+        dist = 14 + Math.random() * 18;            // near foreground
+        scale = 0.35 + Math.random() * 0.55;
+      } else if (tierRoll < 0.75) {
+        dist = 50 + Math.random() * 80;            // mid
+        scale = 0.7 + Math.random() * 1.2;
+      } else {
+        dist = 140 + Math.random() * 140;          // far back-field
+        scale = 1.2 + Math.random() * 1.4;
+      }
       m.position.set(
         Math.cos(th) * rr * dist,
         u * dist,
         Math.sin(th) * rr * dist
       );
-      const scale = 0.7 + Math.random() * 1.6;
       m.scale.setScalar(scale);
       m.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
 
@@ -6244,31 +6531,79 @@ const MarathonWorld = {
     grp.rotation.x = 0.85;
     grp.rotation.z = -0.10;
 
-    const RING_R = 900.0;   // b240: 680 → 900 — user: "fucking huge"; planet-class megastructure scale
-    const RING_r = 48.0;    // b240: 36 → 48 — proportional thickening (r/R ratio kept) so the terrain band scales with the ring
-    const RADIAL_SEGS = 22;
+    const RING_R = 900.0;
+    // g38 — full geometry rewrite. Was TorusGeometry (RING_R=900, RING_r=48,
+    // RADIAL_SEGS=8) — an octagonal donut. User reference shows real Halo
+    // rings are FLAT RIBBONS (wide axial band, thin radial profile), not
+    // round tubes. Custom BufferGeometry now: 4 separate face-strips
+    // (TOP / INNER / BOTTOM / OUTER) wrapping the ring's circumference.
+    // Each face has its own UV.y in [0,1] and a per-vertex aFace attribute
+    // (0/1/2/3) so the fragment shader can dispatch distinct shading per
+    // face — inhabited terrain on INNER (face 1), CRAZY mechanical
+    // exterior on OUTER (face 3), moderate structural on TOP/BOT (0/2).
+    const HALF_AX = 38.0;    // axial half-extent — inhabited band is 76u wide
+    const HALF_RA = 9.0;     // radial half-extent — structural is 18u thick
     const TUBULAR_SEGS = 600;
 
-    const geo = new THREE.TorusGeometry(RING_R, RING_r, RADIAL_SEGS, TUBULAR_SEGS);
+    const positions = [];
+    const uvs       = [];
+    const faces     = [];
+    for (let i = 0; i <= TUBULAR_SEGS; i++) {
+      const u   = i / TUBULAR_SEGS;
+      const ang = u * Math.PI * 2;
+      const cA  = Math.cos(ang), sA = Math.sin(ang);
+      const cx  = cA * RING_R,   cy = sA * RING_R;
+      // Spatial corners (each corner appears twice in the vertex list,
+      // once per adjacent face, so each face has unique UVs):
+      //   OT = outer-top   = ( cx + cA*HALF_RA, cy + sA*HALF_RA,  HALF_AX)
+      //   IT = inner-top   = ( cx - cA*HALF_RA, cy - sA*HALF_RA,  HALF_AX)
+      //   IB = inner-bot   = ( cx - cA*HALF_RA, cy - sA*HALF_RA, -HALF_AX)
+      //   OB = outer-bot   = ( cx + cA*HALF_RA, cy + sA*HALF_RA, -HALF_AX)
+      const OTx = cx + cA*HALF_RA, OTy = cy + sA*HALF_RA, OTz =  HALF_AX;
+      const ITx = cx - cA*HALF_RA, ITy = cy - sA*HALF_RA, ITz =  HALF_AX;
+      const IBx = cx - cA*HALF_RA, IBy = cy - sA*HALF_RA, IBz = -HALF_AX;
+      const OBx = cx + cA*HALF_RA, OBy = cy + sA*HALF_RA, OBz = -HALF_AX;
+      // FACE 0: TOP (axial+, span outer-top → inner-top)
+      positions.push(OTx, OTy, OTz,  ITx, ITy, ITz);
+      uvs.push(u, 0, u, 1);
+      faces.push(0, 0);
+      // FACE 1: INNER (radial-inward, the inhabited band — span inner-top → inner-bot)
+      positions.push(ITx, ITy, ITz,  IBx, IBy, IBz);
+      uvs.push(u, 0, u, 1);
+      faces.push(1, 1);
+      // FACE 2: BOTTOM (axial-, span inner-bot → outer-bot)
+      positions.push(IBx, IBy, IBz,  OBx, OBy, OBz);
+      uvs.push(u, 0, u, 1);
+      faces.push(2, 2);
+      // FACE 3: OUTER (radial-outward, the structural exterior — span outer-bot → outer-top)
+      positions.push(OBx, OBy, OBz,  OTx, OTy, OTz);
+      uvs.push(u, 0, u, 1);
+      faces.push(3, 3);
+    }
+    const indices = [];
+    for (let i = 0; i < TUBULAR_SEGS; i++) {
+      for (let f = 0; f < 4; f++) {
+        const a = i * 8 + f * 2;
+        const b = i * 8 + f * 2 + 1;
+        const c = (i + 1) * 8 + f * 2 + 1;
+        const d = (i + 1) * 8 + f * 2;
+        indices.push(a, b, c, a, c, d);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('aFace',    new THREE.Float32BufferAttribute(faces, 1));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
 
     const vert = `
+      attribute float aFace;
       varying vec2 vUv;
-      varying float vInnerFace;
-      varying float vRimMix;
+      varying float vFace;
       void main(){
         vUv = uv;
-        // Object-space tube center for this vertex (default torus has axis Z,
-        // tube center for vertex at (px,py,pz) is normalize(px,py)*R, z=0).
-        // R hardcoded to match RING_R above; if you bump RING_R, bump this too.
-        vec2 cXY = normalize(position.xy) * 900.0;
-        vec3 tubeCenter = vec3(cXY, 0.0);
-        vec3 nObj = normalize(position - tubeCenter);
-        vec3 radialOut = vec3(normalize(cXY), 0.0);
-        // dot < 0 means vertex normal points toward the torus center axis
-        // → that's the INNER (inhabited) face.
-        float facing = dot(nObj, radialOut);
-        vInnerFace = step(facing, 0.0);   // 1.0 if inner, 0.0 if outer
-        vRimMix    = 1.0 - abs(facing);    // peaks on the side rims
+        vFace = aFace;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `;
@@ -6278,8 +6613,7 @@ const MarathonWorld = {
       uniform float uTime;
       uniform float uBass;
       varying vec2 vUv;
-      varying float vInnerFace;
-      varying float vRimMix;
+      varying float vFace;
 
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float noise2(vec2 p){
@@ -6295,57 +6629,176 @@ const MarathonWorld = {
       }
 
       void main(){
-        // g9: dark "lip" band on the silhouette rim — creates a clear edge
-        // line where inner and outer faces meet. Bloom can't smear dark
-        // pixels, so this band stays as a structural separator no matter
-        // how aggressive halation gets. Applied to both faces below.
-        // g11: reverted g10's cross-ribs — they broke the torus illusion,
-        // making the ring look like a slatted tube instead of a megastructure
-        // with a continuous inhabited inner surface.
-        float lip = smoothstep(0.74, 0.96, vRimMix);
-        float lipMul = mix(1.0, 0.18, lip);
+        // g38 — face dispatch via per-vertex aFace attribute.
+        // 0=top axial, 1=inner radial (inhabited), 2=bottom axial, 3=outer radial (crazy exterior).
+        int face = int(floor(vFace + 0.5));
 
-        // ----- OUTER FACE: Forerunner alloy, slight violet bias -----
-        if (vInnerFace < 0.5) {
-          float seam = step(0.985, fract(vUv.x * 60.0));
-          float ridge = fbm(vec2(vUv.x * 14.0, vUv.y * 3.0));
-          vec3 base = vec3(0.075, 0.078, 0.135) * (0.55 + 0.45 * ridge);
-          base += vec3(0.18, 0.50, 0.75) * seam * 0.10;
-          base += vec3(0.14, 0.30, 0.50) * smoothstep(0.55, 0.95, vRimMix) * 0.06;
+        // Structural rib seams — 20 panel boundaries every 18°. Applied to ALL faces.
+        float ribX = fract(vUv.x * 20.0);
+        float ribLine = smoothstep(0.020, 0.0, min(ribX, 1.0 - ribX));
+        float ribDim  = mix(1.0, 0.55, ribLine);
+        vec3  ribGlow = vec3(0.08, 0.28, 0.55) * ribLine * 0.55;
+
+        // ============================================================
+        // FACE 3 — OUTER RADIAL (the "crazy" mechanical exterior).
+        // User asked for a ring that "has crazy exterior" — multi-scale
+        // industrial detail: hex panel grid + periodic large modules +
+        // cyan glowing ring features + amber accent point lights + vent
+        // lines. Reads as a Forerunner megastructure surface from afar.
+        // ============================================================
+        if (face == 3) {
+          // Hex grid base: 70 panels around × 4 vertical bands
+          vec2 hexUv = vec2(vUv.x * 70.0, vUv.y * 4.0);
+          vec2 hexLocal = fract(hexUv) - 0.5;
+          float hexEdge = smoothstep(0.40, 0.49, max(abs(hexLocal.x), abs(hexLocal.y)));
+          float panelSeed = hash(floor(hexUv));
+          vec3 base = vec3(0.045, 0.058, 0.085) * (0.55 + panelSeed * 0.55);
+          base += vec3(0.16, 0.40, 0.62) * hexEdge * 0.13;
+
+          // Large structural modules — bigger recesses every ~24° (15 around)
+          float bigMod = fbm(vec2(vUv.x * 15.0, vUv.y * 1.5));
+          float modRecess = smoothstep(0.55, 0.78, bigMod);
+          base *= mix(1.0, 0.55, modRecess);
+
+          // Cyan glowing ring features — the iconic Halo "blue glow" structures.
+          // Scatter circular hotspots at random positions; each renders as a
+          // bright ring with a brighter core.
+          vec2 ringUv = vec2(vUv.x * 24.0, vUv.y * 3.0);
+          vec2 ringLocal = fract(ringUv) - 0.5;
+          float ringDist = length(ringLocal);
+          float ringSeed = hash(floor(ringUv));
+          float ringAnnulus = smoothstep(0.20, 0.16, ringDist) - smoothstep(0.12, 0.08, ringDist);
+          float ringCore    = smoothstep(0.06, 0.02, ringDist);
+          float ringMask    = step(0.78, ringSeed);
+          base += vec3(0.22, 0.58, 0.95) * ringMask * (ringAnnulus * 0.22 + ringCore * 0.28);
+
+          // Amber accent point lights — scattered structural surface lights
+          vec2 lightUv = vec2(vUv.x * 80.0, vUv.y * 6.0);
+          vec2 lightLocal = fract(lightUv) - 0.5;
+          float lightSeed = hash(floor(lightUv));
+          float lightDot  = step(0.85, lightSeed) * (1.0 - smoothstep(0.05, 0.10, length(lightLocal)));
+          base += vec3(0.95, 0.65, 0.30) * lightDot * 0.20;
+
+          // Vent lines — thin cyan rectangles in the middle band
+          float ventX = fract(vUv.x * 50.0);
+          float ventBand = step(0.35, vUv.y) * step(vUv.y, 0.65);
+          float vent = step(0.97, ventX) * ventBand;
+          base += vec3(0.28, 0.70, 1.00) * vent * 0.16;
+
+          // Slight axial edge fade so the face doesn't read flat all the way to the corners
+          float edgeFade = smoothstep(0.0, 0.06, vUv.y) * smoothstep(1.0, 0.94, vUv.y);
+          base *= 0.80 + 0.20 * edgeFade;
+
+          // Structural ribs (the 20 hull-section seams)
+          base *= ribDim;
+          base += ribGlow;
           base *= (1.0 + uBass * 0.06);
-          base *= lipMul;
           gl_FragColor = vec4(base, 1.0);
           return;
         }
 
-        // ----- INNER FACE: terrain band, kept under halation threshold -----
+        // ============================================================
+        // FACE 0 / 2 — AXIAL TOP/BOTTOM (thin structural edges).
+        // Less detailed than the wide outer face — these are 18u-thick
+        // structural rims seen from above/below.
+        // ============================================================
+        if (face == 0 || face == 2) {
+          float seam = step(0.985, fract(vUv.x * 60.0));
+          float ridge = fbm(vec2(vUv.x * 14.0, vUv.y * 3.0));
+          vec3 base = vec3(0.065, 0.072, 0.115) * (0.55 + 0.45 * ridge);
+          base += vec3(0.18, 0.45, 0.70) * seam * 0.10;
+          // Periodic bright connector ports along the rim
+          float portX = fract(vUv.x * 30.0);
+          float port = step(0.94, portX) * smoothstep(0.3, 0.5, vUv.y) * smoothstep(0.7, 0.5, vUv.y);
+          base += vec3(0.20, 0.55, 0.95) * port * 0.18;
+          base *= ribDim;
+          base += ribGlow;
+          base *= (1.0 + uBass * 0.05);
+          gl_FragColor = vec4(base, 1.0);
+          return;
+        }
+
+        // Forerunner architectural trim — bright cyan-blue band at the
+        // EDGES of the inhabited inner face (vUv.y near 0 or 1), where
+        // the inhabited surface meets the structural walls.
+        float trimBand = smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.92, 1.0, vUv.y));
+        trimBand = (1.0 - trimBand) * step(0.02, vUv.y) * step(vUv.y, 0.98);
+        // (above gives non-zero only near vUv.y=0 and vUv.y=1, on the inhabited band edges)
+        vec3 forerunnerTrim = vec3(0.18, 0.55, 0.95) * trimBand * 0.22;
+        // Atmospheric equator glow — soft cool-blue at the CENTER of the inhabited band
+        float equatorBand = 1.0 - 2.0 * abs(vUv.y - 0.5);
+        equatorBand = pow(max(equatorBand, 0.0), 2.2);
+        vec3 atmoGlow = vec3(0.12, 0.22, 0.38) * equatorBand * 0.20;
+
+        // ----- INNER FACE (g29): higher-quality terrain band.
+        // Was 2-octave continents → ocean/forest/desert/ice + simple clouds.
+        // Now 4-octave continents, four-biome land (forest/savanna/desert/
+        // mountain), coastline highlights, city lights in mid-altitude
+        // land regions, two-octave clouds, polar atmospheric haze.
         float lat = (vUv.y - 0.5) * 2.0;
+        float latAbs = abs(lat);
 
         float cont = fbm(vec2(vUv.x * 4.5, lat * 1.2));
-        cont += 0.40 * fbm(vec2(vUv.x * 11.0 + 13.0, lat * 3.0));
-        cont *= 0.71;
+        cont += 0.50 * fbm(vec2(vUv.x * 11.0 + 13.0, lat * 3.0));
+        cont += 0.25 * fbm(vec2(vUv.x * 24.0 + 7.0,  lat * 7.0));
+        cont += 0.12 * fbm(vec2(vUv.x * 48.0 + 31.0, lat * 14.0));
+        cont *= 0.55;
 
-        float landMask = smoothstep(0.40, 0.49, cont);
-        float ice = smoothstep(0.86, 0.98, abs(lat));
+        float landMask = smoothstep(0.40, 0.46, cont);
+        float ice = smoothstep(0.82, 0.96, latAbs);
 
-        vec3 oceanDeep = vec3(0.020, 0.10, 0.38);
-        vec3 oceanSh   = vec3(0.09,  0.32, 0.62);
-        vec3 ocean = mix(oceanDeep, oceanSh, smoothstep(0.16, 0.40, cont));
+        // Ocean with tropical cyan bias near equator
+        vec3 oceanDeep = vec3(0.018, 0.08, 0.32);
+        vec3 oceanSh   = vec3(0.10,  0.36, 0.65);
+        vec3 ocean = mix(oceanDeep, oceanSh, smoothstep(0.10, 0.42, cont));
+        ocean = mix(ocean, vec3(0.16, 0.55, 0.72), smoothstep(0.30, 0.05, latAbs) * 0.28);
 
-        vec3 forest = vec3(0.14, 0.42, 0.18);
-        vec3 desert = vec3(0.48, 0.36, 0.16);
-        vec3 land   = mix(forest, desert, smoothstep(0.55, 0.78, cont));
+        // Four-biome land — forest → savanna → desert → mountain
+        vec3 forest   = vec3(0.10, 0.36, 0.14);
+        vec3 savanna  = vec3(0.45, 0.50, 0.20);
+        vec3 desert   = vec3(0.58, 0.42, 0.18);
+        vec3 mountain = vec3(0.40, 0.34, 0.28);
+        vec3 land = mix(forest, savanna,  smoothstep(0.45, 0.62, cont));
+        land = mix(land, desert,   smoothstep(0.62, 0.75, cont));
+        land = mix(land, mountain, smoothstep(0.75, 0.88, cont));
 
         vec3 surface = mix(ocean, land, landMask);
-        surface = mix(surface, vec3(0.62, 0.68, 0.78), ice);
+        surface = mix(surface, vec3(0.78, 0.85, 0.92), ice);
 
-        float clouds = fbm(vec2(vUv.x * 16.0 + uTime * 0.020, lat * 4.5 + uTime * 0.006));
-        clouds = smoothstep(0.62, 0.92, clouds);
-        surface = mix(surface, vec3(0.55, 0.58, 0.62), clouds * 0.16);
+        // Coastline shimmer — bright thin band exactly at the land/ocean boundary
+        float coast = 1.0 - abs(landMask - 0.5) * 2.0;
+        coast = pow(max(coast, 0.0), 9.0);
+        surface += vec3(0.55, 0.82, 0.95) * coast * (1.0 - ice) * 0.22;
 
-        surface += vec3(0.04, 0.14, 0.24) * uBass * 0.10;
+        // City lights — punctate bright dots in mid-altitude land regions.
+        // g31: contribution 0.42 → 0.22 because the bright amber dots
+        // were the #1 bloom-feeder on the inner face and were leaking
+        // colored haze outside the ring's polygonal silhouette.
+        float cityNoise = fbm(vec2(vUv.x * 90.0 + 41.0, lat * 30.0 + 17.0));
+        float cityMask = step(0.78, cityNoise) * landMask * smoothstep(0.5, 0.65, cont) * (1.0 - ice);
+        surface += vec3(1.0, 0.82, 0.50) * cityMask * 0.22;
 
-        surface *= lipMul;
+        // Two-octave clouds — more structural detail
+        float clouds = fbm(vec2(vUv.x * 18.0 + uTime * 0.020, lat * 5.5 + uTime * 0.006));
+        clouds += 0.45 * fbm(vec2(vUv.x * 40.0 + uTime * 0.030, lat * 10.0));
+        clouds = smoothstep(0.72, 1.08, clouds);
+        surface = mix(surface, vec3(0.78, 0.82, 0.88), clouds * 0.20);
+
+        // Polar atmospheric haze — softens the ice band into a misty rim
+        surface = mix(surface, vec3(0.40, 0.50, 0.62), smoothstep(0.85, 1.0, latAbs) * 0.18);
+
+        // Bass tint (held conservative — inner face is bright; bloom would hate more)
+        surface += vec3(0.03, 0.10, 0.18) * uBass * 0.10;
+
+        // g33 — structural rib seams crossing the inhabited band
+        surface *= ribDim;
+        surface += ribGlow;
+        // g33 — Forerunner architectural trim along inhabited-band edges
+        // (where it meets the structural top/bottom walls)
+        surface += forerunnerTrim;
+        // g33 — atmospheric equator glow — cool-blue at the center of the
+        // inhabited band
+        surface += atmoGlow;
 
         gl_FragColor = vec4(surface, 1.0);
       }
@@ -6512,6 +6965,559 @@ const MarathonWorld = {
     tr.grp.rotation.y += 0.00018;
     // Gentle halo breathe with bass.
     tr.haloMat.opacity = 0.30 + bass * 0.18;
+  },
+
+  /* ---------- Pyramid (g39) ----------
+     Destiny-inspired Darkness monument: black obsidian octahedron (stretched
+     vertical for the iconic "pointed top + pointed bottom" silhouette).
+     Custom shader: dark obsidian body with red-orange fresnel rim glow at
+     edges + bass-pulsed inner energy. Position fills the previously-empty
+     forward-right-lower bearing. Slowly rotates around its vertical axis.
+     ---------- */
+  _buildPyramid(){
+    const grp = new THREE.Group();
+    grp.position.set(650, -250, -900);
+    grp.rotation.z = 0.18;   // slight tilt for cinematic asymmetry
+
+    // Octahedron stretched vertically — 100u wide × 260u tall, sharp apex
+    const geo = new THREE.OctahedronGeometry(50, 0);
+    geo.scale(1.4, 2.6, 1.4);
+
+    const vert = `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying vec3 vObj;
+      void main(){
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView   = normalize(-mv.xyz);
+        vObj    = position;
+        gl_Position = projectionMatrix * mv;
+      }
+    `;
+    const frag = `
+      precision highp float;
+      uniform float uTime;
+      uniform float uBass;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying vec3 vObj;
+      void main(){
+        // Fresnel — rim glows hot, faces stay near-black
+        float fres = 1.0 - abs(dot(vNormal, vView));
+        fres = pow(fres, 1.6);
+
+        // Inner pulsing energy — deep red core that throbs with bass
+        // and a slow time wave. Stronger near the vertical apexes where
+        // the obsidian "fissures" would concentrate.
+        float spineProx = 1.0 - smoothstep(0.0, 50.0, abs(vObj.y));   // peaks at center-y
+        float corePulse = 0.5 + 0.5 * sin(uTime * 0.4 + vObj.y * 0.05);
+        corePulse = corePulse * (0.6 + uBass * 0.8);
+
+        // Body: near-black obsidian with faint violet undertone
+        vec3 body = vec3(0.012, 0.006, 0.020);
+        // Rim: hot red-orange (matches Destiny Darkness palette)
+        vec3 rim  = vec3(0.85, 0.20, 0.08);
+        // Inner energy: deep blood-red
+        vec3 core = vec3(0.55, 0.05, 0.04);
+
+        vec3 col = body;
+        col = mix(col, rim, fres * 0.85);
+        col += core * spineProx * corePulse * 0.18;
+
+        // Bass tint adds energy globally
+        col *= 1.0 + uBass * 0.10;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uBass: { value: 0 },
+      },
+      vertexShader: vert,
+      fragmentShader: frag,
+      transparent: false,
+      depthWrite: true,
+      side: THREE.FrontSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    grp.add(mesh);
+    this.scene.add(grp);
+    this.pyramid = { grp, mesh, mat };
+  },
+
+  _tickPyramid(t, bass){
+    if (!this.pyramid || !this.pyramid.grp.visible) return;
+    const p = this.pyramid;
+    p.mat.uniforms.uTime.value = t;
+    p.mat.uniforms.uBass.value = bass;
+    // Very slow yaw — ominous, never still
+    p.grp.rotation.y += 0.0006;
+    // Subtle nod / bob
+    p.grp.position.y = -250 + Math.sin(t * 0.08) * 6.0;
+  },
+
+  /* ---------- Binary star pair (g40) ----------
+     Two emissive spheres orbiting a common barycenter — hot blue-white
+     primary + cooler orange-red secondary, mass-weighted orbital distances.
+     ---------- */
+  _buildBinaryStars(){
+    const grp = new THREE.Group();
+    grp.position.set(-700, 500, 800);
+
+    // g41 — drastically reduced brightness + size. Previous values
+    // (RGB up to 1.0, radii 20+14) blew into giant gold/blue blobs
+    // through the bloom pass — user: "whats this random gold thing
+    // that showed up super ugly i dont like it doesnt fit stuff".
+    // Now peak channels are JUST above bloom threshold (0.30) so the
+    // stars glow softly without painting the frame.
+    const matA = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.28, 0.36, 0.48) });
+    const meshA = new THREE.Mesh(new THREE.SphereGeometry(8, 24, 12), matA);
+    grp.add(meshA);
+
+    const matB = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.42, 0.18, 0.07) });
+    const meshB = new THREE.Mesh(new THREE.SphereGeometry(5, 20, 10), matB);
+    grp.add(meshB);
+
+    this.scene.add(grp);
+    this.binaryStars = { grp, meshA, meshB, matA, matB, sepRadius: 38, period: 55 };
+  },
+
+  _tickBinaryStars(t, bass){
+    if (!this.binaryStars || !this.binaryStars.grp.visible) return;
+    const bs = this.binaryStars;
+    const angle = (t / bs.period) * Math.PI * 2;
+    const c = Math.cos(angle), s = Math.sin(angle);
+    const ra = bs.sepRadius * 0.26;
+    const rb = bs.sepRadius * 0.74;
+    bs.meshA.position.set( c * ra, 0,  s * ra * 0.4);
+    bs.meshB.position.set(-c * rb, 0, -s * rb * 0.4);
+    // g41 — bass multiplier dropped 0.35 → 0.15 so beat hits don't push
+    // the stars dramatically over the bloom threshold.
+    const pa = 1.0 + bass * 0.15;
+    bs.matA.color.setRGB(0.28 * pa, 0.36 * pa, 0.48 * pa);
+    bs.matB.color.setRGB(0.42 * pa, 0.18 * pa, 0.07 * pa);
+  },
+
+  /* ---------- Black hole — live, with suction + ship pull (g40) ----------
+     Event horizon (pure black sphere) + lensing glow halo (additive fresnel
+     ring) + accretion disk (flat shader ring with hot inner / cool outer
+     gradient + rotating noise streaks) + suction particles (~200 points
+     spiraling inward to the horizon and respawning at the outer radius)
+     + gravitational pull on any flyby ship within 500u (ships caught
+     inside the event horizon despawn with a brief flash).
+     ---------- */
+  _buildBlackHole(){
+    const grp = new THREE.Group();
+    grp.position.set(800, -300, 1100);
+    grp.rotation.x = 0.5;
+    grp.rotation.z = 0.25;
+
+    // Event horizon — pure black sphere with NO emissive, sits in front of
+    // everything as an actual absence of light.
+    const horizonMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const horizon = new THREE.Mesh(new THREE.SphereGeometry(32, 32, 16), horizonMat);
+    grp.add(horizon);
+
+    // Lensing glow — thin bright halo right at the horizon's silhouette.
+    // BackSide + fresnel so we only see the rim where light "bends" around.
+    const lensMat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uBass: { value: 0 } },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vView;
+        void main(){
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vNormal = normalize(normalMatrix * normal);
+          vView   = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uBass;
+        varying vec3 vNormal;
+        varying vec3 vView;
+        void main(){
+          float fres = 1.0 - abs(dot(vNormal, vView));
+          fres = pow(fres, 3.0);
+          vec3 col = vec3(1.0, 0.65, 0.30) * fres * (1.2 + uBass * 0.4);
+          gl_FragColor = vec4(col, fres * 0.85);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.FrontSide,
+    });
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(38, 32, 16), lensMat);
+    grp.add(lens);
+
+    // Accretion disk — flat ring around horizon, hot inner edge → cool outer
+    const diskMat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uBass: { value: 0 } },
+      vertexShader: `
+        varying vec2 vUv;
+        void main(){
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uBass;
+        varying vec2 vUv;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        void main(){
+          // RingGeometry uvs: y is radial (0=inner, 1=outer), x is angular
+          float radial = vUv.y;
+          float ang    = vUv.x;
+          // Hot yellow-orange inner → deep red outer
+          vec3 hot  = vec3(1.00, 0.85, 0.45);
+          vec3 cool = vec3(0.30, 0.06, 0.04);
+          vec3 col = mix(hot, cool, smoothstep(0.0, 0.7, radial));
+          // Rotating angular noise — streaks of brighter accretion material
+          float angT = ang + uTime * 0.08;
+          float noiseR = hash(vec2(floor(angT * 90.0), floor(radial * 24.0)));
+          col *= 0.65 + noiseR * 0.7;
+          // Bright streaks
+          float streak = step(0.88, hash(vec2(floor(angT * 55.0), floor(radial * 14.0))));
+          col += vec3(1.0, 0.70, 0.25) * streak * 0.40;
+          col *= 1.0 + uBass * 0.25;
+          // Alpha: fades at inner and outer edges so disk doesn't have hard rims
+          float alpha = smoothstep(0.0, 0.08, radial) * smoothstep(1.0, 0.88, radial);
+          gl_FragColor = vec4(col, alpha * 0.92);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const disk = new THREE.Mesh(new THREE.RingGeometry(40, 110, 96, 4), diskMat);
+    disk.rotation.x = Math.PI * 0.5;   // flat disk perpendicular to local Z
+    grp.add(disk);
+
+    // Suction particles — points spiraling inward from outer to horizon.
+    const N = 220;
+    const positions = new Float32Array(N * 3);
+    const particles = [];
+    for (let i = 0; i < N; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 50 + Math.random() * 180;
+      const tilt = (Math.random() - 0.5) * 0.45;
+      particles.push({
+        angle: a,
+        radius: r,
+        tilt,
+        fallRate: 6 + Math.random() * 14,
+        rotSpeed: 0.5 + Math.random() * 1.2,
+      });
+      positions[i * 3]     = Math.cos(a) * r;
+      positions[i * 3 + 1] = Math.sin(tilt) * Math.min(r * 0.10, 14);
+      positions[i * 3 + 2] = Math.sin(a) * r * 0.45;
+    }
+    const sucGeo = new THREE.BufferGeometry();
+    sucGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const sucMat = new THREE.PointsMaterial({
+      size: 1.6,
+      map: this._makeDotTexture(),
+      color: 0xffb060,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true,
+      alphaTest: 0.02,
+    });
+    const suction = new THREE.Points(sucGeo, sucMat);
+    grp.add(suction);
+
+    this.scene.add(grp);
+    this.blackHole = { grp, horizon, lens, lensMat, disk, diskMat, suction, particles };
+  },
+
+  _tickBlackHole(t, dt, bass){
+    if (!this.blackHole || !this.blackHole.grp.visible) return;
+    const bh = this.blackHole;
+    bh.diskMat.uniforms.uTime.value = t;
+    bh.diskMat.uniforms.uBass.value = bass;
+    bh.lensMat.uniforms.uTime.value = t;
+    bh.lensMat.uniforms.uBass.value = bass;
+
+    // Suction particles spiral inward. Bass speeds up the fall rate so on
+    // heavy tracks the black hole consumes faster.
+    const pos = bh.suction.geometry.attributes.position.array;
+    const fallMul = 1 + bass * 0.6;
+    bh.particles.forEach((p, i) => {
+      p.angle  += p.rotSpeed * dt;
+      p.radius -= p.fallRate * dt * fallMul;
+      if (p.radius < 34) {
+        // Crossed event horizon — respawn at outer rim with fresh angle
+        p.angle    = Math.random() * Math.PI * 2;
+        p.radius   = 160 + Math.random() * 80;
+        p.tilt     = (Math.random() - 0.5) * 0.45;
+        p.fallRate = 6 + Math.random() * 14;
+      }
+      pos[i * 3]     = Math.cos(p.angle) * p.radius;
+      pos[i * 3 + 1] = Math.sin(p.tilt) * Math.min(p.radius * 0.10, 14);
+      pos[i * 3 + 2] = Math.sin(p.angle) * p.radius * 0.45;
+    });
+    bh.suction.geometry.attributes.position.needsUpdate = true;
+
+    // Slow disk + halo precession
+    bh.disk.rotation.z += dt * 0.045;
+    bh.grp.rotation.y += dt * 0.012;
+
+    // Apply gravitational pull to flyby ships within INFLUENCE radius;
+    // despawn any that cross the event horizon.
+    this._applyBlackHolePull(dt);
+  },
+
+  /* ---------- Celestial bodies (g42) — Halo host gas giant + 2 moons ----------
+     Spherical bodies with procedural surfaces. The gas giant sits behind the
+     Halo ring (so the ring reads as orbiting it, like in canon). Two moons
+     fill previously empty forward-upper bearings. Single shared shader
+     dispatched by uType (0 = rocky, 1 = gas giant).
+     ---------- */
+  _buildCelestials(){
+    const SHARED_VERT = `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying vec3 vObj;
+      void main(){
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView   = normalize(-mv.xyz);
+        vObj    = position;
+        gl_Position = projectionMatrix * mv;
+      }
+    `;
+    const SHARED_FRAG = `
+      precision highp float;
+      uniform float uTime;
+      uniform float uType;        // 0 = rocky, 1 = gas giant
+      uniform vec3  uColorA;      // base
+      uniform vec3  uColorB;      // light highlight
+      uniform vec3  uColorC;      // dark shadow / band accent
+      uniform vec3  uSpotColor;   // gas giant: storm color
+      uniform float uRadius;      // for proportional noise frequencies
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying vec3 vObj;
+
+      float hash3d(vec3 p){
+        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+      }
+      float noise3d(vec3 p){
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+        vec3 u = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(hash3d(i + vec3(0,0,0)), hash3d(i + vec3(1,0,0)), u.x),
+              mix(hash3d(i + vec3(0,1,0)), hash3d(i + vec3(1,1,0)), u.x), u.y),
+          mix(mix(hash3d(i + vec3(0,0,1)), hash3d(i + vec3(1,0,1)), u.x),
+              mix(hash3d(i + vec3(0,1,1)), hash3d(i + vec3(1,1,1)), u.x), u.y),
+          u.z);
+      }
+      float fbm3d(vec3 p){
+        float v = 0.0;
+        float a = 0.5;
+        for (int i = 0; i < 4; i++){
+          v += a * noise3d(p);
+          p *= 2.13;
+          a *= 0.55;
+        }
+        return v;
+      }
+
+      void main(){
+        vec3 nObj = normalize(vObj);
+        // Normalize noise frequency by body radius so detail is proportional
+        float fScale = 30.0 / uRadius;
+
+        vec3 surface;
+
+        if (uType < 0.5) {
+          // ----- ROCKY MOON (g46 — improved texturing) -----
+          // Base terrain
+          float terrain = fbm3d(vObj * fScale);
+          surface = mix(uColorC, uColorA, smoothstep(0.30, 0.50, terrain));
+          surface = mix(surface, uColorB, smoothstep(0.55, 0.75, terrain));
+          // g46 — LOW-FREQUENCY MARE PATCHES (large dark plains like Earth's moon mares)
+          float mare = fbm3d(vObj * fScale * 0.4 + vec3(11.3, 7.1, 3.9));
+          float mareMask = smoothstep(0.45, 0.28, mare);
+          surface = mix(surface, uColorC * 0.65, mareMask * 0.60);
+          // Craters — high-freq dimples
+          float craters = fbm3d(vObj * fScale * 3.0 + vec3(7.3, 1.7, 4.1));
+          float dim = smoothstep(0.55, 0.70, craters);
+          surface *= 1.0 - dim * 0.38;
+          // g46 — sharper, brighter crater rim (was * 0.40)
+          float rim = smoothstep(0.49, 0.55, craters) * (1.0 - smoothstep(0.55, 0.60, craters));
+          surface += uColorB * rim * 0.60;
+          // g46 — second-scale rocky detail (medium freq) for surface bumpiness
+          float bumps = fbm3d(vObj * fScale * 6.0 + vec3(2.1, 8.3, 5.7));
+          surface *= 0.88 + bumps * 0.18;
+        } else {
+          // ----- GAS GIANT -----
+          float lat = nObj.y;
+          // Bands warped by noise → stormy latitudinal flow
+          float warp = fbm3d(vObj * fScale * 0.7 + vec3(uTime * 0.04, 0.0, 0.0)) * 0.22;
+          float band = sin((lat + warp) * 16.0);
+          float bandMix = band * 0.5 + 0.5;
+          surface = mix(uColorC, uColorA, bandMix);
+          // Brighter equatorial belt
+          float eq = 1.0 - smoothstep(0.0, 0.35, abs(lat));
+          surface = mix(surface, uColorB, eq * 0.30);
+          // Turbulent storms
+          float turb = fbm3d(vObj * fScale * 2.5 + vec3(uTime * 0.02, 0.0, uTime * 0.01));
+          surface *= 0.80 + turb * 0.30;
+          // Great storm spot — single bright cyclone at a fixed bearing
+          vec3 spotDir = normalize(vec3(0.55, -0.20, 0.81));
+          float spotProx = max(0.0, dot(nObj, spotDir));
+          float spotMask = smoothstep(0.88, 0.96, spotProx);
+          // Add some swirl inside the spot via local fbm
+          float spotSwirl = fbm3d(vObj * fScale * 4.0 + vec3(uTime * 0.10, 0.0, 0.0));
+          surface = mix(surface, uSpotColor * (0.7 + spotSwirl * 0.4), spotMask * 0.85);
+        }
+
+        // Atmospheric / rim lighting — fresnel
+        float fres = 1.0 - abs(dot(vNormal, vView));
+        fres = pow(fres, 2.4);
+        vec3 rimTint = (uType < 0.5)
+          ? vec3(0.18, 0.22, 0.30) * 0.32   // moon: cool blue-white glow
+          : uColorA * 0.45;                  // gas giant: atmosphere matches base
+        surface += rimTint * fres;
+
+        gl_FragColor = vec4(surface, 1.0);
+      }
+    `;
+
+    const makeBody = (cfg) => {
+      const geo = new THREE.SphereGeometry(cfg.radius, cfg.segs || 48, Math.floor((cfg.segs || 48) / 2));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime:      { value: 0 },
+          uType:      { value: cfg.type },
+          uColorA:    { value: new THREE.Vector3(...cfg.colorA) },
+          uColorB:    { value: new THREE.Vector3(...cfg.colorB) },
+          uColorC:    { value: new THREE.Vector3(...cfg.colorC) },
+          uSpotColor: { value: new THREE.Vector3(...(cfg.spotColor || [0, 0, 0])) },
+          uRadius:    { value: cfg.radius },
+        },
+        vertexShader: SHARED_VERT,
+        fragmentShader: SHARED_FRAG,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(...cfg.position);
+      mesh.rotation.set(cfg.tilt?.[0] || 0, cfg.tilt?.[1] || 0, cfg.tilt?.[2] || 0);
+      // g46 — optional soft glow halo. Used on the Halo host moon to add
+      // the subtle atmospheric scatter the user asked for.
+      let halo = null;
+      if (cfg.glow) {
+        const haloMat = new THREE.SpriteMaterial({
+          map: this._makeHaloTexture(),
+          color: new THREE.Color(cfg.glow.color),
+          transparent: true,
+          opacity: cfg.glow.opacity,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        halo = new THREE.Sprite(haloMat);
+        const haloScale = cfg.radius * (cfg.glow.scale || 2.4);
+        halo.scale.set(haloScale, haloScale, 1);
+        mesh.add(halo);
+      }
+      return { mesh, mat, halo, spinRate: cfg.spinRate };
+    };
+
+    // 1) HALO HOST MOON. g46 — pushed back further (z 2350 → 2550, needs
+    //    far plane bumped 2400 → 2700) per user "a bit furthrer out". Added
+    //    a tiny cool blue-white glow halo at 2.2× radius. Texturing also
+    //    improved in the shared rocky shader (mare patches, sharper crater
+    //    rims, surface bumpiness).
+    const haloPlanet = makeBody({
+      radius: 360, segs: 56, type: 0,
+      position: [60, 50, 2550],
+      tilt: [0.30, 0.0, -0.05],
+      colorA: [0.22, 0.22, 0.20],   // gray base
+      colorB: [0.30, 0.28, 0.25],   // dust highlight
+      colorC: [0.09, 0.09, 0.08],   // mare shadow
+      spinRate: 0.0006,
+      glow: { color: 0xb8d0f0, opacity: 0.22, scale: 2.2 },
+    });
+
+    // 2) ROCKY MOON — classic Earth-moon gray, forward-left-up bearing
+    const moonA = makeBody({
+      radius: 90, segs: 40, type: 0,
+      position: [-1200, 350, -1100],
+      tilt: [0.6, 0.4, 0.15],
+      colorA: [0.42, 0.40, 0.37],   // gray base
+      colorB: [0.62, 0.58, 0.52],   // dust highlight
+      colorC: [0.20, 0.19, 0.18],   // mare shadow
+      spinRate: 0.0010,
+    });
+
+    // 3) OCHRE MOON — Mars-like rust, forward-right-up bearing
+    const moonB = makeBody({
+      radius: 70, segs: 36, type: 0,
+      position: [1100, 250, -1200],
+      tilt: [-0.5, 0.8, 0.20],
+      colorA: [0.55, 0.32, 0.20],   // rust base
+      colorB: [0.78, 0.52, 0.32],   // bright ochre dust
+      colorC: [0.28, 0.15, 0.10],   // dark canyon
+      spinRate: 0.0012,
+    });
+
+    this.scene.add(haloPlanet.mesh, moonA.mesh, moonB.mesh);
+    this.celestials = { haloPlanet, moonA, moonB };
+  },
+
+  _tickCelestials(t){
+    if (!this.celestials) return;
+    const bodies = [this.celestials.haloPlanet, this.celestials.moonA, this.celestials.moonB];
+    bodies.forEach(b => {
+      if (!b || !b.mesh.visible) return;
+      b.mat.uniforms.uTime.value = t;
+      b.mesh.rotation.y += b.spinRate;
+    });
+  },
+
+  _applyBlackHolePull(dt){
+    if (!this.blackHole || !this.flybyShips) return;
+    const bhPos = this.blackHole.grp.position;
+    const INFLUENCE = 500;
+    const HORIZON   = 38;
+    this.flybyShips.forEach(ship => {
+      if (!ship.active) return;
+      // Skip scripted-scenario ships — only generic flybys get caught (so the
+      // big scripted cameos like CCS-pass / monolith-drift don't get yanked
+      // mid-cinematic).
+      if (ship.scenario) return;
+      const sp = ship.outer.position;
+      const dx = bhPos.x - sp.x;
+      const dy = bhPos.y - sp.y;
+      const dz = bhPos.z - sp.z;
+      const r2 = dx * dx + dy * dy + dz * dz;
+      if (r2 > INFLUENCE * INFLUENCE) return;
+      const r = Math.sqrt(r2);
+      if (r < HORIZON) {
+        // Crossed event horizon — despawn (gets recycled by the pool)
+        ship.active = false;
+        if (ship.outer) ship.outer.visible = false;
+        return;
+      }
+      // Gravitational pull — strength rises sharply as r decreases.
+      // 1500 / (r^2 + 200) at r=200 → ~0.037 u/s², at r=80 → ~0.23, at r=40 → ~1.0.
+      const pull = 1500 / (r * r + 200);
+      const invR = 1 / r;
+      ship.velocity.x += dx * invR * pull * dt;
+      ship.velocity.y += dy * invR * pull * dt;
+      ship.velocity.z += dz * invR * pull * dt;
+    });
   },
 
   /* ---------- Neuron threads — ambient firing between title pairs ---------- */
@@ -6804,118 +7810,346 @@ const MarathonWorld = {
 
   /* ---------- Titles ---------- */
   _buildTitles(){
-    // g14: HIDDEN_TITLES removed — cuts now happen at the source (config.json)
-    // so the player rotation can't land on them either. If you ever want to
-    // hide a track from the galaxy view ONLY (keep it playable elsewhere),
-    // reintroduce a Set filter here.
     const all = (this.ctx.tracks || []);
     if (!all.length) return;
 
-    // Show every track. All on a SHARED fibonacci sphere — one shell, one
-    // radius — so apparent size stays consistent across the catalog. Tier
-    // controls size + opacity only, NOT distance. Each tier's tracks are
-    // striped through the slot list so they're evenly distributed (you'll
-    // never look at a wedge that's all-archive or all-featured).
+    // g19 depth overhaul. Each curation tier lives on its OWN fibonacci
+    // shell at a different distance from the camera — featured pulled close
+    // (~r80–100, large), newer at mid (~r115–140), archive pushed back
+    // (~r165–215, small). Tier controls distance AND size AND opacity.
+    // Net: void has true depth instead of reading as one wallpaper sphere.
+    // Drag-look reveals parallax between tiers; featured titles feel
+    // present, archive recedes into atmosphere.
     const featured = all.filter(t => t.isFeatured);
     const newer    = all.filter(t => !t.isFeatured && t.isNew);
     const archive  = all.filter(t => !t.isFeatured && !t.isNew);
-    const total = featured.length + newer.length + archive.length;
-    if (!total) return;
-
-    const slots = new Array(total).fill(null);
-    const assignTier = (tracks, tier) => {
-      if (!tracks.length) return;
-      const stride = total / tracks.length;
-      tracks.forEach((track, i) => {
-        let slot = Math.floor(i * stride);
-        // Linear-probe to next empty slot if collision (only happens if
-        // floor(stride*i) lands on an already-claimed slot).
-        let guard = 0;
-        while (slots[slot] !== null && guard < total) { slot = (slot + 1) % total; guard++; }
-        slots[slot] = { track, tier };
-      });
-    };
-    assignTier(featured, 'featured');
-    assignTier(newer,    'newer');
-    assignTier(archive,  'archive');
+    if (!(featured.length + newer.length + archive.length)) return;
 
     const GOLDEN_ANGLE    = Math.PI * (3 - Math.sqrt(5));
     const VERTICAL_SQUASH = 0.78;
-    const SHELL_RADIUS    = 130;
 
-    slots.forEach((entry, slot) => {
-      if (!entry) return;
-      const { track, tier } = entry;
-      const idx = all.indexOf(track);
-      if (idx < 0) return;
-      const slug = this.ctx.slugify ? this.ctx.slugify(track.title) : track.title;
-      const tint = colorForTrack(track, idx);
+    // g25 — title sizes bumped across the board. User complaint: "titles
+    // you can barely read floating around." Archive especially (was w=12 at
+    // r=188 ≈ 3.7° angular width, ~70px on a 1080p screen — unreadable).
+    // Bumping featured 26→34, newer 17→22, archive 12→16 gets archive to
+    // ~5° / ~95px which is readable. Combined with bloom restraint in g25
+    // post-FX, the titles can now dominate without needing bloom haze to
+    // compensate.
+    const TIER_DEFS = {
+      featured: { radius: 90,  jR: 12, widthUnits: 34, fontSize: 260, baseOpacity: 1.00 },
+      newer:    { radius: 128, jR: 14, widthUnits: 22, fontSize: 200, baseOpacity: 0.95 },
+      archive:  { radius: 188, jR: 25, widthUnits: 16, fontSize: 150, baseOpacity: 0.82 },
+    };
 
-      // Tier varies size + opacity only — distance is shared.
-      let widthUnits, fontSize, baseOpacity;
-      if (tier === 'featured') {
-        widthUnits = 20; fontSize = 220; baseOpacity = 1.00;
-      } else if (tier === 'newer') {
-        widthUnits = 17; fontSize = 180; baseOpacity = 0.90;
-      } else {
-        widthUnits = 14; fontSize = 140; baseOpacity = 0.78;
-      }
+    const placeTier = (tracks, tierKey) => {
+      if (!tracks.length) return;
+      const cfg = TIER_DEFS[tierKey];
+      const N = tracks.length;
+      tracks.forEach((track, slot) => {
+        const idx = all.indexOf(track);
+        if (idx < 0) return;
+        const slug = this.ctx.slugify ? this.ctx.slugify(track.title) : track.title;
+        const tint = colorForTrack(track, idx);
 
-      // Per-track hash (deterministic across reloads) drives small jitters.
-      const seed = Math.abs(Math.sin(idx * 12.9898 + 78.233) * 43758.5453);
-      const jY = ((seed)         % 1 - 0.5) * 0.04;
-      const jT = ((seed * 7.31)  % 1 - 0.5) * 0.10;
-      const jR = ((seed * 3.71)  % 1 - 0.5) * 8;
-      const jW = ((seed * 13.7)  % 1 - 0.5) * 2;
+        // Deterministic jitter per-track so reloads land in the same place.
+        const seed = Math.abs(Math.sin(idx * 12.9898 + 78.233) * 43758.5453);
+        const jY  = ((seed)         % 1 - 0.5) * 0.04;
+        const jT  = ((seed * 7.31)  % 1 - 0.5) * 0.10;
+        const jRR = ((seed * 3.71)  % 1 - 0.5) * 2 * cfg.jR;
+        const jWW = ((seed * 13.7)  % 1 - 0.5) * 2;
 
-      // Fibonacci sphere coords on the shared shell
-      const yRaw     = 1 - (slot + 0.5) / total * 2;     // -1..1 even cos(phi)
-      const yClamped = Math.max(-0.95, Math.min(0.95, yRaw + jY));
-      const ringR    = Math.sqrt(1 - yClamped * yClamped);
-      const theta    = GOLDEN_ANGLE * slot + jT;
-      const r        = SHELL_RADIUS + jR;
-      const w        = widthUnits + jW;
-      const pos = new THREE.Vector3(
-        r * ringR * Math.cos(theta),
-        r * yClamped * VERTICAL_SQUASH,
-        r * ringR * Math.sin(theta)
-      );
+        // Per-tier fibonacci sphere — each tier evenly spans the sphere on
+        // its own. With 4 featured / 6 newer / 62 archive, this means
+        // featured titles are ~90° apart (tetrahedron-ish), archive titles
+        // fall back to ~13° avg spacing on their farther shell.
+        const yRaw     = 1 - (slot + 0.5) / N * 2;
+        const yClamped = Math.max(-0.95, Math.min(0.95, yRaw + jY));
+        const ringR    = Math.sqrt(1 - yClamped * yClamped);
+        const theta    = GOLDEN_ANGLE * slot + jT;
+        const r        = cfg.radius + jRR;
+        const w        = cfg.widthUnits + jWW;
+        const pos = new THREE.Vector3(
+          r * ringR * Math.cos(theta),
+          r * yClamped * VERTICAL_SQUASH,
+          r * ringR * Math.sin(theta)
+        );
 
-      const tex = this._makeTitleTexture(track.title, fontSize);
-      const aspect = tex.image.width / tex.image.height;
-      const planeH = w / aspect;
-      const mat = new THREE.ShaderMaterial({
-        uniforms: {
-          uTex:       { value: tex },
-          uTime:      { value: Math.random() * 100 },
-          uHover:     { value: 0 },
-          uFocus:     { value: 0 },
-          uBass:      { value: 0 },
-          uOpacity:   { value: baseOpacity },
-          uTint:      { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
-          uHueShift:  { value: 0 },
-          uBreath:    { value: 0 },   // b192
-          uTwinkle:   { value: 0 },   // b192
-        },
-        vertexShader: TITLE_VERTEX,
-        fragmentShader: TITLE_FRAGMENT,
+        const tex = this._makeTitleTexture(track.title, cfg.fontSize);
+        const aspect = tex.image.width / tex.image.height;
+        const planeH = w / aspect;
+        const mat = new THREE.ShaderMaterial({
+          uniforms: {
+            uTex:       { value: tex },
+            uTime:      { value: Math.random() * 100 },
+            uHover:     { value: 0 },
+            uFocus:     { value: 0 },
+            uBass:      { value: 0 },
+            uOpacity:   { value: cfg.baseOpacity },
+            uTint:      { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
+            uHueShift:  { value: 0 },
+            uBreath:    { value: 0 },
+            uTwinkle:   { value: 0 },
+            uDist:      { value: cfg.radius },   // g26 — updated per-frame in animate
+          },
+          vertexShader: TITLE_VERTEX,
+          fragmentShader: TITLE_FRAGMENT,
+          transparent: true,
+          depthWrite: false,
+        });
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, planeH), mat);
+        plane.position.copy(pos);
+        plane.userData = { isTitle: true, index: idx, track, slug, tier: tierKey, baseOpacity: cfg.baseOpacity };
+        plane.onBeforeRender = (renderer, scene, camera) => {
+          plane.quaternion.copy(camera.quaternion);
+        };
+        this.scene.add(plane);
+        this.titles.push({
+          mesh: plane, index: idx, track, slug, tier: tierKey,
+          basePos: pos.clone(),
+          flickerSeed: Math.random() * 100,
+          baseOpacity: cfg.baseOpacity,
+        });
+      });
+    };
+
+    placeTier(featured, 'featured');
+    placeTier(newer,    'newer');
+    placeTier(archive,  'archive');
+  },
+
+  /* ---------- Featured title auras (g27) ----------
+     For the 4 featured tracks, add (a) a soft additive glow halo behind the
+     title and (b) an orbital ring of small particles that swirl around it.
+     Featured titles become focal MOMENTS — not just bigger catalog entries.
+     Newer/archive tiers untouched. The halo & particles follow the title's
+     world position each frame so they track through fly-in / return.
+     ---------- */
+  _makeHaloTexture(){
+    const SIZE = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+    const c = SIZE / 2;
+    const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
+    grad.addColorStop(0.00, 'rgba(255,255,255,1.00)');
+    grad.addColorStop(0.25, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+    grad.addColorStop(1.00, 'rgba(255,255,255,0.00)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  },
+
+  _buildTitleAuras(){
+    this.titleAuras = [];
+    const haloTex = this._makeHaloTexture();
+    this.titles.forEach(t => {
+      if (t.tier !== 'featured') return;
+      const w = t.mesh.geometry.parameters.width;
+      const tint = t.mesh.material.uniforms.uTint.value;
+      const color = new THREE.Color(tint.x, tint.y, tint.z);
+
+      // Halo: large soft additive sprite behind the title
+      const haloMat = new THREE.SpriteMaterial({
+        map: haloTex,
+        color,
         transparent: true,
         depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.22,
       });
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, planeH), mat);
-      plane.position.copy(pos);
-      plane.userData = { isTitle: true, index: idx, track, slug, tier, baseOpacity };
-      plane.onBeforeRender = (renderer, scene, camera) => {
-        plane.quaternion.copy(camera.quaternion);
-      };
-      this.scene.add(plane);
-      this.titles.push({
-        mesh: plane, index: idx, track, slug, tier,
-        basePos: pos.clone(),
-        flickerSeed: Math.random() * 100,
-        baseOpacity,
+      const halo = new THREE.Sprite(haloMat);
+      halo.scale.set(w * 2.0, w * 2.0, 1);
+      halo.position.copy(t.basePos);
+      halo.renderOrder = -2;
+      this.scene.add(halo);
+
+      // Orbital ring: 28 small points tracing a tilted helical orbit
+      const N = 28;
+      const positions = new Float32Array(N * 3);
+      const orbit = [];
+      for (let i = 0; i < N; i++) {
+        orbit.push({
+          angle: (i / N) * Math.PI * 2,
+          radius: w * (0.95 + Math.random() * 0.35),
+          tilt: (Math.random() - 0.5) * 0.7,
+          speed: 0.35 + Math.random() * 0.40,
+          drift: (Math.random() - 0.5) * 0.05,
+        });
+        positions[i * 3] = positions[i * 3 + 1] = positions[i * 3 + 2] = 0;
+      }
+      const pGeo = new THREE.BufferGeometry();
+      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const pMat = new THREE.PointsMaterial({
+        size: 0.65,
+        map: this._makeDotTexture(),         // g31 — soft circular dots (was square)
+        color,
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true,
+        alphaTest: 0.02,
       });
+      const particles = new THREE.Points(pGeo, pMat);
+      particles.renderOrder = -1;
+      this.scene.add(particles);
+
+      this.titleAuras.push({ title: t, halo, particles, orbit, baseW: w });
     });
+  },
+
+  _tickTitleAuras(t, dt, bass){
+    if (!this.titleAuras) return;
+    this.titleAuras.forEach(a => {
+      const center = a.title.mesh.position;
+
+      // Halo follows the title (including fly-in)
+      a.halo.position.copy(center);
+      const isHover = this.hovered && this.hovered.index === a.title.index;
+      const isFocus = this.focused && this.focused.index === a.title.index;
+      const baseOp = 0.18 + bass * 0.14;
+      const targetOp = isFocus ? baseOp * 2.1 : (isHover ? baseOp * 1.6 : baseOp);
+      a.halo.material.opacity += (targetOp - a.halo.material.opacity) * 0.10;
+      // On hover/focus, swell slightly larger
+      const targetScale = a.baseW * 2.0 * (isFocus ? 1.30 : (isHover ? 1.12 : 1.0));
+      a.halo.scale.x += (targetScale - a.halo.scale.x) * 0.10;
+      a.halo.scale.y = a.halo.scale.x;
+
+      // Orbital particles — update positions from per-particle params.
+      // g36 — INTEGRATED angle (was multiplied by absolute t, which combined
+      // with raw bass-driven orbitBoost caused 1+ rad position teleports
+      // when bass spiked at t > 30s). Now p.angle increments by dt each
+      // frame so changing orbitBoost only affects per-frame angular VELOCITY
+      // — no position jump. Also using smoothed _breath instead of raw bass
+      // for additional stability.
+      const pos = a.particles.geometry.attributes.position.array;
+      const smoothedBass = this._breath || 0;
+      const orbitBoost = 1.0 + (isFocus ? 0.45 : 0) + smoothedBass * 0.20;
+      const dtStep = dt * orbitBoost;
+      a.orbit.forEach((p, i) => {
+        p.angle += dtStep * p.speed + p.drift * dt * 0.5;
+        const ang = p.angle;
+        pos[i * 3]     = center.x + Math.cos(ang) * p.radius;
+        pos[i * 3 + 1] = center.y + Math.sin(p.tilt * 2.0) * Math.sin(ang) * p.radius;
+        pos[i * 3 + 2] = center.z + Math.cos(p.tilt * 2.0) * Math.sin(ang) * p.radius;
+      });
+      a.particles.geometry.attributes.position.needsUpdate = true;
+      // Particle opacity rides with halo (also smoothed bass)
+      a.particles.material.opacity = 0.55 + (isHover || isFocus ? 0.30 : 0) + smoothedBass * 0.15;
+    });
+  },
+
+  /* ---------- Foreground dust (g27) ----------
+     ~600 small additive points in a near shell (r=6–40) drifting at low
+     velocity. With camera origin float at ±1.2u, near dust dramatically
+     parallaxes — sells "I'm in real 3D space" more viscerally than any
+     mid-distance element. Stays subtle (small size, low opacity) so it
+     doesn't compete with titles.
+     ---------- */
+  _buildForegroundDust(){
+    // g31 — was 600 particles at PointsMaterial without a texture map →
+    // rendered as SQUARE fragments at size 0.18 with sizeAttenuation. At
+    // near distance (r=6) the closest particles read as big chunky boxes.
+    // Now: soft circular sprite texture + smaller size + ~5× drift speed
+    // so they visibly stream past the camera instead of just bobbing.
+    const N = 500;
+    const positions = new Float32Array(N * 3);
+    const drift = [];
+    for (let i = 0; i < N; i++) {
+      const u = Math.random() * 2 - 1;
+      const th = Math.random() * Math.PI * 2;
+      const rr = Math.sqrt(1 - u * u);
+      const dist = 6 + Math.random() * 34;
+      positions[i * 3]     = Math.cos(th) * rr * dist;
+      positions[i * 3 + 1] = u * dist;
+      positions[i * 3 + 2] = Math.sin(th) * rr * dist;
+      drift.push({
+        // g36 — velocities halved (was 2.4/1.6/2.4 from g31). Too fast =
+        // particles cross the shell boundary every couple seconds, each
+        // crossing teleports them to a fresh respawn position → visible
+        // pops. Plus the fast random motion read as jitter rather than
+        // ambient drift.
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: (Math.random() - 0.5) * 0.8,
+        vz: (Math.random() - 0.5) * 1.2,
+      });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      size: 0.12,
+      map: this._makeDotTexture(),
+      color: 0xd8e0f0,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true,
+      alphaTest: 0.02,
+    });
+    this.fgDust = { points: new THREE.Points(geo, mat), drift };
+    this.scene.add(this.fgDust.points);
+  },
+
+  // g31 — soft circular sprite texture for PointsMaterial. Without this,
+  // points render as solid square fragments, which read as "Minecraft
+  // particles" instead of dust.
+  _makeDotTexture(){
+    const SIZE = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+    const c = SIZE / 2;
+    const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
+    grad.addColorStop(0.00, 'rgba(255,255,255,1.00)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(0.75, 'rgba(255,255,255,0.10)');
+    grad.addColorStop(1.00, 'rgba(255,255,255,0.00)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  },
+
+  _tickForegroundDust(dt){
+    if (!this.fgDust) return;
+    const pos = this.fgDust.points.geometry.attributes.position.array;
+    const N = this.fgDust.drift.length;
+    // g36 — was: when out of shell, teleport to random new near position.
+    // Result: visible particle "pops" all over the field as the fast (g31)
+    // velocities pushed many particles across the boundary every frame.
+    // Now: BOUNCE — when out of bounds, scale position back into the shell
+    // and flip velocity. Smooth continuous motion, no pops.
+    for (let i = 0; i < N; i++) {
+      const d = this.fgDust.drift[i];
+      pos[i * 3]     += d.vx * dt;
+      pos[i * 3 + 1] += d.vy * dt;
+      pos[i * 3 + 2] += d.vz * dt;
+      const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+      const r2 = x * x + y * y + z * z;
+      if (r2 > 45 * 45) {
+        // Out the outside — scale back to shell edge and flip velocity
+        const r = Math.sqrt(r2);
+        const scale = 44 / r;
+        pos[i * 3]     = x * scale;
+        pos[i * 3 + 1] = y * scale;
+        pos[i * 3 + 2] = z * scale;
+        d.vx = -d.vx; d.vy = -d.vy; d.vz = -d.vz;
+      } else if (r2 < 5 * 5) {
+        // Inside inner exclusion — push out to inner shell edge, flip
+        const r = Math.sqrt(Math.max(r2, 0.001));
+        const scale = 6 / r;
+        pos[i * 3]     = x * scale;
+        pos[i * 3 + 1] = y * scale;
+        pos[i * 3 + 2] = z * scale;
+        d.vx = -d.vx; d.vy = -d.vy; d.vz = -d.vz;
+      }
+    }
+    this.fgDust.points.geometry.attributes.position.needsUpdate = true;
   },
 
   _makeTitleTexture(title, fontSize){
@@ -6962,10 +8196,15 @@ const MarathonWorld = {
   _setupComposer(){
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.85, 0.55, 0.05);
-    bloom.threshold = 0.05;
-    bloom.strength  = 0.85;
-    bloom.radius    = 0.55;
+    // g25 — bloom restrained. Was threshold 0.05 / strength 0.85 — that meant
+    // almost every pixel bloomed and any bright source bled into haze. Now
+    // threshold 0.30 (only actually-bright pixels bloom) / strength 0.55
+    // (less haze radius around what does bloom). Restores title legibility
+    // and stops the "everything glows" complaint.
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 0.30);
+    bloom.threshold = 0.30;
+    bloom.strength  = 0.55;
+    bloom.radius    = 0.45;
     this.bloom = bloom;
     this.composer.addPass(bloom);
     const lensDirtTex = this._makeLensDirtTexture();
@@ -6989,6 +8228,7 @@ const MarathonWorld = {
         uDofOn:      { value: 0 },
         uFocusUv:    { value: new THREE.Vector2(0.5, 0.5) },
         uFocusRadius:{ value: 0.18 },
+        uFocusDim:   { value: 0 },   // g41 — dim outside focus radius when title selected
       },
       vertexShader: POST_VERTEX,
       fragmentShader: POST_FRAGMENT,
@@ -7259,6 +8499,10 @@ const MarathonWorld = {
         <button data-act="el-marathon"  id="mw-el-marathon">marathon ship: <span>ON</span></button>
         <button data-act="el-haloring"  id="mw-el-haloring">halo ring: <span>ON</span></button>
         <button data-act="el-traveler"  id="mw-el-traveler" data-since="g2">traveler: <span>ON</span></button>
+        <button data-act="el-pyramid"   id="mw-el-pyramid" data-since="g39">pyramid: <span>ON</span></button>
+        <button data-act="el-binary"    id="mw-el-binary" data-since="g40">binary stars: <span>ON</span></button>
+        <button data-act="el-blackhole" id="mw-el-blackhole" data-since="g40">black hole: <span>ON</span></button>
+        <button data-act="el-moons"     id="mw-el-moons" data-since="g42">moons + halo planet: <span>ON</span></button>
         <button data-act="el-buoys"     id="mw-el-buoys">nav buoys: <span>ON</span></button>
         <button data-act="el-neurons"   id="mw-el-neurons" data-since="g8">neuron threads: <span>ON</span></button>
       </div>
@@ -7523,6 +8767,10 @@ const MarathonWorld = {
       elState('mw-el-marathon',   this.marathonShip ? this.marathonShip.grp.visible : true);
       elState('mw-el-haloring',   this.haloRing ? this.haloRing.grp.visible : true);
       elState('mw-el-traveler',   this.traveler ? this.traveler.grp.visible : true);
+      elState('mw-el-pyramid',    this.pyramid ? this.pyramid.grp.visible : true);
+      elState('mw-el-binary',     this.binaryStars ? this.binaryStars.grp.visible : true);
+      elState('mw-el-blackhole',  this.blackHole ? this.blackHole.grp.visible : true);
+      elState('mw-el-moons',      this.celestials ? this.celestials.haloPlanet.mesh.visible : true);
       elState('mw-el-buoys',      this.navBuoys ? this.navBuoys.every(b => b.grp.visible) : true);
       elState('mw-el-neurons',    this.neuronGroup ? this.neuronGroup.visible : true);
       // HUD hidden state
@@ -7633,6 +8881,12 @@ const MarathonWorld = {
       marathon:   () => this.marathonShip ? this.marathonShip.grp : null,
       haloring:   () => this.haloRing ? this.haloRing.grp : null,
       traveler:   () => this.traveler ? this.traveler.grp : null,
+      pyramid:    () => this.pyramid ? this.pyramid.grp : null,
+      binary:     () => this.binaryStars ? this.binaryStars.grp : null,
+      blackhole:  () => this.blackHole ? this.blackHole.grp : null,
+      moons:      () => this.celestials
+        ? [this.celestials.haloPlanet.mesh, this.celestials.moonA.mesh, this.celestials.moonB.mesh]
+        : null,
       buoys:      () => this.navBuoys,
       neurons:    () => this.neuronGroup,
     };
@@ -7889,16 +9143,57 @@ const MarathonWorld = {
   },
 
   // Switch the visual focus to whatever track is currently playing in the
-  // global audio. Used by HUD prev/next buttons — playback already advanced
-  // (via ctx.onPrev/onNext), and we want the camera to ROTATE to the new
-  // title's constellation slot (mode 'look') instead of pulling it forward
-  // (mode 'fly', used for direct title clicks).
+  // global audio. Used by HUD prev/next buttons.
+  // g18: snap camera + fly (was: 'look' mode with lerp). 'look' depended on
+  // the camera-rotation lerp finishing before auto-promoting to 'fly' — if
+  // anything interrupted that lerp (drag, re-trigger), the new title never
+  // pulled forward and the visual stayed stuck on the previous focus. Snap
+  // is instant; fly mode runs unconditionally after. Combined with
+  // _ensurePlay, both visual + audio state are definitively updated.
   _syncFocusToCurrent(){
     const cur = this.ctx.getCurrent ? this.ctx.getCurrent() : -1;
     if (cur < 0) return;
     const node = this.titles.find(n => n.index === cur);
     if (!node) return;
-    this._focus(node, { skipPlay: true, mode: 'look' });
+    // Snap camera to new title's bearing — instant. Kills any in-flight
+    // _targetYaw/_targetPitch lerp and any drag-inertia residue so the
+    // animate loop has a clean state to fly from.
+    const p = node.basePos;
+    const dist = Math.max(0.001, p.length());
+    this.gaze.yaw   = Math.atan2(p.x, -p.z);
+    this.gaze.pitch = Math.asin(Math.max(-1, Math.min(1, p.y / dist)));
+    if (this._dragVel) { this._dragVel.yaw = 0; this._dragVel.pitch = 0; }
+    this._targetYaw = null;
+    this._targetPitch = null;
+    // Re-focus to new node in 'fly' mode — title flies from sphere slot to
+    // camera-forward (which is now this node's bearing, post-snap).
+    this._focus(node, { skipPlay: true, mode: 'fly' });
+    // Definitively retry audio.play() until it actually starts.
+    this._ensurePlay();
+  },
+
+  // g18: retry audio.play() up to 5 times with backoff (30/90/180/300/450ms).
+  // playIndex calls play() synchronously after setting audio.src; in Chromium
+  // this can fail silently for two reasons:
+  //   1. AudioContext is still 'suspended' (first user gesture of session) —
+  //      resume() is async, play() fires before the graph is live.
+  //   2. AbortError because the previous play() against the old src is still
+  //      resolving when the new play() is called.
+  // Each retry also re-attempts resume() in case it's still suspended. Bails
+  // out as soon as the element is actually playing.
+  _ensurePlay(){
+    const a = this.ctx.audio;
+    if (!a) return;
+    let attempt = 0;
+    const tryPlay = () => {
+      if (!a.paused) return;
+      if (attempt++ >= 5) return;
+      const ac = a.__floorAnalyser && a.__floorAnalyser.ctx;
+      if (ac && ac.state === 'suspended') ac.resume().catch(()=>{});
+      a.play().catch(()=>{});
+      setTimeout(tryPlay, 30 + attempt * 60);
+    };
+    setTimeout(tryPlay, 20);
   },
 
   _focus(node, opts){
@@ -7911,7 +9206,12 @@ const MarathonWorld = {
     //          rotates (yaw/pitch lerp) to face the title's basePos. So the
     //          user "looks toward" the new song instead of pulling it to them.
     this.focusMode = (opts && opts.mode) || 'fly';
-    if (!opts || !opts.skipPlay) this.ctx.onPlay?.(node.index);
+    if (!opts || !opts.skipPlay) {
+      this.ctx.onPlay?.(node.index);
+      // g18: same retry logic as _syncFocusToCurrent — direct title clicks
+      // hit the same AudioContext-suspended / AbortError races as HUD next.
+      this._ensurePlay();
+    }
 
     if (this.focusMode === 'look') {
       // Compute target yaw/pitch from the title's world position. Animate loop
@@ -8021,7 +9321,9 @@ const MarathonWorld = {
         let dy = this._targetYaw - this.gaze.yaw;
         if (dy > Math.PI)  dy -= Math.PI * 2;
         if (dy < -Math.PI) dy += Math.PI * 2;
-        const k = Math.min(1, dt * 3.5);
+        // g17: 3.5 → 14. User wanted snappier prev/next camera moves.
+        // ~250ms to reach the new title's bearing.
+        const k = Math.min(1, dt * 14);
         this.gaze.yaw   += dy * k;
         this.gaze.pitch += (this._targetPitch - this.gaze.pitch) * k;
         // Snap & release once close enough — then switch to fly-mode so the
@@ -8070,8 +9372,22 @@ const MarathonWorld = {
     const lookDist = 80;
     const desiredLookAt = fwd.clone().multiplyScalar(lookDist);
     this.cam.lookAt.lerp(desiredLookAt, 0.30);
-    this.camera.position.set(0, 0, 0);
-    this.camera.lookAt(this.cam.lookAt);
+    // g21 — camera origin float. Multi-period drift so the camera breathes
+    // through space, every world-anchored element parallaxes naturally.
+    // g26 — amplitude doubled (~±0.6u → ~±1.2u envelope). Combined with
+    // near-foreground shards now at r=14–32 (parallax atan(1.2/20) ≈ 3.4°
+    // per axis — clearly visible), depth finally reads as 3D space instead
+    // of layered cards. Look target offsets by the same amount so forward
+    // direction stays unchanged (no pitch wobble).
+    const floatX = Math.sin(t * 0.13)         * 0.85 + Math.sin(t * 0.31 + 1.7) * 0.36;
+    const floatY = Math.cos(t * 0.17 + 0.4)   * 0.56 + Math.sin(t * 0.41 + 2.3) * 0.28;
+    const floatZ = Math.cos(t * 0.11 + 1.1)   * 0.95 + Math.sin(t * 0.27 + 3.1) * 0.32;
+    this.camera.position.set(floatX, floatY, floatZ);
+    this.camera.lookAt(
+      this.cam.lookAt.x + floatX,
+      this.cam.lookAt.y + floatY,
+      this.cam.lookAt.z + floatZ
+    );
 
     if (this.haze) {
       this.haze.material.uniforms.uTime.value = t;
@@ -8080,12 +9396,18 @@ const MarathonWorld = {
     this._tickStreaks(t, dt);
     this._tickSatellites(t, dt, bass);
     this._tickShards(t, dt, bass);
+    this._tickForegroundDust(dt);     // g27 — near-shell dust drift
+    this._tickTitleAuras(t, dt, bass); // g27 — featured-title halos + orbital particles
     this._tickFlyby(t, dt);
     this._tickBolts(t, dt);
     this._tickCore(t, bass);
     this._tickMarathonShip(t, bass);
     this._tickHaloRing(t, bass);
     this._tickTraveler(t, bass);
+    this._tickPyramid(t, bass);
+    this._tickBinaryStars(t, bass);
+    this._tickBlackHole(t, dt, bass);
+    this._tickCelestials(t);
     this._tickNavBuoys(t, bass);
     this._tickNeuronThreads(t, dt, bass);
 
@@ -8107,12 +9429,20 @@ const MarathonWorld = {
       this.nebula.rotation.y = t * 0.0035;
       this.nebula.rotation.x = Math.sin(t * 0.012) * 0.10;
     }
+    // g25 — auroras disabled (see _buildAuroras comment in init).
+    // this._tickAuroras(t, bass);
 
-    // Fog patches drift slowly + breathe with bass
+    // Fog patches drift slowly + breathe with bass. g21 — added lateral
+    // (x/z) drift in addition to the existing vertical bob, so clouds
+    // visibly roll past as the camera floats. Period varies by seed so
+    // patches don't drift in lockstep. Amplitude tuned to ~4u — large
+    // enough to read at this distance, small enough not to look chaotic.
     if (this.fogPatches) {
       this.fogPatches.forEach((sp, i) => {
         const u = sp.userData;
+        sp.position.x = u.baseX + Math.sin(t * 0.08 + u.seed * 2.3) * 4.0;
         sp.position.y = u.baseY + Math.sin(t * 0.18 + u.seed * 1.7) * 3.0;
+        sp.position.z = u.baseZ + Math.cos(t * 0.07 + u.seed * 1.9) * 4.0;
         const baseOp = 0.18 + (i % 3) * 0.05;
         sp.material.opacity = baseOp + bass * 0.20;
       });
@@ -8192,6 +9522,10 @@ const MarathonWorld = {
       u.uBreath.value = Math.sin(t * 0.55 + n.flickerSeed * 7.31) * 0.05;
       const targetTw = ((n._twinkleUntil || 0) > t) ? 1.0 : 0.0;
       u.uTwinkle.value += (targetTw - u.uTwinkle.value) * Math.min(1, dt * (targetTw > 0 ? 16 : 6));
+      // g26 — feed actual camera-distance to the shader for atmospheric
+      // perspective. Far titles desaturate + fade alpha; close ones stay
+      // sharp. Sells "real space depth" without adding any visual elements.
+      u.uDist.value = n.mesh.position.distanceTo(this.camera.position);
       let targetOp;
       if (this.focused) targetOp = isFocus ? 1.0 : 0.10;
       else targetOp = n.baseOpacity;
@@ -8202,18 +9536,25 @@ const MarathonWorld = {
         targetPos = fwdNow.clone().multiplyScalar(n.showcaseDist || 18);
       } else {
         // Idle drift OR look-mode focus: title stays at its constellation slot
-        // with gentle bobbing + global breath that radially expands the whole
-        // sphere on bass impacts (g8).
+        // with bobbing + global breath that radially expands the whole sphere
+        // on bass impacts (g8). g21 — amplitude bumped (was 1.4/1.0/1.2) so
+        // titles visibly float in zero-G rather than reading as pinned dots.
+        // Combined with camera float, each title now has its own micro-orbit.
         const ph = n.flickerSeed;
         tmpDrift.set(
-          Math.sin(t * 0.42 + ph)        * 1.4,
-          Math.cos(t * 0.31 + ph * 1.7)  * 1.0,
-          Math.sin(t * 0.27 + ph * 0.8)  * 1.2
+          Math.sin(t * 0.42 + ph)        * 2.5,
+          Math.cos(t * 0.31 + ph * 1.7)  * 1.8,
+          Math.sin(t * 0.27 + ph * 0.8)  * 2.2
         );
         const breathScale = 1 + (this._breath || 0) * 0.06;
         targetPos = n.basePos.clone().multiplyScalar(breathScale).add(tmpDrift);
       }
-      n.mesh.position.lerp(targetPos, Math.min(1, dt * (isFocus ? 9 : 3)));
+      // g28 — fly-in slowed further 11 → 6 ("ridiculously fast" still at
+      // 11). dt*6 ≈ 280ms half-life, title lands in ~560ms. Deliberate
+      // arc, no longer a slam. Return lerp held at dt*8 so the previous
+      // focused title still clears the foreground before the new one
+      // settles into showcase position.
+      n.mesh.position.lerp(targetPos, Math.min(1, dt * (isFocus ? 6 : 8)));
     });
 
     // ---- Auto-cycle halation + color grade (b172) ----
@@ -8286,9 +9627,19 @@ const MarathonWorld = {
           this.postPass.uniforms.uFocusRadius.value = 1.5;  // basically no blur
         }
       }
+      // g41 — focus dim lerp. Always update uFocusUv (independent of DoF)
+      // so the dim mask tracks the focused title even when DoF is off.
+      if (this.focused && this.focused.mesh) {
+        const v = this.focused.mesh.position.clone().project(this.camera);
+        this.postPass.uniforms.uFocusUv.value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5);
+      }
+      const targetDim = this.focused ? 1.0 : 0.0;
+      const dimU = this.postPass.uniforms.uFocusDim;
+      dimU.value += (targetDim - dimU.value) * Math.min(1, dt * 4.0);
     }
     if (this.bloom) {
-      this.bloom.strength = 0.80 + bass * 0.45;
+      // g25 — was 0.80 + bass*0.45. Less aggressive bloom modulation.
+      this.bloom.strength = 0.55 + bass * 0.25;
     }
 
     const tcEl = document.getElementById('tg-tc');

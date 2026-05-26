@@ -2,7 +2,7 @@
 
 **Scope:** the main page at `/` (and its alias `/world`). Track titles drifting in a 3D void, with permanent landmarks (Marathon ship, Halo ringworld, distant core), audio-reactive shaders, and 30+ scripted scenarios spawnable via the `~` admin panel.
 
-**Build:** g15
+**Build:** g46
 **Updated:** 2026-05-25
 
 ## Scope-owned files (this chat freely edits these)
