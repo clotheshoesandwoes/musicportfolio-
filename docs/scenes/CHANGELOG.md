@@ -4,6 +4,35 @@ Per-scene history for `/scenes` starting at the post-split point. Build history 
 
 ---
 
+## s18 — 2026-05-13 — Restore + Shadow Moses additions on the Halo base
+
+User after the s23 rewrite they hated: "this looks so much worse can we redo the super cool metal gear halo style military base we had previously trake inspo from those and from metal gear." Reverted the s23 wholesale rewrite (10k+ lines back to the original s17 file) and ALSO surgically re-applied the s18-s22 features the user explicitly praised, plus added MGS1 Shadow-Moses-flavored hangar + parked Hind.
+
+### Restored (re-applied on top of s17)
+- **Free-cam mode** (`F` key, WASD/QE, Shift = 4× speed, drag to look). Top-center HUD shows live coords. ESC ladder: focus → freecam → POI 0.
+- **Admin debug panel** (top-right, under `cantmute.me` mark): `[L] LABELS on/off`, `[F] FREECAM on/off`, live `x y z yaw° pitch°` readout, `copy coords` button (writes to clipboard, flashes "copied ✓"), `jump x,z [__] [__] [go]` inputs (auto-enables freecam, teleports camera).
+- **Planet move** from `(-110, 12, -130)` → `(-180, 75, -215)` — same back-left diagonal, but ~6× higher in y and 1.6× further so it reads as a sky element behind the ridge instead of clipping the dirt.
+- **Missile-site floating-items fix** — dropped the `padH +` offset from every off-pad mesh inside `_buildMissileSite` (LOX cluster, generator shed + drums + door + stack + louvres + roof, cable tray + 3 support pillars, antenna farm dipoles + cross elements + guy wires, bunker stairs + blast door + door frame + wall lamp, sandbag perimeter, jersey barriers, 4× LF corner pylons + lamp heads + lenses + strobes, 4× security cam poles + cameras + LEDs, 4× warning sign stakes + sign + stripe, diesel fuel tank cluster + caps + saddles + placard + vent, sphere oxidizer cluster + skirt + equator + vent + cap + placard + pipe, gas bottle rack frame + bottles + valves + placard, spill berm curbs + stripes, payload transporter sub-group internals, personnel hatch + lid + stripe + rails) plus the NW Pad 8 secondary sandbag perimeter. On-pad meshes (silo, missile, cap, nose, deflector, gantry stuff, blast deflector, cable tray2 inside pad, hypergolic cabinet / drum pallet / hose reel pump that sit inside the 13u pad radius) keep their `padH +` offsets because they actually sit on the raised concrete.
+
+### New (Shadow Moses / MGS1 flavor)
+- **`vtol_hangar`** at `(-95, -8, -132)` in the previously-empty far-NW desert, angled `~10°` toward the base center. Halo-Reach base + Metal Gear vibes:
+  - 22u×9u×16u concrete shell with an arched steel half-cylinder roof.
+  - Twin sliding bay doors on the front face (closed), with horizontal ribs, yellow caution stripes on the outer edges, and a glowing vertical seam down the centerline (interior light leaking through).
+  - Upper-level office windows above the doors (5 lit window slits, warm interior glow).
+  - 3 rooftop exhaust ducts with stack pipes + rain caps + dark louvre faces (MGS industrial vibe).
+  - Comm antenna with parabolic dish + cross bars + red strobe on the roof.
+  - Concrete loading apron in front of the doors, painted center stripes + yellow edge stripe.
+  - 2 floodlight poles framing the apron.
+  - Vertical exhaust pipes running up both side walls with elbow-out caps.
+- **`parked_hind`** — Hind-D silhouette parked on the apron, angled across it. Long fuselage, tapered nose with warm cockpit glass, stub wings with rocket pods, tail boom + vertical tail fin + small tail rotor, 5-blade main rotor drooping (parked), 3 landing wheels with struts, port/starboard/tail nav lights.
+
+### Files
+- `js/scenes-selector.js` — surgical re-application of s18-s22 features (~20 edits across `_buildMissileSite`) + new `_buildVtolHangar` + `_buildHind` methods (~250 lines). NOT a full rewrite. The s17 base structure (the user's "super cool metal gear halo style military base") is preserved exactly.
+- `js/builds/scenes.js` — s17 → s18.
+- `docs/scenes/{FILE_MAP.md, CHANGELOG.md, SCENE_MANIFEST.json (regenerated)}`.
+
+---
+
 ## s17 — 2026-05-11 — Auto-generated SCENE_MANIFEST.json (manifest layer)
 
 User after s16: "continue pls". Labels were exhausted, so picked up the next piece from [LABEL_OVERLAY_PLAN.md](LABEL_OVERLAY_PLAN.md) section 2 — the auto-generated manifest. Converts the labeled-screenshot workflow into a structured JSON any fresh chat can read without needing a screenshot at all.

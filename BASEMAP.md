@@ -147,20 +147,39 @@ AIR — AIRFIELD:     Pelican 90s scripted landing (descent → land → unload 
 
 ## Roads (shader masks in `_buildEnvironment`)
 
-| Road | Spec | Half-width |
-|---|---|---|
-| N perimeter | z = -90, x ∈ [-78, 78] | 4.5u |
-| S perimeter | z = +50, x ∈ [-78, 78] | 4.5u |
-| W perimeter | x = -78, z ∈ [-90, 50] | 4.5u |
-| E perimeter | x = +78, z ∈ [-90, 50] | 4.5u |
-| Spine N-S | x = 0, z ∈ [-90, -12] | 4.5u |
-| Cross @ z=-50 | z = -50, x ∈ [-66, 66] | 3.5u |
-| Back cross @ z=+30 | z = +30, x ∈ [-66, 66] | 3.5u |
-| Spur to airfield | x = +50, z ∈ [+30, +55] | 3.0u |
+⚠️ **AUTHORITATIVE SOURCE:** the floor-shader fragment in
+[js/scenes-selector.js](js/scenes-selector.js) at `_buildEnvironment` (~line 269).
+This table tracks what's actually rendered. Earlier versions of this doc listed
+roads at `z=-50`, `z=+30`, and an airfield spur — **none of those are in the
+shader**. Verified s9 / 2026-05-10.
 
-Walkways (cement, narrower, lower priority than asphalt):
-- Deck ring r ∈ [13, 18]
-- Side walks @ x = ±30, z ∈ [-58, -18]
+Asphalt roads (4.5u half-width — buildings sitting on these get painted over):
+
+| Road | Spec | Mask span |
+|---|---|---|
+| N perimeter | z = -90, x ∈ [-78, 78] | z ∈ [-94.5, -85.5] |
+| S perimeter | z = +50, x ∈ [-78, 78] | z ∈ [+45.5, +54.5] |
+| W perimeter | x = -78, z ∈ [-90, 50] | x ∈ [-82.5, -73.5] |
+| E perimeter | x = +78, z ∈ [-90, 50] | x ∈ [+73.5, +82.5] |
+| Spine N-S | x = 0, z ∈ [-90, -12] | x ∈ [-4.5, +4.5] |
+
+Cement walkways (1.6u half-width — narrow, low visual contrast):
+- Cross walkway @ z = -30, x ∈ [-72, 72]
+- Cross walkway @ z = -58, x ∈ [-72, 72]
+- Side walkway @ x = -30, z ∈ [-58, -18]
+- Side walkway @ x = +30, z ∈ [-58, -18]
+- Deck ring at r = 15.5 ± 2.5
+
+**Building placement rule:** for static buildings, give ≥10u clearance from
+asphalt road masks (use the table above). Walkways are narrow enough that a
+building straddling one is mostly invisible — but prefer to flank them. Only
+exception: scripted moving vehicles + NPCs can occupy roads (that's their
+purpose).
+
+**Note:** roads are masked by both x AND z — e.g. N-perim only renders for
+x ∈ [-78, 78]. So a building at x=-92, z=-100 (NW outer compound zone) is
+clear of N-perim even though its z overlaps the mask span, because x=-92 is
+outside the road's x-range.
 
 ---
 

@@ -40,12 +40,11 @@
     return 'archive';
   }
   function paletteForCell(idx, tier) {
-    // t8 — vivid jewel-tone channels (FL 2026). Even archive clips get
-    // enough saturation to read as a real color, not muddy grey.
+    // T13 (= t6 reconstruction) — original tier saturation
     const baseHue = (idx * PHI * 360) % 360;
-    if (tier === 'featured') return { h: (baseHue + 350) % 360, s: 92, l: 64 };
-    if (tier === 'new')      return { h: (baseHue + 195) % 360, s: 82, l: 62 };
-    return { h: baseHue, s: 55, l: 56 };
+    if (tier === 'featured') return { h: (baseHue + 350) % 360, s: 78, l: 62 };
+    if (tier === 'new')      return { h: (baseHue + 195) % 360, s: 70, l: 60 };
+    return { h: baseHue, s: 28, l: 56 };
   }
   function slugifyLocal(s) {
     return (s || '').toString().toLowerCase()
@@ -262,6 +261,7 @@
       // master lane (sibling of scroll, lives outside the scrolling area)
       const master = document.createElement('div');
       master.className = 'daw-lane is-master';
+      // T13 (= t6 reconstruction) — master pane: card + spectrum + grid + actions
       master.innerHTML = `
         <div class="daw-lane-head is-master-head">
           <div class="daw-lane-stripe"></div>
@@ -289,7 +289,7 @@
             <div class="daw-mg-row"><span class="daw-mg-k">slot</span><span class="daw-mg-v" id="daw-mg-slot">—</span></div>
           </div>
           <div class="daw-master-actions">
-            <button class="daw-ma" id="daw-ma-details" title="show clip details" aria-expanded="false">▸ details</button>
+            <button class="daw-ma" id="daw-ma-details" title="show details" aria-expanded="false">▸ details</button>
             <div class="daw-ma-panel" id="daw-ma-details-panel" hidden>
               <div class="daw-ma-panel-row" id="daw-ma-notes">
                 <div class="daw-ma-panel-k">// notes</div>
@@ -504,6 +504,7 @@
       el.style.setProperty('--clip-h', pal.h);
       el.style.setProperty('--clip-s', pal.s + '%');
       el.style.setProperty('--clip-l', pal.l + '%');
+      // T13 (= t6 reconstruction) — clip cell
       el.innerHTML = `
         <div class="daw-clip-stripe"></div>
         <div class="daw-clip-row">
@@ -530,9 +531,155 @@
         stripeEl: el.querySelector('.daw-clip-stripe'),
         barEl:    el.querySelector('.daw-clip-bar'),
         waveCanvas: el.querySelector('.daw-clip-wave'),
+        coverCanvas: null,
+        tapeEl:   null,
         slug: slugifyLocal(track.title),
       };
       return cell;
+    },
+
+    /* ---------- Hero cover for master pane ----------
+       Reuses the cover renderer at large size, drawn for the currently-armed
+       track. Idle state shows ambient drift seeded by frame count. */
+    _drawMasterCover() {
+      const c = this.root && this.root.querySelector('#daw-master-cover');
+      if (!c) return;
+      const cur = (this.ctx.getCurrent && this.ctx.getCurrent()) ?? -1;
+      const tracks = this.ctx.tracks || [];
+      const track  = (cur >= 0 && tracks[cur]) ? tracks[cur] : null;
+      if (!track) {
+        // Idle — soft drifting wash so the master pane never looks dead
+        const r = c.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = r.width | 0, h = r.height | 0;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = '#0a0e16';
+        ctx.fillRect(0, 0, w, h);
+        const g = ctx.createRadialGradient(w * 0.3, h * 0.3, 0, w * 0.5, h * 0.5, w * 0.8);
+        g.addColorStop(0, 'rgba(110,231,255,0.18)');
+        g.addColorStop(0.5, 'rgba(255,138,61,0.06)');
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        return;
+      }
+      // Reuse _drawClipCover by handing it a fake cell
+      const tier = tierOf(track);
+      const pal  = paletteForCell(cur, tier);
+      this._drawClipCover({
+        coverCanvas: c,
+        palette: pal,
+        track, idx: cur,
+      });
+    },
+
+    /* ---------- Generative cover art ----------
+       Each clip gets a unique procedural visual seeded by its title hash.
+       Three styles cycled by hash bits: aurora bands, radial bloom,
+       mosaic mesh. Palette-aware so featured/new/archive tiers each get
+       a coherent variant. Replaces the wall-of-identical-waveforms feel. */
+    _drawClipCover(cell) {
+      const c = cell.coverCanvas;
+      if (!c) return;
+      const r = c.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.max(40, r.width | 0);
+      const h = Math.max(20, r.height | 0);
+      c.width  = w * dpr; c.height = h * dpr;
+      c.style.width = w + 'px'; c.style.height = h + 'px';
+      const ctx = c.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const pal  = cell.palette;
+      const seed = hash((cell.track.title || '') + ':' + cell.idx);
+      const style = seed % 3;
+
+      // Base — deep tinted background
+      ctx.fillStyle = `hsl(${pal.h}, ${Math.min(60, pal.s)}%, 8%)`;
+      ctx.fillRect(0, 0, w, h);
+
+      const rnd = (function(s){ s = s >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; }; })(seed);
+
+      if (style === 0) {
+        // AURORA — stacked translucent ellipse bands at angles
+        ctx.globalCompositeOperation = 'lighter';
+        const bands = 4 + (seed % 3);
+        for (let i = 0; i < bands; i++) {
+          const cy = h * (0.15 + 0.7 * rnd());
+          const angle = (rnd() - 0.5) * 0.7;
+          const hueShift = (rnd() - 0.5) * 60;
+          const lightness = 48 + rnd() * 28;
+          ctx.save();
+          ctx.translate(w / 2, cy);
+          ctx.rotate(angle);
+          const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.85);
+          grad.addColorStop(0,   `hsla(${pal.h + hueShift}, ${pal.s}%, ${lightness}%, 0.55)`);
+          grad.addColorStop(0.5, `hsla(${pal.h + hueShift}, ${pal.s}%, ${lightness}%, 0.22)`);
+          grad.addColorStop(1,   'transparent');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, w * 0.9, h * (0.22 + rnd() * 0.10), 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (style === 1) {
+        // BLOOM — soft radial blobs, ink-in-water feel
+        ctx.globalCompositeOperation = 'lighter';
+        const cx = w * (0.25 + 0.5 * rnd());
+        const cy = h * (0.25 + 0.5 * rnd());
+        const radius = Math.max(w, h) * (0.55 + 0.35 * rnd());
+        const g0 = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        g0.addColorStop(0,   `hsla(${pal.h}, ${pal.s}%, 70%, 0.85)`);
+        g0.addColorStop(0.35,`hsla(${pal.h + 18}, ${pal.s}%, 58%, 0.50)`);
+        g0.addColorStop(1,   'transparent');
+        ctx.fillStyle = g0; ctx.fillRect(0, 0, w, h);
+        const blooms = 3 + (seed % 3);
+        for (let i = 0; i < blooms; i++) {
+          const x = w * rnd();
+          const y = h * rnd();
+          const rad = Math.max(w, h) * (0.18 + 0.32 * rnd());
+          const hueShift = (rnd() - 0.5) * 90;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+          g.addColorStop(0, `hsla(${pal.h + hueShift}, ${pal.s}%, 64%, 0.55)`);
+          g.addColorStop(1, 'transparent');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      } else {
+        // MOSAIC — grid of palette-tinted cells, brightness varies by hash
+        const cols = 8 + (seed & 3);
+        const rows = Math.max(3, Math.floor(h / w * cols) || 4);
+        const cellW = w / cols, cellH = h / rows;
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const v = rnd();
+            const dist = Math.hypot(x - cols/2 + (rnd()-0.5)*1.2, y - rows/2 + (rnd()-0.5)*1.2);
+            const alpha = Math.max(0.05, 1 - dist / (cols * 0.55)) * (0.30 + 0.70 * v);
+            const lightness = 30 + v * 42;
+            const hueShift = (rnd() - 0.5) * 40;
+            ctx.fillStyle = `hsla(${pal.h + hueShift}, ${pal.s}%, ${lightness}%, ${alpha})`;
+            ctx.fillRect(x * cellW + 0.5, y * cellH + 0.5, cellW - 1, cellH - 1);
+          }
+        }
+        // Subtle scan-overlay on top for texture
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        for (let yy = 0; yy < h; yy += 3) ctx.fillRect(0, yy, w, 1);
+      }
+
+      // Inner border highlight + bottom vignette so the cover edges feel sharp
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillRect(0, 0, w, 1);
+      const vg = ctx.createLinearGradient(0, h * 0.55, 0, h);
+      vg.addColorStop(0, 'transparent');
+      vg.addColorStop(1, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, h * 0.55, w, h * 0.45);
     },
 
     _drawClipWaveform(cell) {
@@ -668,13 +815,6 @@
         if (e.target.closest('.daw-clip')) this._setStatus('READY');
       });
 
-      // M / S LEDs — visual toggle (no audio routing yet, just lights up the LED)
-      root.addEventListener('click', e => {
-        const led = e.target.closest('.daw-tinybtn[data-toggle]');
-        if (!led || led.disabled) return;
-        e.stopPropagation();
-        led.classList.toggle('is-on');
-      });
 
       // filter chips
       root.querySelectorAll('.daw-bb-chip').forEach(b => {
@@ -976,10 +1116,7 @@
       this.specCanvas = c; this.specCtx = ctx;
     },
     _drawSpectrum(t) {
-      // t8 — FL 2026 sleek spectrum. Smooth vertical bars with vivid
-      // jewel-tone gradients (cyan low / magenta mid / orange top), soft
-      // glow halo, peak-hold dots. Tinted by the currently-playing channel
-      // so the spectrum colors carry the active clip's identity.
+      // T13 (= t6 reconstruction) — smooth orange-on-dark spectrum bars + center scope
       if (!this.specCanvas || !this.specCtx) {
         this._sizeSpectrum();
         if (!this.specCanvas) return;
@@ -987,32 +1124,14 @@
       const c = this.specCanvas, ctx = this.specCtx;
       const w = c.clientWidth, h = c.clientHeight;
       ctx.clearRect(0, 0, w, h);
-
+      // Background grid
+      ctx.fillStyle = 'rgba(255,255,255,0.022)';
+      for (let y = 0; y < h; y += 8) ctx.fillRect(0, y, w, 1);
+      // Spectrum bars
       const N = (this.freqArr && this.freqArr.length) || 0;
       const playing = !!(this.audio && !this.audio.paused);
-      const bars = 56;
-      const bandGap = 1;
-      const bw = (w / bars) - bandGap;
-
-      if (!this._specPeaks || this._specPeaks.length !== bars) {
-        this._specPeaks = new Array(bars).fill(0);
-        this._specSmooth = new Array(bars).fill(0);
-        this._specPeakAge = new Array(bars).fill(0);
-      }
-
-      // Pull tint hue from the currently-playing clip palette so the
-      // spectrum re-tints per track. Falls back to cyan when nothing armed.
-      const cur = (this.ctx.getCurrent && this.ctx.getCurrent()) ?? -1;
-      const tracks = this.ctx.tracks || [];
-      const track  = (cur >= 0 && tracks[cur]) ? tracks[cur] : null;
-      let hue = 195;
-      if (track) {
-        const tier = tierOf(track);
-        const pal  = paletteForCell(cur, tier);
-        hue = pal.h;
-      }
-
-      // Idle ambient mode — looks alive even before play
+      const bars = 64;
+      const bw = (w / bars);
       for (let i = 0; i < bars; i++) {
         let v = 0;
         if (N) {
@@ -1022,60 +1141,28 @@
           for (let j = lo; j < hi; j++) { const s = this.freqArr[j] || 0; if (s > max) max = s; }
           v = (max / 255) * (playing ? 1 : 0);
         }
-        if (!playing) v = 0.04 + 0.05 * (Math.sin(t * 1.4 + i * 0.27) * 0.5 + 0.5);
-
-        const cs = this._specSmooth[i];
-        this._specSmooth[i] = v > cs ? v : cs * 0.84 + v * 0.16;
-        const sv = this._specSmooth[i];
-
-        if (sv > this._specPeaks[i]) {
-          this._specPeaks[i] = sv;
-          this._specPeakAge[i] = 0;
-        } else {
-          this._specPeakAge[i] += 1;
-          if (this._specPeakAge[i] > 22) this._specPeaks[i] *= 0.95;
-        }
-
-        const x = i * (bw + bandGap);
-        const bh = Math.max(2, sv * h * 0.96);
-        const y = h - bh;
-
-        // Per-bar gradient — cyan→tinted-mid→orange-top, glowing.
-        const grad = ctx.createLinearGradient(0, h, 0, y);
-        grad.addColorStop(0,   `hsla(195, 95%, 60%, 0.45)`);
-        grad.addColorStop(0.5, `hsla(${hue}, 90%, 60%, 0.85)`);
-        grad.addColorStop(1,   `hsla(${(hue + 30) % 360}, 100%, 80%, 1)`);
+        if (!playing) v = 0.06 + 0.04 * Math.sin(t * 1.7 + i * 0.31);
+        const bh = Math.max(1, v * h * 0.95);
+        const x = i * bw;
+        const grad = ctx.createLinearGradient(0, h, 0, h - bh);
+        grad.addColorStop(0,   'rgba(255, 122, 61, 0.15)');
+        grad.addColorStop(0.4, 'rgba(255, 122, 61, 0.85)');
+        grad.addColorStop(1,   'rgba(255, 230, 200, 1)');
         ctx.fillStyle = grad;
-        ctx.beginPath();
-        // Rounded top, square bottom — modern FL bar look.
-        const r = Math.min(bw / 2, 2);
-        ctx.moveTo(x, h);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.lineTo(x + bw - r, y);
-        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
-        ctx.lineTo(x + bw, h);
-        ctx.closePath();
-        ctx.fill();
-
-        // Top gloss highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.28)';
-        ctx.fillRect(x + r, y, bw - r * 2, 1);
-
-        // Peak-hold dot
-        const peakY = h - this._specPeaks[i] * h * 0.96;
-        if (this._specPeaks[i] > 0.04) {
-          ctx.fillStyle = `hsla(${(hue + 30) % 360}, 100%, 78%, 0.9)`;
-          ctx.fillRect(x, Math.max(0, peakY - 1), bw, 2);
-        }
+        ctx.fillRect(x + 0.5, h - bh, bw - 1, bh);
       }
-
-      // Soft floor glow
-      const floor = ctx.createLinearGradient(0, h - 8, 0, h);
-      floor.addColorStop(0, 'rgba(110,231,255,0)');
-      floor.addColorStop(1, 'rgba(110,231,255,0.10)');
-      ctx.fillStyle = floor;
-      ctx.fillRect(0, h - 8, w, 8);
+      // Center-line scope (using bass for amplitude)
+      ctx.strokeStyle = 'rgba(255, 122, 61, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const cy = h * 0.5;
+      for (let x = 0; x < w; x++) {
+        const phase = x / w * Math.PI * 14 + t * 4;
+        const a = (this.bass * 0.6 + this.energy * 0.2) * Math.sin(phase) * (h * 0.20);
+        const y = cy + a;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
     },
 
     _updateMeters() {
@@ -1273,7 +1360,6 @@
         if (c.idx === cur && this.audio && !this.audio.paused) {
           c.barEl.style.width = (pct * 100).toFixed(2) + '%';
           c.barEl.style.opacity = '1';
-          // Pulse the launch button
           c.btnEl.textContent = '■';
           c.btnEl.classList.add('is-armed');
         } else if (c.idx === cur) {

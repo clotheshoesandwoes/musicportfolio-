@@ -212,6 +212,7 @@ const ScenesSelector = {
     this._buildTents();                // b184: 3 bivouac clusters of GP-medium tents
     this._buildPersonnel();            // b184: 8 soldiers walking between tents/buildings
     this._buildScorpions();            // b173: 1 parked Scorpion tank + 1 slow patroller
+    this._buildVtolHangar();           // s18: Shadow Moses-style VTOL hangar + parked Hind in the far-NW empty desert
     this._buildLabels();               // s13: debug ID labels (?labels=1 / L key)
     this._setupComposer();
 
@@ -223,11 +224,17 @@ const ScenesSelector = {
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onPointerUp = this._onPointerUp.bind(this);
     this._onKey = this._onKey.bind(this);
+    this._onKeyUp = this._onKeyUp.bind(this);
+    // s18: free-cam state. F toggles it; WASD strafe, QE up/down, Shift = fast,
+    // ESC / 0-9 / clicking a viewport button returns to scripted POI mode.
+    this.freecam = { active: false, speed: 28, fastMult: 4.0 };
+    this.keys = new Set();
     window.addEventListener('resize', this._onResize);
     canvas.addEventListener('pointermove', this._onMove);
     canvas.addEventListener('pointerdown', this._onPointerDown);
     window.addEventListener('pointerup', this._onPointerUp);
     window.addEventListener('keydown', this._onKey);
+    window.addEventListener('keyup', this._onKeyUp);
 
     this._onResize();
     this.animate = this.animate.bind(this);
@@ -2408,6 +2415,376 @@ const ScenesSelector = {
     return grp;
   },
 
+  /* ---------- s18: Shadow Moses-style VTOL hangar + parked Hind ----
+     Big Alaskan-base hangar in the far-NW empty desert past nw_radio_shack.
+     Steel-and-concrete construction, twin sliding bay doors (closed but
+     with a vertical seam glow showing interior is lit), three lit window
+     rows on the upper office level, roof exhaust ducts, comm antenna, red
+     aviation strobe. A Hind-D silhouette is parked on the apron in front,
+     hint of MGS1 cold-war espionage. */
+  _buildVtolHangar() {
+    const concrete = new THREE.MeshBasicMaterial({ color: 0x363c4a });
+    const concreteLit = new THREE.MeshBasicMaterial({ color: 0x4a5468 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const steelLit = new THREE.MeshBasicMaterial({ color: 0x3a4258 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+    const yellow = new THREE.MeshBasicMaterial({ color: 0x6a5618 });
+    const winGlow = (op) => new THREE.MeshBasicMaterial({
+      color: 0xffaa55, transparent: true, opacity: op,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+
+    const grp = new THREE.Group();
+    grp.name = 'vtol_hangar';
+    grp.position.set(-95, -8, -132);
+    grp.rotation.y = Math.PI * 0.18;  // angled toward the base center
+
+    // ----- Main hangar shell — wide concrete box with a metal arched roof
+    const hW = 22, hH = 9, hD = 16;
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(hW, hH, hD), concrete);
+    shell.position.set(0, hH / 2, 0);
+    shell.name = 'vtol_hangar_shell';
+    grp.add(shell);
+    // Arched steel roof on top (half-cylinder rotated)
+    const roof = new THREE.Mesh(
+      new THREE.CylinderGeometry(hW / 2, hW / 2, hD + 0.4, 24, 1, false, 0, Math.PI),
+      steelLit,
+    );
+    roof.rotation.x = Math.PI / 2;
+    roof.rotation.z = Math.PI / 2;
+    roof.position.set(0, hH, 0);
+    grp.add(roof);
+
+    // ----- Twin bay doors on the camera-facing front face -----
+    // Each door is a tall steel rectangle with horizontal ribs. A vertical
+    // glowing seam down the centerline hints "interior is lit, doors closed."
+    [-1, 1].forEach(side => {
+      const dW = hW / 2 - 0.4, dH = hH * 0.78;
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(dW, dH, 0.25),
+        steel,
+      );
+      door.position.set(side * (dW / 2 + 0.1), dH / 2, hD / 2 + 0.05);
+      door.name = `vtol_bay_door_${side > 0 ? 'r' : 'l'}`;
+      grp.add(door);
+      // Horizontal ribs across the door (5 ribs)
+      for (let r = 1; r <= 5; r++) {
+        const rib = new THREE.Mesh(
+          new THREE.BoxGeometry(dW * 0.96, 0.10, 0.06),
+          steelLit,
+        );
+        rib.position.set(side * (dW / 2 + 0.1), dH * (r / 6), hD / 2 + 0.20);
+        grp.add(rib);
+      }
+      // Yellow caution stripes on door edges
+      const stripeEdge = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16, dH, 0.06),
+        yellow,
+      );
+      stripeEdge.position.set(side * (dW + 0.06), dH / 2, hD / 2 + 0.22);
+      grp.add(stripeEdge);
+    });
+    // Vertical glowing seam down centerline of the closed doors (interior glow leaking out)
+    const seam = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.18, hH * 0.74),
+      winGlow(0.95),
+    );
+    seam.position.set(0, hH * 0.39, hD / 2 + 0.30);
+    seam.userData = { rate: 5.0, phase: Math.random() * 6, baseOpacity: 0.95 };
+    grp.add(seam);
+    this.standoff?.windows.push(seam);
+
+    // ----- Upper-level office windows on the front face (above the bay doors) -----
+    for (let i = 0; i < 5; i++) {
+      const win = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.4, 0.7),
+        winGlow(0.78),
+      );
+      win.position.set(-hW / 2 + 2.4 + i * (hW - 4.8) / 4, hH * 0.88, hD / 2 + 0.05);
+      win.userData = { rate: 4.2 + i * 0.3, phase: Math.random() * 6, baseOpacity: 0.78 };
+      grp.add(win);
+      this.standoff?.windows.push(win);
+    }
+    // Yellow caution stripe under the office windows
+    const officeStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(hW * 0.9, 0.14, 0.06),
+      yellow,
+    );
+    officeStripe.position.set(0, hH * 0.74, hD / 2 + 0.08);
+    grp.add(officeStripe);
+
+    // ----- Vertical concrete ribs framing the bay doors -----
+    [-hW / 2, 0, hW / 2].forEach(xo => {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.45, hH, 0.35), concreteLit);
+      rib.position.set(xo, hH / 2, hD / 2 + 0.18);
+      grp.add(rib);
+    });
+
+    // ----- Roof exhaust ducts (MGS-style industrial venting) -----
+    [-hW * 0.30, 0, hW * 0.30].forEach((xo, idx) => {
+      const duct = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 1.4, 1.6),
+        steelLit,
+      );
+      duct.position.set(xo, hH + 1.0, -hD * 0.20);
+      duct.name = `vtol_hangar_vent_${idx}`;
+      grp.add(duct);
+      // Stack pipe out the top
+      const stack = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.30, 0.35, 1.8, 8),
+        steel,
+      );
+      stack.position.set(xo, hH + 2.6, -hD * 0.20);
+      grp.add(stack);
+      // Stack cap
+      const stackCap = new THREE.Mesh(
+        new THREE.ConeGeometry(0.45, 0.30, 8),
+        steel,
+      );
+      stackCap.position.set(xo, hH + 3.65, -hD * 0.20);
+      grp.add(stackCap);
+      // Louvre vent face
+      const louvre = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.4, 1.2),
+        dark,
+      );
+      louvre.position.set(xo, hH + 1.0, -hD * 0.20 + 0.82);
+      grp.add(louvre);
+    });
+
+    // ----- Comm/radar antenna on the roof -----
+    const antPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.12, 5.5, 5),
+      steel,
+    );
+    antPole.position.set(hW * 0.36, hH + 2.75, hD * 0.20);
+    grp.add(antPole);
+    const antDish = new THREE.Mesh(
+      new THREE.SphereGeometry(0.9, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45),
+      steelLit,
+    );
+    antDish.rotation.x = -Math.PI * 0.42;
+    antDish.position.set(hW * 0.36, hH + 5.3, hD * 0.20);
+    antDish.name = 'vtol_hangar_dish';
+    grp.add(antDish);
+    // Cross bars on the antenna
+    for (let h = 1.5; h < 5; h += 1.2) {
+      const xbar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 1.2, 4),
+        steel,
+      );
+      xbar.rotation.z = Math.PI / 2;
+      xbar.position.set(hW * 0.36, hH + h, hD * 0.20);
+      grp.add(xbar);
+    }
+    // Aviation strobe at the top
+    const topStrobe = this._makeRunningLight(0xff3344, 0.55);
+    topStrobe.position.set(hW * 0.36, hH + 5.7, hD * 0.20);
+    topStrobe.userData = { rate: 1.6, phase: Math.random() * 6 };
+    grp.add(topStrobe);
+    this.standoff?.strobes.push(topStrobe);
+
+    // ----- Concrete loading apron in front of the bay doors -----
+    const apron = new THREE.Mesh(
+      new THREE.BoxGeometry(hW + 4, 0.16, 12),
+      concreteLit,
+    );
+    apron.position.set(0, 0.08, hD / 2 + 6);
+    apron.name = 'vtol_apron';
+    grp.add(apron);
+    // Painted center stripes leading to the doors
+    [-1, 1].forEach(side => {
+      const stripe = new THREE.Mesh(
+        new THREE.BoxGeometry(0.40, 0.02, 10),
+        new THREE.MeshBasicMaterial({ color: 0xc6c2a8 }),
+      );
+      stripe.position.set(side * hW * 0.20, 0.17, hD / 2 + 6);
+      grp.add(stripe);
+    });
+    // Yellow apron edge stripe
+    const apronStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(hW + 4, 0.06, 0.20),
+      yellow,
+    );
+    apronStripe.position.set(0, 0.18, hD / 2 + 12);
+    grp.add(apronStripe);
+
+    // ----- Parked Hind-D silhouette on the apron (MGS1 iconic) -----
+    const hind = this._buildHind();
+    hind.position.set(hW * 0.25, 0, hD / 2 + 7.5);
+    hind.rotation.y = Math.PI * 0.85;  // angled across the apron
+    hind.name = 'parked_hind';
+    grp.add(hind);
+
+    // ----- 2 floodlight poles framing the apron -----
+    [-1, 1].forEach((side, idx) => {
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.13, 0.18, 8, 5),
+        steel,
+      );
+      pole.position.set(side * (hW / 2 + 2.5), 4, hD / 2 + 4);
+      grp.add(pole);
+      const head = new THREE.Mesh(
+        new THREE.BoxGeometry(0.50, 0.30, 0.60),
+        steelLit,
+      );
+      head.position.set(side * (hW / 2 + 2.5) - side * 0.6, 7.8, hD / 2 + 4.4);
+      grp.add(head);
+      const lens = this._makeRunningLight(0xfff0c8, 0.28);
+      lens.position.set(side * (hW / 2 + 2.5) - side * 0.9, 7.7, hD / 2 + 4.7);
+      grp.add(lens);
+    });
+
+    // ----- Exhaust pipes on the side wall (MGS industrial detail) -----
+    [-1, 1].forEach(side => {
+      // Vertical exhaust pipe running up the side
+      const pipe = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.22, hH * 0.85, 8),
+        steel,
+      );
+      pipe.position.set(side * (hW / 2 + 0.25), hH * 0.43, -hD * 0.30);
+      grp.add(pipe);
+      // Output cap angled outward
+      const exitElbow = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.20, 0.24, 1.0, 8),
+        steel,
+      );
+      exitElbow.rotation.z = side * Math.PI * 0.30;
+      exitElbow.position.set(side * (hW / 2 + 0.7), hH * 0.85, -hD * 0.30);
+      grp.add(exitElbow);
+    });
+
+    this.scene.add(grp);
+  },
+
+  /* ---------- Hind-D helicopter (parked) — simplified silhouette ---- */
+  _buildHind() {
+    const olive = new THREE.MeshBasicMaterial({ color: 0x2a3018 });
+    const oliveHi = new THREE.MeshBasicMaterial({ color: 0x3a4022 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x2a3142 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x191d28 });
+
+    const g = new THREE.Group();
+    // Main fuselage (long and lean, MGS1-style)
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.6, 9.0), olive);
+    body.position.y = 1.6;
+    g.add(body);
+    // Tapered nose (cockpit canopy)
+    const nose = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 1.2, 1.8),
+      oliveHi,
+    );
+    nose.position.set(0, 1.85, -4.8);
+    g.add(nose);
+    // Cockpit glass (warm interior glow)
+    const cockpit = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.4, 0.7),
+      new THREE.MeshBasicMaterial({
+        color: 0xffaa55, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }),
+    );
+    cockpit.position.set(0, 2.25, -5.75);
+    cockpit.rotation.x = -0.15;
+    g.add(cockpit);
+    // Stub wings with weapon hardpoints (Hind iconic)
+    [-1, 1].forEach(side => {
+      const wing = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.20, 1.6),
+        oliveHi,
+      );
+      wing.position.set(side * 1.8, 1.6, -0.5);
+      wing.rotation.z = side * 0.05;  // slight anhedral
+      g.add(wing);
+      // Rocket pod (cylinder hanging off the wingtip)
+      const pod = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.30, 0.30, 1.6, 10),
+        steel,
+      );
+      pod.rotation.x = Math.PI / 2;
+      pod.position.set(side * 2.9, 1.35, -0.5);
+      g.add(pod);
+    });
+    // Tail boom (extending back from main body)
+    const tail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.7, 5.0),
+      olive,
+    );
+    tail.position.set(0, 1.7, 6.5);
+    g.add(tail);
+    // Vertical tail fin
+    const tailFin = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 1.8, 1.6),
+      oliveHi,
+    );
+    tailFin.position.set(0, 2.6, 8.5);
+    g.add(tailFin);
+    // Tail rotor (small disc, vertical)
+    const tailRotor = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.9, 0.9, 0.06, 16),
+      dark,
+    );
+    tailRotor.rotation.z = Math.PI / 2;
+    tailRotor.position.set(0.30, 2.6, 9.1);
+    g.add(tailRotor);
+    // Main rotor mast + blades (parked, blades drooping)
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.24, 0.9, 8),
+      steel,
+    );
+    mast.position.set(0, 2.85, 0);
+    g.add(mast);
+    const rotorHub = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.5, 0.16, 12),
+      steel,
+    );
+    rotorHub.position.set(0, 3.30, 0);
+    g.add(rotorHub);
+    // 5 blades drooping at ~5° (parked)
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const blade = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.08, 6.5),
+        dark,
+      );
+      blade.position.set(Math.cos(a) * 3.0, 3.25, Math.sin(a) * 3.0);
+      blade.rotation.y = a + Math.PI / 2;
+      blade.rotation.x = 0.07;  // slight droop
+      g.add(blade);
+    }
+    // Landing skids/wheels — 3 small wheels (one nose, two main)
+    const wheelMat = dark;
+    [[-0.85, -3.0], [0.85, -3.0], [0, -4.0]].forEach(([wx, wz]) => {
+      const wheel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.30, 0.30, 0.25, 10),
+        wheelMat,
+      );
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, 0.30, wz);
+      g.add(wheel);
+      // Strut up to body
+      const strut = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.06, 0.7, 4),
+        steel,
+      );
+      strut.position.set(wx, 0.80, wz);
+      g.add(strut);
+    });
+    // Nav lights — port red, starboard green, tail white
+    const navL = this._makeRunningLight(0xff3344, 0.18);
+    navL.position.set(-2.9, 1.35, -0.5);
+    g.add(navL);
+    const navR = this._makeRunningLight(0x33ff66, 0.18);
+    navR.position.set(2.9, 1.35, -0.5);
+    g.add(navR);
+    const navTail = this._makeRunningLight(0xffffff, 0.16);
+    navTail.position.set(0, 2.8, 9.6);
+    navTail.userData = { rate: 1.4, phase: Math.random() * 6 };
+    g.add(navTail);
+
+    return g;
+  },
+
   _buildScorpions() {
     // b193: parked Scorpion moved with the rest of the motor pool from
     // (40, -38) — sat in the v2 logistics-yard host — to a spot south of
@@ -3138,7 +3515,10 @@ const ScenesSelector = {
     });
     this.planet = new THREE.Mesh(planetGeo, planetMat);
     this.planet.name = 'planet';
-    this.planet.position.set(-110, 12, -130);
+    // s18: moved up and out along the same back-left diagonal so the
+    // planet sits as a sky element behind the ridge instead of clipping
+    // the dirt floor. 1.6× further on x/z, ~6× higher in y.
+    this.planet.position.set(-180, 75, -215);
     this.scene.add(this.planet);
 
     // Atmospheric halo behind planet — soft sprite
@@ -6631,82 +7011,74 @@ const ScenesSelector = {
     // ----- LOX / cryo tank — insulated cylinder beside silo (s2: pushed
     // further from siloR+11.5 → siloR+15 so the west compound breathes;
     // user feedback "everything is too close together on the missile side") -----
+    // s18: LOX cluster sits on dirt OUTSIDE the pad, so y-references anchor
+    // to ground (y=0) not padH. Previously every off-pad mesh inherited the
+    // padH offset and floated 1.2u above the ground.
     const loxR = 1.8, loxH = 6.5;
     const loxX = -(siloR + 15), loxZ = 4.0;
     const lox = new THREE.Mesh(new THREE.CylinderGeometry(loxR, loxR, loxH, 12), concreteLit);
-    lox.position.set(loxX, padH + loxH / 2, loxZ);
+    lox.position.set(loxX, loxH / 2, loxZ);
     grp.add(lox);
-    // Insulation banding rings (frost rings)
     [0.20, 0.50, 0.80].forEach(f => {
       const band = new THREE.Mesh(new THREE.TorusGeometry(loxR + 0.04, 0.06, 4, 18), stencil);
       band.rotation.x = Math.PI / 2;
-      band.position.set(loxX, padH + loxH * f, loxZ);
+      band.position.set(loxX, loxH * f, loxZ);
       grp.add(band);
     });
-    // End caps (dome)
     const loxCap = new THREE.Mesh(new THREE.SphereGeometry(loxR, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), concreteLit);
-    loxCap.position.set(loxX, padH + loxH, loxZ);
+    loxCap.position.set(loxX, loxH, loxZ);
     grp.add(loxCap);
-    // Vent stack
     const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 1.6, 4), steel);
-    vent.position.set(loxX, padH + loxH + 0.8, loxZ);
+    vent.position.set(loxX, loxH + 0.8, loxZ);
     grp.add(vent);
-    // Fuel line conduit running to silo base
     const conduit = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, Math.abs(loxX) + siloR, 5), steel);
     conduit.rotation.z = Math.PI / 2;
-    conduit.position.set(loxX / 2, padH + 0.20, loxZ);
+    conduit.position.set(loxX / 2, 0.20, loxZ);
     grp.add(conduit);
-    // Cradle — saddle support at base
     [-loxH * 0.30, loxH * 0.30].forEach(off => {
       const cradle = new THREE.Mesh(new THREE.BoxGeometry(loxR * 1.6, 0.50, 0.30), accent);
-      cradle.position.set(loxX + off / 4, padH + 0.25, loxZ);
+      cradle.position.set(loxX + off / 4, 0.25, loxZ);
       cradle.rotation.y = Math.PI / 2;
       grp.add(cradle);
     });
-    // Hazard placard on the tank face
     const placard = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6), yellow);
-    placard.position.set(loxX, padH + loxH * 0.55, loxZ + loxR + 0.04);
+    placard.position.set(loxX, loxH * 0.55, loxZ + loxR + 0.04);
     grp.add(placard);
 
     // ----- Generator shed beside the launch pad (s2: padR+6 → padR+9 so
     // shed clears the bunker side wall and the pad reads less crowded.) -----
     const gsW = 5.5, gsH = 3.5, gsD = 6.5;
     const gsX = padR + 9, gsZ = 8.5;
+    // s18: generator shed cluster — off-pad, anchored to ground.
     const gShed = new THREE.Mesh(new THREE.BoxGeometry(gsW, gsH, gsD), olive);
-    gShed.position.set(gsX, padH + gsH / 2, gsZ);
+    gShed.position.set(gsX, gsH / 2, gsZ);
     grp.add(gShed);
-    // Roof panel
     const gsRoof = new THREE.Mesh(new THREE.BoxGeometry(gsW + 0.3, 0.18, gsD + 0.3), oliveHi);
-    gsRoof.position.set(gsX, padH + gsH + 0.09, gsZ);
+    gsRoof.position.set(gsX, gsH + 0.09, gsZ);
     grp.add(gsRoof);
-    // Diesel exhaust stack on roof
     const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 1.4, 6), steel);
-    stack.position.set(gsX + gsW * 0.35, padH + gsH + 0.85, gsZ - gsD * 0.30);
+    stack.position.set(gsX + gsW * 0.35, gsH + 0.85, gsZ - gsD * 0.30);
     grp.add(stack);
-    // Stack rain cap
     const stackCap = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.20, 6), steel);
-    stackCap.position.set(gsX + gsW * 0.35, padH + gsH + 1.65, gsZ - gsD * 0.30);
+    stackCap.position.set(gsX + gsW * 0.35, gsH + 1.65, gsZ - gsD * 0.30);
     grp.add(stackCap);
-    // Louvre vents on the long face
     for (let i = -2; i <= 2; i++) {
       const louvre = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.50), steel);
-      louvre.position.set(gsX - gsW / 2 - 0.04, padH + gsH * 0.55, gsZ + i * 0.55);
+      louvre.position.set(gsX - gsW / 2 - 0.04, gsH * 0.55, gsZ + i * 0.55);
       grp.add(louvre);
     }
-    // Door (dim warm interior)
     const gsDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.6),
       new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
-    gsDoor.position.set(gsX + gsW * 0.30, padH + 0.80, gsZ + gsD / 2 + 0.03);
+    gsDoor.position.set(gsX + gsW * 0.30, 0.80, gsZ + gsD / 2 + 0.03);
     gsDoor.userData = { rate: 3.2, phase: Math.random() * 6, baseOpacity: 0.45 };
     grp.add(gsDoor);
     this.standoff?.windows.push(gsDoor);
-    // Fuel drums beside the shed
     [-gsW / 2 - 0.4, -gsW / 2 - 0.9].forEach((off, i) => {
       const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.0, 10), i === 0 ? olive : oliveHi);
-      drum.position.set(gsX + off, padH + 0.50, gsZ - gsD / 2 + 0.4);
+      drum.position.set(gsX + off, 0.50, gsZ - gsD / 2 + 0.4);
       grp.add(drum);
       const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10), steel);
-      lid.position.set(gsX + off, padH + 1.02, gsZ - gsD / 2 + 0.4);
+      lid.position.set(gsX + off, 1.02, gsZ - gsD / 2 + 0.4);
       grp.add(lid);
     });
 
@@ -6724,8 +7096,10 @@ const ScenesSelector = {
     const trayMat = new THREE.MeshBasicMaterial({ color: 0x303540 });
     // Horizontal run from generator to bunker (sits south of both, z=+2)
     const tray1Span = Math.abs(gsX - bunkerX);
+    // s18: tray1 + its support pillars run from off-pad gShed toward bunker;
+    // anchored to ground. tray2 stays inside the pad radius so keeps padH.
     const tray1 = new THREE.Mesh(new THREE.BoxGeometry(tray1Span + 0.5, 0.10, 0.40), trayMat);
-    tray1.position.set((gsX + bunkerX) / 2, padH + 0.10, 2.0);
+    tray1.position.set((gsX + bunkerX) / 2, 0.10, 2.0);
     grp.add(tray1);
     // Tray from bunker side to silo base — runs along bunker's silo-side wall
     const tray2Span = bunkerFront - 0 + 1.5;
@@ -6735,7 +7109,7 @@ const ScenesSelector = {
     // 3 cable supports along tray1
     for (let i = 1; i <= 3; i++) {
       const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.30, 0.50), steel);
-      pillar.position.set(gsX - i * 1.2, padH + 0.15, 2.0);
+      pillar.position.set(gsX - i * 1.2, 0.15, 2.0);
       grp.add(pillar);
     }
 
@@ -6743,51 +7117,47 @@ const ScenesSelector = {
     // s2: padR+14 → padR+18 (= 31) and farmZ -12 → -16 so the dipole array
     // sits well clear of the new generator shed at gsX=padR+9 and reads as
     // a distinct east outbuilding instead of being lost in the bunker mass.
+    // s18: antenna farm dipoles + guy wires anchor to ground (off-pad).
     const farmX = padR + 18, farmZ = -16;
     [0, 1, 2].forEach(i => {
       const dipoleH = 4.5 - i * 0.6;
       const dipole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, dipoleH, 4), steel);
-      dipole.position.set(farmX + i * 0.9, padH + dipoleH / 2, farmZ);
+      dipole.position.set(farmX + i * 0.9, dipoleH / 2, farmZ);
       grp.add(dipole);
-      // Cross dipole element near top
       const xEl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 4), steel);
       xEl.rotation.z = Math.PI / 2;
-      xEl.position.set(farmX + i * 0.9, padH + dipoleH * 0.85, farmZ);
+      xEl.position.set(farmX + i * 0.9, dipoleH * 0.85, farmZ);
       grp.add(xEl);
     });
-    // Guy wires (3 per dipole array — only on tallest)
     [0, 2.094, 4.188].forEach(theta => {
       const guy = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 5.5, 3), steel);
-      const tipX = farmX, tipY = padH + 4.2, tipZ = farmZ;
+      const tipX = farmX, tipY = 4.2, tipZ = farmZ;
       const baseX = farmX + Math.cos(theta) * 2.4;
       const baseZ = farmZ + Math.sin(theta) * 2.4;
-      const dx = tipX - baseX, dy = tipY - padH, dz = tipZ - baseZ;
+      const dx = tipX - baseX, dy = tipY, dz = tipZ - baseZ;
       const len = Math.hypot(dx, dy, dz);
       guy.scale.y = len / 5.5;
-      guy.position.set((tipX + baseX) / 2, (tipY + padH) / 2, (tipZ + baseZ) / 2);
+      guy.position.set((tipX + baseX) / 2, tipY / 2, (tipZ + baseZ) / 2);
       guy.lookAt(tipX, tipY, tipZ);
       guy.rotateX(Math.PI / 2);
       grp.add(guy);
     });
 
-    // ----- Bunker entrance stairs + blast door (anchored to bunkerFront) -----
+    // s18: bunker stairs + blast door + frame + wall lamp anchor to ground.
     const stairW = 1.6;
     [0, 1, 2].forEach(step => {
       const tread = new THREE.Mesh(new THREE.BoxGeometry(stairW, 0.18, 0.45), concreteLit);
-      tread.position.set(bunkerX - cbW * 0.25, padH + 0.09 + step * 0.18, bunkerFront + 0.6 + step * 0.45);
+      tread.position.set(bunkerX - cbW * 0.25, 0.09 + step * 0.18, bunkerFront + 0.6 + step * 0.45);
       grp.add(tread);
     });
-    // Blast door slab — flush against bunker front face
     const blastDoor = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 0.20), steel);
-    blastDoor.position.set(bunkerX - cbW * 0.25, padH + 1.40, bunkerFront + 0.04);
+    blastDoor.position.set(bunkerX - cbW * 0.25, 1.40, bunkerFront + 0.04);
     grp.add(blastDoor);
-    // Door frame
     const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(2.20, 2.80, 0.10), accent);
-    doorFrame.position.set(bunkerX - cbW * 0.25, padH + 1.40, bunkerFront + 0.10);
+    doorFrame.position.set(bunkerX - cbW * 0.25, 1.40, bunkerFront + 0.10);
     grp.add(doorFrame);
-    // Wall-mount lamp beside blast door
     const wallLamp = this._makeRunningLight(0xffaa55, 0.22);
-    wallLamp.position.set(bunkerX - cbW * 0.25 - 1.5, padH + 2.6, bunkerFront + 0.04);
+    wallLamp.position.set(bunkerX - cbW * 0.25 - 1.5, 2.6, bunkerFront + 0.04);
     grp.add(wallLamp);
 
     // ----- HVAC unit on the bunker roof -----
@@ -6832,22 +7202,21 @@ const ScenesSelector = {
     grp.add(slit);
     this.standoff?.windows.push(slit);
 
-    // Sandbag perimeter around the launch pad — denser to wrap bigger pad
+    // s18: sandbags + jersey barriers ring the pad on dirt (off-pad) — y=ground.
     const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
     for (let i = 0; i < 56; i++) {
       const a = (i / 56) * Math.PI * 2;
       const r = padR + 1.8;
       const b = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.40, 0.65), bagMat);
-      b.position.set(Math.cos(a) * r, padH + 0.20, Math.sin(a) * r);
+      b.position.set(Math.cos(a) * r, 0.20, Math.sin(a) * r);
       b.rotation.y = a + (Math.random() - 0.5) * 0.10;
       grp.add(b);
     }
-    // Jersey barriers between sandbags and gantry
     for (let i = 0; i < 4; i++) {
       const a = -Math.PI / 2 + (i - 1.5) * 0.25;
       const r = padR + 3.0;
       const jersey = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.0, 0.7), concreteLit);
-      jersey.position.set(Math.cos(a) * r, padH + 0.50, Math.sin(a) * r);
+      jersey.position.set(Math.cos(a) * r, 0.50, Math.sin(a) * r);
       jersey.rotation.y = a + Math.PI / 2;
       grp.add(jersey);
     }
@@ -6862,54 +7231,48 @@ const ScenesSelector = {
 
     const compoundR = padR + 17;  // s2: padR+12 → padR+17 LF compound — perimeter pulled out so floodlight pylons / cameras / warning signs ring the spread-out compound instead of clustering on top of the moved-outboard equipment.
 
-    // ----- 4 corner floodlight pylons -----
+    // s18: LF compound perimeter (pylons / cameras / warning signs) sits
+    // outside the pad on dirt → all anchor to ground (y=0).
     [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sx,sz]) => {
       const px = sx * compoundR * 0.78, pz = sz * compoundR * 0.78;
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 11, 5), steel);
-      pole.position.set(px, padH + 5.5, pz);
+      pole.position.set(px, 5.5, pz);
       grp.add(pole);
-      // Yoke arm
       const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.10, 1.6), steel);
-      yoke.position.set(px - sx * 0.5, padH + 11, pz - sz * 0.5);
+      yoke.position.set(px - sx * 0.5, 11, pz - sz * 0.5);
       yoke.rotation.y = Math.atan2(-sz, -sx);
       grp.add(yoke);
-      // Lamp head — bank of 3 floods
       [-0.45, 0, 0.45].forEach(off => {
         const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.30, 0.55), accent);
-        lamp.position.set(px - sx * 1.2 + off * sz, padH + 11, pz - sz * 1.2 - off * sx);
+        lamp.position.set(px - sx * 1.2 + off * sz, 11, pz - sz * 1.2 - off * sx);
         grp.add(lamp);
         const lens = this._makeRunningLight(0xfff0c8, 0.30);
-        lens.position.set(px - sx * 1.5 + off * sz, padH + 10.85, pz - sz * 1.5 - off * sx);
+        lens.position.set(px - sx * 1.5 + off * sz, 10.85, pz - sz * 1.5 - off * sx);
         grp.add(lens);
       });
-      // Aviation strobe at very top
       const tipStrobe = this._makeRunningLight(0xff3344, 0.50);
-      tipStrobe.position.set(px, padH + 11.8, pz);
+      tipStrobe.position.set(px, 11.8, pz);
       tipStrobe.userData = { rate: 1.5 + Math.random() * 0.5, phase: Math.random() * 6 };
       grp.add(tipStrobe);
       this.standoff?.strobes.push(tipStrobe);
     });
 
-    // ----- Security camera poles at cardinals -----
     [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach(theta => {
       const cx = Math.cos(theta) * (compoundR * 0.62);
       const cz = Math.sin(theta) * (compoundR * 0.62);
       const cpole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 6, 5), steel);
-      cpole.position.set(cx, padH + 3, cz);
+      cpole.position.set(cx, 3, cz);
       grp.add(cpole);
-      // Camera housing — small box angled slightly down toward pad
       const cam = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.30, 0.65), accent);
-      cam.position.set(cx, padH + 6.0, cz);
-      cam.lookAt(0, padH + 1, 0);
+      cam.position.set(cx, 6.0, cz);
+      cam.lookAt(0, padH + 1, 0);  // look-at target stays on the pad (silo base)
       grp.add(cam);
-      // Tiny red status LED
       const led = this._makeRunningLight(0xff3344, 0.10);
-      led.position.set(cx, padH + 6.2, cz);
+      led.position.set(cx, 6.2, cz);
       led.userData = { rate: 2.8, phase: Math.random() * 6 };
       grp.add(led);
     });
 
-    // ----- "RESTRICTED AREA" warning signs on stakes -----
     const signMat = new THREE.MeshBasicMaterial({
       color: 0xc83838, side: THREE.DoubleSide,
     });
@@ -6919,19 +7282,16 @@ const ScenesSelector = {
     [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75].forEach(theta => {
       const sx = Math.cos(theta) * (compoundR * 0.92);
       const sz = Math.sin(theta) * (compoundR * 0.92);
-      // Stake
       const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.4, 4), steel);
-      stake.position.set(sx, padH + 1.2, sz);
+      stake.position.set(sx, 1.2, sz);
       grp.add(stake);
-      // Sign panel — red
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), signMat);
-      sign.position.set(sx, padH + 1.9, sz);
-      sign.lookAt(0, padH + 1.9, 0);
+      sign.position.set(sx, 1.9, sz);
+      sign.lookAt(0, 1.9, 0);
       grp.add(sign);
-      // White stripe on sign (suggesting "RESTRICTED AREA" text band)
       const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.18), signWhite);
-      stripe.position.set(sx, padH + 1.95, sz);
-      stripe.lookAt(0, padH + 1.95, 0);
+      stripe.position.set(sx, 1.95, sz);
+      stripe.lookAt(0, 1.95, 0);
       stripe.translateZ(0.02);
       grp.add(stripe);
     });
@@ -6943,32 +7303,29 @@ const ScenesSelector = {
       new THREE.CylinderGeometry(fuelR, fuelR, fuelL, 14),
       concreteLit,
     );
+    // s18: diesel fuel tank cluster off-pad, anchored to ground.
     fuelTank.rotation.z = Math.PI / 2;
-    fuelTank.position.set(fuelX, padH + fuelR, gsZ - 0.5);
+    fuelTank.position.set(fuelX, fuelR, gsZ - 0.5);
     grp.add(fuelTank);
-    // End caps (domes)
     [+1, -1].forEach(s => {
       const cap = new THREE.Mesh(
         new THREE.SphereGeometry(fuelR, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
         concreteLit,
       );
-      cap.position.set(fuelX + s * fuelL / 2, padH + fuelR, gsZ - 0.5);
+      cap.position.set(fuelX + s * fuelL / 2, fuelR, gsZ - 0.5);
       cap.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2;
       grp.add(cap);
     });
-    // Saddle supports
     [-fuelL * 0.3, fuelL * 0.3].forEach(off => {
       const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, fuelR * 1.8), accent);
-      saddle.position.set(fuelX + off, padH + 0.6, gsZ - 0.5);
+      saddle.position.set(fuelX + off, 0.6, gsZ - 0.5);
       grp.add(saddle);
     });
-    // Hazard placard
     const fuelPlacard = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.6), yellow);
-    fuelPlacard.position.set(fuelX, padH + fuelR, gsZ - 0.5 + fuelR + 0.04);
+    fuelPlacard.position.set(fuelX, fuelR, gsZ - 0.5 + fuelR + 0.04);
     grp.add(fuelPlacard);
-    // Vent stack
     const fuelVent = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 1.8, 4), steel);
-    fuelVent.position.set(fuelX - fuelL * 0.35, padH + fuelR + 0.9, gsZ - 0.5);
+    fuelVent.position.set(fuelX - fuelL * 0.35, fuelR + 0.9, gsZ - 0.5);
     grp.add(fuelVent);
 
     // ===== s3: rocket-propulsion-themed clutter to fill the SW compound
@@ -6987,60 +7344,55 @@ const ScenesSelector = {
         new THREE.SphereGeometry(sphR, 18, 12),
         concreteLit,
       );
-      sph.position.set(sphX, padH + sphR + 0.8, sphZ);
+      // s18: sphere oxidizer sits just outside pad on dirt → y=ground.
+      sph.position.set(sphX, sphR + 0.8, sphZ);
       grp.add(sph);
-      // Skirt / support ring
       const skirt = new THREE.Mesh(
         new THREE.CylinderGeometry(sphR * 0.55, sphR * 0.65, 1.4, 12),
         accent,
       );
-      skirt.position.set(sphX, padH + 0.7, sphZ);
+      skirt.position.set(sphX, 0.7, sphZ);
       grp.add(skirt);
-      // Equator band
       const eq = new THREE.Mesh(new THREE.TorusGeometry(sphR + 0.04, 0.10, 4, 18), stencil);
       eq.rotation.x = Math.PI / 2;
-      eq.position.set(sphX, padH + sphR + 0.8, sphZ);
+      eq.position.set(sphX, sphR + 0.8, sphZ);
       grp.add(eq);
-      // Vent tower (taller — gives the tank a vertical accent visible from POI)
       const sphVent = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 2.4, 4), steel);
-      sphVent.position.set(sphX, padH + sphR + 0.8 + sphR + 1.2, sphZ);
+      sphVent.position.set(sphX, sphR + 0.8 + sphR + 1.2, sphZ);
       grp.add(sphVent);
       const sphVentCap = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.25, 6), steel);
-      sphVentCap.position.set(sphX, padH + sphR + 0.8 + sphR + 2.5, sphZ);
+      sphVentCap.position.set(sphX, sphR + 0.8 + sphR + 2.5, sphZ);
       grp.add(sphVentCap);
-      // Hazard placard (red — this one is fuel)
       const sphPlacard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6),
         new THREE.MeshBasicMaterial({ color: 0xc83838 }));
-      sphPlacard.position.set(sphX, padH + sphR + 0.8, sphZ + sphR + 0.04);
+      sphPlacard.position.set(sphX, sphR + 0.8, sphZ + sphR + 0.04);
       grp.add(sphPlacard);
-      // Pipe to silo base
       const sphPipe = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.08, Math.abs(sphX) + siloR, 5),
         steel,
       );
       sphPipe.rotation.z = Math.PI / 2;
-      sphPipe.position.set(sphX / 2, padH + 0.30, sphZ);
+      sphPipe.position.set(sphX / 2, 0.30, sphZ);
       grp.add(sphPipe);
     }
 
     // ----- Helium / GN2 high-pressure bottle rack (12 cylinders in caged frame) -----
     {
+      // s18: bottle rack just outside pad on dirt → y=ground.
       const rkX = -(siloR + 6), rkZ = -10;
-      // Steel cage frame
       const frameW = 3.6, frameH = 2.2, frameD = 1.2;
       [[-frameW / 2, -frameD / 2], [frameW / 2, -frameD / 2], [-frameW / 2, frameD / 2], [frameW / 2, frameD / 2]].forEach(([fx, fz]) => {
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, frameH, 0.08), steel);
-        post.position.set(rkX + fx, padH + frameH / 2, rkZ + fz);
+        post.position.set(rkX + fx, frameH / 2, rkZ + fz);
         grp.add(post);
       });
       [0.30, frameH - 0.15].forEach(yh => {
         [-frameD / 2, frameD / 2].forEach(fz => {
           const rail = new THREE.Mesh(new THREE.BoxGeometry(frameW + 0.08, 0.06, 0.06), steel);
-          rail.position.set(rkX, padH + yh, rkZ + fz);
+          rail.position.set(rkX, yh, rkZ + fz);
           grp.add(rail);
         });
       });
-      // 12 high-pressure gas cylinders (2 rows of 6)
       const bottleR = 0.22, bottleH = 1.85;
       for (let row = 0; row < 2; row++) {
         for (let col = 0; col < 6; col++) {
@@ -7050,17 +7402,15 @@ const ScenesSelector = {
             new THREE.CylinderGeometry(bottleR, bottleR, bottleH, 10),
             (col + row) % 2 === 0 ? olive : oliveHi,
           );
-          bottle.position.set(bx, padH + bottleH / 2 + 0.08, bz);
+          bottle.position.set(bx, bottleH / 2 + 0.08, bz);
           grp.add(bottle);
-          // Brass valve dome on top
           const valve = new THREE.Mesh(new THREE.SphereGeometry(bottleR * 0.55, 6, 5), steel);
-          valve.position.set(bx, padH + bottleH + 0.10, bz);
+          valve.position.set(bx, bottleH + 0.10, bz);
           grp.add(valve);
         }
       }
-      // Yellow placard "HE" / "GN2" on the cage front
       const rkPlacard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), yellow);
-      rkPlacard.position.set(rkX, padH + frameH * 0.85, rkZ + frameD / 2 + 0.06);
+      rkPlacard.position.set(rkX, frameH * 0.85, rkZ + frameD / 2 + 0.06);
       grp.add(rkPlacard);
     }
 
@@ -7166,18 +7516,18 @@ const ScenesSelector = {
         [-(siloR + 1),  14], [-(siloR + 1),  -12],
         [-(siloR + 17), -12], [-(siloR + 17), -3],
       ];
+      // s18: berm curb on dirt around propellant cluster → y=ground.
       for (let i = 0; i < bermPts.length - 1; i++) {
         const [x1, z1] = bermPts[i];
         const [x2, z2] = bermPts[i + 1];
         const len = Math.hypot(x2 - x1, z2 - z1);
         const yaw = Math.atan2(z2 - z1, x2 - x1);
         const curb = new THREE.Mesh(new THREE.BoxGeometry(len, 0.32, 0.30), concreteLit);
-        curb.position.set((x1 + x2) / 2, padH + 0.16, (z1 + z2) / 2);
+        curb.position.set((x1 + x2) / 2, 0.16, (z1 + z2) / 2);
         curb.rotation.y = -yaw;
         grp.add(curb);
-        // Yellow caution stripe on the curb top
         const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.32), yellow);
-        stripe2.position.set((x1 + x2) / 2, padH + 0.34, (z1 + z2) / 2);
+        stripe2.position.set((x1 + x2) / 2, 0.34, (z1 + z2) / 2);
         stripe2.rotation.y = -yaw;
         grp.add(stripe2);
       }
@@ -7189,82 +7539,73 @@ const ScenesSelector = {
     const ptX = -padR - 13, ptZ = 14;
     const ptYaw = -0.3;
     const pt = new THREE.Group();
-    // Cab — green olive truck cab
+    // s18: dropped padH offsets — transporter sits on the dirt OFF the pad,
+    // wheels (r=0.55) should touch the ground. Was floating 1.2u with wheels dangling.
     const ptCab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.2, 3.0), olive);
-    ptCab.position.set(0, padH + 1.5, -3.5);
+    ptCab.position.set(0, 1.5, -3.5);
     pt.add(ptCab);
     const ptCabRoof = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 3.0), oliveHi);
-    ptCabRoof.position.set(0, padH + 2.7, -3.5);
+    ptCabRoof.position.set(0, 2.7, -3.5);
     pt.add(ptCabRoof);
-    // Headlights
     [-1.0, 1.0].forEach(hx => {
       const hl = this._makeRunningLight(0xfff0c8, 0.30);
-      hl.position.set(hx, padH + 1.4, -5.0);
+      hl.position.set(hx, 1.4, -5.0);
       pt.add(hl);
     });
-    // Cab windshield (warm interior)
     const ptWind = new THREE.Mesh(
       new THREE.PlaneGeometry(2.2, 1.0),
       new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    ptWind.position.set(0, padH + 2.1, -5.01);
+    ptWind.position.set(0, 2.1, -5.01);
     pt.add(ptWind);
-    // Trailer flatbed — long, low
     const ptBed = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.6, 9), olive);
-    ptBed.position.set(0, padH + 1.0, 2.8);
+    ptBed.position.set(0, 1.0, 2.8);
     pt.add(ptBed);
-    // Faux missile-shape cargo lashed to bed (canister)
     const ptCargo = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 8.0, 12), oliveHi);
     ptCargo.rotation.x = Math.PI / 2;
-    ptCargo.position.set(0, padH + 1.85, 3.0);
+    ptCargo.position.set(0, 1.85, 3.0);
     pt.add(ptCargo);
-    // Lashing straps
     for (let i = -2; i <= 2; i++) {
       const strap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.06, 0.10), steel);
-      strap.position.set(0, padH + 1.65, 3.0 + i * 1.5);
+      strap.position.set(0, 1.65, 3.0 + i * 1.5);
       pt.add(strap);
     }
-    // Wheels — 10 wheels (cab x4, trailer x6)
     const wheelMat = new THREE.MeshBasicMaterial({ color: 0x191d28 });
     [[-1.4, -4.5],[1.4, -4.5],[-1.4, -2.6],[1.4, -2.6],
      [-1.4, 0.4],[1.4, 0.4],[-1.4, 3.0],[1.4, 3.0],[-1.4, 5.6],[1.4, 5.6]].forEach(([wx, wz]) => {
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 12), wheelMat);
       wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(wx, padH + 0.55, wz);
+      wheel.position.set(wx, 0.55, wz);
       pt.add(wheel);
     });
-    // Roof beacon (amber)
     const ptBeacon = this._makeRunningLight(0xffaa22, 0.45);
-    ptBeacon.position.set(0, padH + 3.0, -3.5);
+    ptBeacon.position.set(0, 3.0, -3.5);
     ptBeacon.userData = { rate: 2.4, phase: Math.random() * 6 };
     grp.add(ptBeacon);  // add at top level so animation tick can find via standoff windows
     pt.position.set(ptX, 0, ptZ);
     pt.rotation.y = ptYaw;
     grp.add(pt);
 
-    // ----- Sloped concrete personnel access hatch — separate from blast door -----
+    // s18: personnel hatch sits on dirt → y=ground.
     const hatchX = padR - 2, hatchZ = -padR + 2;
     const hatch = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 2.6), concreteLit);
-    hatch.position.set(hatchX, padH + 0.45, hatchZ);
+    hatch.position.set(hatchX, 0.45, hatchZ);
     grp.add(hatch);
-    // Slanted top (suggests hatch lid lifted)
     const hatchLid = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 2.4), steel);
-    hatchLid.position.set(hatchX, padH + 1.05, hatchZ);
+    hatchLid.position.set(hatchX, 1.05, hatchZ);
     hatchLid.rotation.x = -0.25;
     grp.add(hatchLid);
-    // Yellow caution stripe on hatch sides
     const hatchStripe = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.12, 0.04), yellow);
-    hatchStripe.position.set(hatchX, padH + 0.20, hatchZ + 1.32);
+    hatchStripe.position.set(hatchX, 0.20, hatchZ + 1.32);
     grp.add(hatchStripe);
-    // Hand-rail loop at the lifted edge
     [-1.0, 1.0].forEach(rx => {
       const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 4), steel);
-      rail.position.set(hatchX + rx, padH + 1.3, hatchZ);
+      rail.position.set(hatchX + rx, 1.3, hatchZ);
       grp.add(rail);
     });
     const railTop = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.0, 4), steel);
     railTop.rotation.z = Math.PI / 2;
-    railTop.position.set(hatchX, padH + 1.8, hatchZ);
+    railTop.position.set(hatchX, 1.8, hatchZ);
     grp.add(railTop);
 
     // b214: silo pushed back z=-94 → z=-107. Old position straddled the N
@@ -7633,13 +7974,13 @@ const ScenesSelector = {
       const xbar = new THREE.Mesh(new THREE.BoxGeometry((siloR + 1.6) * 2, 0.14, 0.14), steel);
       xbar.position.set(0, padH + siloH * 0.55, 0);
       grp.add(xbar);
-      // Sandbag perimeter
+      // Sandbag perimeter (s18: off-pad → y=ground)
       const bagMat = new THREE.MeshBasicMaterial({ color: 0x2a3040 });
       for (let i = 0; i < 36; i++) {
         const a = (i / 36) * Math.PI * 2;
         const r = padR + 1.5;
         const b = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.36, 0.55), bagMat);
-        b.position.set(Math.cos(a) * r, padH + 0.18, Math.sin(a) * r);
+        b.position.set(Math.cos(a) * r, 0.18, Math.sin(a) * r);
         b.rotation.y = a;
         grp.add(b);
       }
@@ -9410,10 +9751,18 @@ const ScenesSelector = {
     strip.innerHTML = '<div class="ss-poi-label">— viewpoint —</div>'
       + this.poi.list.map((p, i) =>
           `<button class="ss-poi-btn" data-poi="${i}"><span class="ss-poi-num">${i}</span>${p.name}</button>`
-        ).join('');
+        ).join('')
+      // s18: free-cam toggle on the viewpoint strip.
+      + '<button class="ss-poi-btn" id="ss-freecam-btn" data-act="freecam" '
+      +   'style="border-color:rgba(180,220,255,0.45);color:#cfe6ff">'
+      +   '<span class="ss-poi-num">F</span>FREE CAM'
+      + '</button>';
     strip.addEventListener('click', e => {
       let target = e.target;
-      while (target && !target.dataset?.poi && target !== strip) target = target.parentElement;
+      while (target && !target.dataset?.poi && !target.dataset?.act && target !== strip) {
+        target = target.parentElement;
+      }
+      if (target?.dataset?.act === 'freecam') { this._toggleFreeCam(); return; }
       const idx = target?.dataset?.poi;
       if (idx != null) this._gotoPOI(parseInt(idx, 10));
     });
@@ -9423,6 +9772,8 @@ const ScenesSelector = {
 
   _gotoPOI(idx) {
     if (!this.poi || idx < 0 || idx >= this.poi.list.length) return;
+    // s18: tapping a viewport while in free-cam exits free-cam first.
+    if (this.freecam.active) this._toggleFreeCam(false);
     if (idx === this.poi.current && !this.poi.inTransit) return;
     const p = this.poi.list[idx];
     // Capture current actual camera position (strip out the bob offset)
@@ -9453,6 +9804,8 @@ const ScenesSelector = {
 
   _tickPOI(dt, t) {
     if (!this.poi) return;
+    // s18: free-cam owns the camera position when active; POI tick is a no-op.
+    if (this.freecam.active) return;
     if (this.poi.inTransit) {
       this.poi.t += dt / this.poi.duration;
       if (this.poi.t >= 1) {
@@ -9554,6 +9907,12 @@ const ScenesSelector = {
     this.labels.enabled = !!on;
     this.labels.sprites.forEach(s => { s.visible = this.labels.enabled; });
     this._updateLabelsHud();
+    // s18: keep the admin panel's labels button in sync.
+    const btn = document.getElementById('ss-admin-labels');
+    if (btn) {
+      btn.textContent = `[L] LABELS ${this.labels.enabled ? 'on' : 'off'}`;
+      btn.classList.toggle('active', this.labels.enabled);
+    }
   },
 
   _updateLabelsHud() {
@@ -9577,10 +9936,47 @@ const ScenesSelector = {
       <div class="ss-tr">
         <div class="ss-mark">cantmute.me</div>
         <div class="ss-meta">drag to look · tap a panel to focus</div>
+        <!-- s18: admin/debug panel — labels + freecam toggles, copy coords, jump-to-x,z. -->
+        <div id="ss-admin" style="margin-top:14px;padding:10px 12px;
+             background:rgba(8,12,20,0.75);border:1px solid rgba(180,220,255,0.30);
+             font:11px ui-monospace,Menlo,Consolas,monospace;color:#cfe6ff;
+             letter-spacing:0.08em;pointer-events:auto;min-width:230px">
+          <div style="opacity:0.55;font-size:9px;margin-bottom:6px">— debug —</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button id="ss-admin-labels" class="ss-poi-btn"
+                    style="flex:1;padding:4px 6px;font-size:10px">[L] LABELS off</button>
+            <button id="ss-admin-freecam" class="ss-poi-btn"
+                    style="flex:1;padding:4px 6px;font-size:10px">[F] FREECAM off</button>
+          </div>
+          <div id="ss-admin-coords" style="opacity:0.80;font-size:10px;line-height:1.5;margin-bottom:6px">
+            x 0.0  y 0.0  z 0.0<br>yaw 0°  pitch 0°
+          </div>
+          <button id="ss-admin-copy" class="ss-poi-btn"
+                  style="width:100%;padding:4px 6px;font-size:10px;margin-bottom:8px">copy coords</button>
+          <div style="display:flex;gap:4px;align-items:center;font-size:10px">
+            <span style="opacity:0.55">jump x,z</span>
+            <input id="ss-admin-jx" type="text" inputmode="numeric" placeholder="0"
+                   style="width:42px;background:rgba(20,28,40,0.9);border:1px solid rgba(180,220,255,0.30);
+                          color:#cfe6ff;font:10px ui-monospace,Menlo,Consolas,monospace;padding:2px 4px">
+            <input id="ss-admin-jz" type="text" inputmode="numeric" placeholder="-70"
+                   style="width:42px;background:rgba(20,28,40,0.9);border:1px solid rgba(180,220,255,0.30);
+                          color:#cfe6ff;font:10px ui-monospace,Menlo,Consolas,monospace;padding:2px 4px">
+            <button id="ss-admin-jump" class="ss-poi-btn"
+                    style="flex:1;padding:2px 6px;font-size:10px">go</button>
+          </div>
+        </div>
       </div>
       <div class="ss-bl">
         <div class="ss-hint" id="ss-hint">— select a panel —</div>
         <div class="ss-labels-hint" id="ss-labels-hint" style="margin-top:6px;font-size:10px;opacity:0.55;letter-spacing:0.08em">[L] labels: off</div>
+        <div class="ss-labels-hint" style="margin-top:2px;font-size:10px;opacity:0.55;letter-spacing:0.08em">[F] free cam · WASD + QE · shift = fast</div>
+      </div>
+      <div id="ss-freecam-hud" style="display:none;position:fixed;left:50%;top:14px;transform:translateX(-50%);
+           padding:6px 14px;background:rgba(8,12,20,0.78);border:1px solid rgba(180,220,255,0.45);
+           font:11px ui-monospace,Menlo,Consolas,monospace;color:#cfe6ff;letter-spacing:0.10em;
+           pointer-events:none;z-index:60">
+        <div style="opacity:0.55;font-size:9px">— free cam · drag to look · F or ESC to exit —</div>
+        <div id="ss-freecam-readout" style="margin-top:2px">x 0.0  y 0.0  z 0.0    yaw 0°  pitch 0°</div>
       </div>
       <div class="ss-focus" id="ss-focus" style="display:none">
         <div class="ss-focus-num" id="ss-focus-num"></div>
@@ -9595,6 +9991,49 @@ const ScenesSelector = {
     root.querySelectorAll('[data-act="release"]').forEach(b => {
       b.addEventListener('click', e => { e.stopPropagation(); this._release(); });
     });
+    // s18: admin panel handlers — toggles, copy, jump-to-coord.
+    const adminLabels  = root.querySelector('#ss-admin-labels');
+    const adminFreecam = root.querySelector('#ss-admin-freecam');
+    const adminCopy    = root.querySelector('#ss-admin-copy');
+    const adminJump    = root.querySelector('#ss-admin-jump');
+    const adminJx      = root.querySelector('#ss-admin-jx');
+    const adminJz      = root.querySelector('#ss-admin-jz');
+    if (adminLabels) adminLabels.addEventListener('click', e => {
+      e.stopPropagation();
+      this._setLabelsEnabled(!this.labels.enabled);
+    });
+    if (adminFreecam) adminFreecam.addEventListener('click', e => {
+      e.stopPropagation();
+      this._toggleFreeCam();
+    });
+    if (adminCopy) adminCopy.addEventListener('click', async e => {
+      e.stopPropagation();
+      const p = this.camera.position;
+      const yawDeg = (this.gaze.yaw * 180 / Math.PI).toFixed(1);
+      const pitchDeg = (this.gaze.pitch * 180 / Math.PI).toFixed(1);
+      const txt = `x=${p.x.toFixed(2)} y=${p.y.toFixed(2)} z=${p.z.toFixed(2)} yaw=${yawDeg}° pitch=${pitchDeg}°`;
+      try {
+        await navigator.clipboard.writeText(txt);
+        adminCopy.textContent = 'copied ✓';
+        setTimeout(() => { adminCopy.textContent = 'copy coords'; }, 1200);
+      } catch (err) {
+        adminCopy.textContent = 'copy failed';
+        setTimeout(() => { adminCopy.textContent = 'copy coords'; }, 1200);
+      }
+    });
+    if (adminJump) {
+      const doJump = () => {
+        const x = parseFloat(adminJx.value);
+        const z = parseFloat(adminJz.value);
+        if (Number.isNaN(x) || Number.isNaN(z)) return;
+        if (!this.freecam.active) this._toggleFreeCam(true);
+        this.camera.position.set(x, 4, z);
+      };
+      adminJump.addEventListener('click', e => { e.stopPropagation(); doJump(); });
+      [adminJx, adminJz].forEach(inp => inp && inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); doJump(); }
+      }));
+    }
     return root;
   },
 
@@ -9656,7 +10095,12 @@ const ScenesSelector = {
       this.drag.totalPx += Math.abs(dx) + Math.abs(dy);
       this.gaze.yaw   -= dx * 0.0032;
       this.gaze.pitch += dy * 0.0024;
-      this.gaze.pitch = Math.max(-0.40, Math.min(0.30, this.gaze.pitch));
+      // s18: relaxed pitch in free-cam so the user can look straight down at
+      // the floor to debug spatial layouts. Scripted POI mode keeps the old
+      // tight clamp so panels don't drift out of frame.
+      const pitchLo = this.freecam.active ? -Math.PI * 0.48 : -0.40;
+      const pitchHi = this.freecam.active ?  Math.PI * 0.48 :  0.30;
+      this.gaze.pitch = Math.max(pitchLo, Math.min(pitchHi, this.gaze.pitch));
       this.drag.lx = e.clientX;
       this.drag.ly = e.clientY;
     } else {
@@ -9702,24 +10146,33 @@ const ScenesSelector = {
 
   _onKey(e) {
     if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
-    // ESC: release focus first, else snap back to deck (POI 0)
+    // ESC: release focus → exit free-cam → snap back to deck (POI 0)
     if (e.key === 'Escape') {
       if (this.focused) this._release();
+      else if (this.freecam.active) this._toggleFreeCam(false);
       else if (this.poi && this.poi.current !== 0) this._gotoPOI(0);
       return;
     }
-    // Digit hotkeys: jump to POI N (0..9)
-    if (this.poi && /^[0-9]$/.test(e.key)) {
-      const idx = parseInt(e.key, 10);
-      if (idx < this.poi.list.length) this._gotoPOI(idx);
+    // s18: F toggles free-cam mode
+    if (e.key === 'f' || e.key === 'F') {
+      this._toggleFreeCam();
       return;
     }
-    // N/P: cycle next/prev
-    if (this.poi && (e.key === 'n' || e.key === 'N')) {
+    // Digit hotkeys: jump to POI N (0..9). Exits free-cam first.
+    if (this.poi && /^[0-9]$/.test(e.key)) {
+      const idx = parseInt(e.key, 10);
+      if (idx < this.poi.list.length) {
+        if (this.freecam.active) this._toggleFreeCam(false);
+        this._gotoPOI(idx);
+      }
+      return;
+    }
+    // N/P: cycle next/prev (only when not in free-cam — N is a strafe key)
+    if (this.poi && !this.freecam.active && (e.key === 'n' || e.key === 'N')) {
       this._gotoPOI((this.poi.current + 1) % this.poi.list.length);
       return;
     }
-    if (this.poi && (e.key === 'p' || e.key === 'P')) {
+    if (this.poi && !this.freecam.active && (e.key === 'p' || e.key === 'P')) {
       this._gotoPOI((this.poi.current - 1 + this.poi.list.length) % this.poi.list.length);
       return;
     }
@@ -9728,6 +10181,80 @@ const ScenesSelector = {
       this._setLabelsEnabled(!this.labels.enabled);
       return;
     }
+    // s18: WASD/QE/Shift held-key tracking (only meaningful in free-cam)
+    const k = e.key.toLowerCase();
+    if (k === 'w' || k === 'a' || k === 's' || k === 'd' || k === 'q' || k === 'e' || k === 'shift') {
+      this.keys.add(k);
+    }
+  },
+
+  _onKeyUp(e) {
+    const k = e.key.toLowerCase();
+    if (this.keys.has(k)) this.keys.delete(k);
+  },
+
+  _toggleFreeCam(force) {
+    const next = (typeof force === 'boolean') ? force : !this.freecam.active;
+    if (next === this.freecam.active) return;
+    this.freecam.active = next;
+    if (next) {
+      if (this.focused) this._release();
+      if (this.poi) this.poi.inTransit = false;
+      this.keys.clear();
+    } else if (this.poi) {
+      const p = this.poi.list[this.poi.current];
+      this.gaze.yaw   = p.yaw;
+      this.gaze.pitch = p.pitch;
+    }
+    const fc = document.getElementById('ss-freecam-hud');
+    if (fc) fc.style.display = next ? '' : 'none';
+    const btn = document.getElementById('ss-freecam-btn');
+    if (btn) btn.classList.toggle('active', next);
+    const aBtn = document.getElementById('ss-admin-freecam');
+    if (aBtn) {
+      aBtn.textContent = `[F] FREECAM ${next ? 'on' : 'off'}`;
+      aBtn.classList.toggle('active', next);
+    }
+  },
+
+  _tickFreeCam(dt) {
+    this._updateAdminCoords();
+    if (!this.freecam.active) return;
+    const k = this.keys;
+    let fwd = 0, strafe = 0, lift = 0;
+    if (k.has('w')) fwd    += 1;
+    if (k.has('s')) fwd    -= 1;
+    if (k.has('d')) strafe += 1;
+    if (k.has('a')) strafe -= 1;
+    if (k.has('e')) lift   += 1;
+    if (k.has('q')) lift   -= 1;
+    if (fwd || strafe || lift) {
+      const mult = k.has('shift') ? this.freecam.fastMult : 1;
+      const step = this.freecam.speed * mult * dt;
+      const yaw = this.gaze.yaw;
+      const fx = Math.sin(yaw), fz = -Math.cos(yaw);
+      const sx = Math.cos(yaw), sz = Math.sin(yaw);
+      this.camera.position.x += (fx * fwd + sx * strafe) * step;
+      this.camera.position.z += (fz * fwd + sz * strafe) * step;
+      this.camera.position.y += lift * step;
+      if (this.camera.position.y < -6) this.camera.position.y = -6;
+    }
+    const el = document.getElementById('ss-freecam-readout');
+    if (el) {
+      const p = this.camera.position;
+      const yawDeg = (this.gaze.yaw * 180 / Math.PI).toFixed(0);
+      const pitchDeg = (this.gaze.pitch * 180 / Math.PI).toFixed(0);
+      el.textContent = `x ${p.x.toFixed(1)}  y ${p.y.toFixed(1)}  z ${p.z.toFixed(1)}    yaw ${yawDeg}°  pitch ${pitchDeg}°`;
+    }
+  },
+
+  _updateAdminCoords() {
+    const el = document.getElementById('ss-admin-coords');
+    if (!el) return;
+    const p = this.camera.position;
+    const yawDeg = (this.gaze.yaw * 180 / Math.PI).toFixed(0);
+    const pitchDeg = (this.gaze.pitch * 180 / Math.PI).toFixed(0);
+    el.innerHTML = `x ${p.x.toFixed(1)}  y ${p.y.toFixed(1)}  z ${p.z.toFixed(1)}<br>yaw ${yawDeg}°  pitch ${pitchDeg}°`;
   },
 
   _raycast() {
@@ -9786,6 +10313,7 @@ const ScenesSelector = {
     // b202: POI-aware camera positioning. _tickPOI sets camera.position
     // (lerping mid-transit OR snapping to current POI + bob).
     this._tickPOI(dt, t);
+    this._tickFreeCam(dt);
 
     // Camera orientation from gaze (drag updates yaw/pitch; POI transit
     // also lerps yaw/pitch toward target).
@@ -9940,6 +10468,7 @@ const ScenesSelector = {
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointerup', this._onPointerUp);
     window.removeEventListener('keydown', this._onKey);
+    window.removeEventListener('keyup', this._onKeyUp);
     if (this.composer) {
       try { this.composer.passes.forEach(p => p.dispose?.()); } catch (e) {}
     }
