@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "musicportfolio",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py"],
+      "port": 8000
+    },
+    {
+      "name": "musicportfolio-fresh",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py", "8137"],
+      "port": 8137
+    }
+  ]
+}
