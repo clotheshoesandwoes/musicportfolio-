@@ -431,7 +431,13 @@ const MarathonWorld = {
     // with titles for attention; for a music portfolio the titles must
     // dominate. Function kept in source so we can re-enable later if a
     // different approach calls for them.
-    // this._buildAuroras();
+    // g49 — re-enabled in nearOnly mode for travel-shell depth.
+    // g52 — and disabled again ("bro these fucking space rectangles what
+    // are they" — the wisp planes' noise bands read as glowing rectangles,
+    // especially edge-on). The ribbon approach is dead twice now; if the
+    // travel band needs volume later it has to come from round soft media
+    // (fog-patch sprites / dust), never rectangular sheets.
+    // this._buildAuroras(true);
     this._buildStarfield();
     this._buildForegroundDust();   // g27 — dense near dust, makes the void feel inhabited
     this._buildCore();
@@ -439,10 +445,15 @@ const MarathonWorld = {
     this._buildFogPatches();
     this._buildTitles();
     this._buildTitleAuras();   // g27 — halos + orbital particles around featured titles
+    this._buildFocusAura();    // g49 — roaming aura for focused non-featured titles
     this._buildFragments();
     this._buildStreaks();
     this._buildSatellites();
-    this._buildShards();
+    // g51 — shards REMOVED ("SHITTY RECTANGLES JUST SPIN LOOKS TERRIBLE" —
+    // third strike after g50's crystal treatment didn't save them). Random
+    // floating polyhedra are decoration with no reason rooted in the music;
+    // functions kept in source for the revert path, same as the g25 auroras.
+    // this._buildShards();
     this._buildFlyby();
     this._buildBolts();
     this._buildMarathonShip();
@@ -457,6 +468,17 @@ const MarathonWorld = {
 
     this.clock = new THREE.Clock();
     this.ray = new THREE.Raycaster();
+
+    // g48 — travel mode. The camera is no longer bolted to the origin:
+    // clicking a title glides the camera THROUGH the field to a standoff
+    // point in front of it (the title stays at its constellation slot), and
+    // releasing focus leaves you parked out there — the next click hops you
+    // onward from wherever you are. _camBase is the camera's current anchor
+    // (idle float rides on top of it), _camGoal the in-flight destination.
+    this.travelMode = true;
+    this._camBase = new THREE.Vector3(0, 0, 0);
+    this._camGoal = null;
+    this._travelGaze = false;
 
     this._onResize = this._onResize.bind(this);
     this._onMove = this._onMove.bind(this);
@@ -475,6 +497,15 @@ const MarathonWorld = {
     this._setupComposer();
     this._onResize();
     this._hookAudio();
+
+    // g49 — if the Chakra Petch webfont wasn't ready when titles baked
+    // (cold cache), rebake once it lands so titles don't stay in the
+    // Space Grotesk fallback.
+    if (document.fonts && document.fonts.load && !(document.fonts.check && document.fonts.check('700 96px "Chakra Petch"'))) {
+      document.fonts.load('700 140px "Chakra Petch"')
+        .then(() => { if (!this.destroyed) this._rebakeTitles(); })
+        .catch(() => {});
+    }
 
     this.animate = this.animate.bind(this);
     this.animate();
@@ -539,7 +570,7 @@ const MarathonWorld = {
         </div>
       </div>
       <div class="tg-bl">
-        <div class="tg-hint" id="tg-hint">drag to look around &nbsp;·&nbsp; click a title</div>
+        <div class="tg-hint" id="tg-hint">drag to look around &nbsp;·&nbsp; click a title to fly there &amp; play it</div>
       </div>
       <div class="tg-br">
         <div class="tg-hover" id="tg-hover"></div>
@@ -549,8 +580,9 @@ const MarathonWorld = {
           <div class="tg-focus-kicker" id="tg-focus-kicker">— now playing —</div>
           <h1 class="tg-focus-title" id="tg-focus-title"></h1>
           <div class="tg-focus-meta" id="tg-focus-meta"></div>
+          <div class="tg-focus-bio" id="tg-focus-bio" style="display:none"></div>
           <div class="tg-focus-actions">
-            <button class="tg-act" data-act="play">play</button>
+            <button class="tg-act" data-act="play" id="tg-focus-play">play</button>
             <button class="tg-act tg-act-dim" data-act="release">close</button>
           </div>
         </div>
@@ -559,7 +591,14 @@ const MarathonWorld = {
       b.addEventListener('click', e => {
         e.stopPropagation();
         const act = b.dataset.act;
-        if (act === 'play' && this.focused) this.ctx.onPlay?.(this.focused.index);
+        if (act === 'play' && this.focused) {
+          // g47 — the card's button used to always fire onPlay, which resets
+          // audio.src and restarts the network load on a track that was
+          // already playing/buffering. Toggle when this track is current.
+          const cur = this.ctx.getCurrent ? this.ctx.getCurrent() : -1;
+          if (cur === this.focused.index) this.ctx.onTogglePlay?.();
+          else { this.ctx.onPlay?.(this.focused.index); this._ensurePlay(); }
+        }
         else if (act === 'release') this._release();
       });
     });
@@ -630,6 +669,22 @@ const MarathonWorld = {
       const playing = !a.paused && cur >= 0;
       playIc.style.display  = playing ? 'none'  : '';
       pauseIc.style.display = playing ? '' : 'none';
+    }
+    // g47 — focus card reflects the real audio state. It used to show a
+    // static "play" button + "— now playing —" kicker even while the clicked
+    // track was already sounding (or still buffering), which read as "the
+    // click did nothing, press play yourself." One source of truth: the
+    // audio element, polled here every frame like the rest of the HUD.
+    if (this.focused) {
+      const kickEl = document.getElementById('tg-focus-kicker');
+      const actEl  = document.getElementById('tg-focus-play');
+      if (kickEl && actEl) {
+        const isCur   = cur === this.focused.index;
+        const loading = isCur && !a.paused && a.readyState < 3;
+        const playing = isCur && !a.paused && a.readyState >= 3;
+        kickEl.textContent = loading ? '— loading —' : playing ? '— now playing —' : '— paused —';
+        actEl.textContent  = loading ? 'loading…'    : playing ? 'pause'           : 'play';
+      }
     }
   },
 
@@ -1076,7 +1131,7 @@ const MarathonWorld = {
      with painterly hue sheets — that band was empty before. Additive
      blending so they layer over nebula without darkening anything.
      ---------- */
-  _buildAuroras(){
+  _buildAuroras(nearOnly){
     this.auroras = [];
     // g24 — pushed FAR out (was 195–255, now 320–420) so they don't dominate
     // the field of view, and shrunk (was 150–190 wide, now 95–125). Combined
@@ -1089,7 +1144,25 @@ const MarathonWorld = {
       { r: 350, hue: 0.10, phase: 1.4, w: 100, h: 26, tilt:  1.20, rot:  0.0009 },  // amber
       { r: 420, hue: 0.65, phase: 2.1, w: 135, h: 36, tilt: -1.05, rot: -0.0016 },  // lavender
       { r: 320, hue: 0.32, phase: 2.8, w: 105, h: 28, tilt:  0.80, rot:  0.0012 },  // green
+      // g49 — near-field wisps INSIDE the travel shell (titles live at
+      // r≈130; camera now flies through this band). The far ribbons above
+      // barely parallax during a hop, which made the background read as a
+      // flat skybox the moment travel mode shipped. These sit at r=95–240
+      // so every flight slides them across the sky at visibly different
+      // rates — depth you can feel, not decoration. Dimmer (alpha 0.13
+      // vs 0.22) and smaller so they never compete with titles.
+      { r:  95, hue: 0.58, phase: 3.6, w: 48, h: 15, tilt:  0.95, rot:  0.0019, alpha: 0.13, near: true },
+      { r: 130, hue: 0.80, phase: 4.1, w: 58, h: 17, tilt: -0.35, rot: -0.0015, alpha: 0.13, near: true },
+      { r: 115, hue: 0.06, phase: 4.8, w: 44, h: 14, tilt:  1.45, rot:  0.0022, alpha: 0.12, near: true },
+      { r: 170, hue: 0.62, phase: 5.3, w: 66, h: 19, tilt: -0.90, rot: -0.0013, alpha: 0.13, near: true },
+      { r: 150, hue: 0.90, phase: 5.9, w: 52, h: 16, tilt:  0.25, rot:  0.0017, alpha: 0.12, near: true },
+      { r: 205, hue: 0.48, phase: 6.4, w: 74, h: 21, tilt: -1.30, rot: -0.0010, alpha: 0.14, near: true },
+      { r: 185, hue: 0.14, phase: 7.0, w: 60, h: 18, tilt:  0.60, rot:  0.0014, alpha: 0.12, near: true },
+      { r: 240, hue: 0.70, phase: 7.7, w: 82, h: 23, tilt: -0.15, rot: -0.0012, alpha: 0.14, near: true },
     ];
+    // g49 — nearOnly skips the 5 far ribbons g25 turned off; only the dim
+    // travel-shell wisps build.
+    const setups = nearOnly ? SETUPS.filter(s => s.near) : SETUPS;
 
     const VERTEX = `
       uniform float uTime;
@@ -1114,6 +1187,7 @@ const MarathonWorld = {
       uniform float uSeed;
       uniform float uHue;
       uniform float uBass;
+      uniform float uAlpha;
       varying vec2 vUv;
 
       float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -1158,7 +1232,9 @@ const MarathonWorld = {
         // g24 — alpha 0.65 → 0.22 (and bass term 0.35 → 0.15). Combined
         // with NormalBlending below, ribbons now TINT the background
         // instead of piling additive brightness into the bloom pass.
-        float a = vEdge * hEdge * bands * 0.22;
+        // g49 — per-ribbon uAlpha so near-field wisps run dimmer than the
+        // far ribbons.
+        float a = vEdge * hEdge * bands * uAlpha;
         a *= 1.0 + uBass * 0.15;
 
         gl_FragColor = vec4(col, a);
@@ -1166,14 +1242,15 @@ const MarathonWorld = {
     `;
 
     const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-    SETUPS.forEach((s, i) => {
+    setups.forEach((s, i) => {
       const geo = new THREE.PlaneGeometry(s.w, s.h, 60, 8);
       const mat = new THREE.ShaderMaterial({
         uniforms: {
-          uTime: { value: 0 },
-          uSeed: { value: s.phase },
-          uHue:  { value: s.hue },
-          uBass: { value: 0 },
+          uTime:  { value: 0 },
+          uSeed:  { value: s.phase },
+          uHue:   { value: s.hue },
+          uBass:  { value: 0 },
+          uAlpha: { value: s.alpha || 0.22 },
         },
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
@@ -1187,7 +1264,7 @@ const MarathonWorld = {
       });
       const mesh = new THREE.Mesh(geo, mat);
       // Fibonacci-spread direction, then push out to radius r.
-      const yRaw = 1 - (i + 0.5) / SETUPS.length * 2;
+      const yRaw = 1 - (i + 0.5) / setups.length * 2;
       const yClamped = yRaw * 0.6;
       const ringR = Math.sqrt(Math.max(0, 1 - yClamped * yClamped));
       const theta = GOLDEN_ANGLE * i + s.phase;
@@ -2380,10 +2457,18 @@ const MarathonWorld = {
   // ----- 2. MOTHERSHIP REVEAL — huge purple/blue cruiser drifts past -----
   _spawnMothershipReveal(){
     const grp = new THREE.Group();
-    const hullMat = new THREE.MeshBasicMaterial({ color: 0x1a1438, transparent: true, opacity: 0 });
+    // g50 — "these models need to be heavily improved" (screenshot: two rows
+    // of glowing dots floating on nothing + a blocky engine blob). Three
+    // fixes: hull lifted out of invisible-black so the silhouette reads
+    // against the void; window strips dimmed below the bloom threshold so
+    // they read as lit windows instead of per-dot christmas LEDs (the
+    // red-over-blue rows in the screenshot were the CA pass splitting the
+    // over-bright dots); engine glow shrunk so the halation pass stops
+    // ghosting blocks around it. Edge wireframe gives the hull structure.
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x2c2650, transparent: true, opacity: 0 });
     const accentMat = new THREE.MeshBasicMaterial({ color: 0x4a3aa8, transparent: true, opacity: 0 });
     const lightMat = new THREE.MeshBasicMaterial({
-      color: 0x6c98ff, transparent: true, opacity: 0,
+      color: 0x4668a8, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
     const spine = new THREE.Mesh(new THREE.BoxGeometry(70, 6, 12), hullMat); grp.add(spine);
@@ -2394,17 +2479,27 @@ const MarathonWorld = {
     }
     const bridge = new THREE.Mesh(new THREE.BoxGeometry(10, 8, 8), accentMat);
     bridge.position.set(20, 7, 0); grp.add(bridge);
-    for (let i = 0; i < 12; i++) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 0.2), lightMat);
-      strip.position.set(-30 + i * 5.4, 1.5, 6.05); grp.add(strip);
-      const strip2 = strip.clone(); strip2.position.z = -6.05; grp.add(strip2);
+    const wireMat = new THREE.LineBasicMaterial({
+      color: 0x5a5f9e, transparent: true, opacity: 0,
+    });
+    grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(spine.geometry), wireMat));
+    const bridgeWire = new THREE.LineSegments(new THREE.EdgesGeometry(bridge.geometry), wireMat);
+    bridgeWire.position.copy(bridge.position); grp.add(bridgeWire);
+    // g51 — 12 discrete strips per flank still read as christmas-light dot
+    // rows even after the g50 dimming, and the CA pass split them into the
+    // red/blue dotted lines in the screenshots. 4 long unbroken window
+    // BANDS per flank read as lit decks; gaps between them as bulkheads.
+    for (let i = 0; i < 4; i++) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(13, 0.5, 0.15), lightMat);
+      band.position.set(-26 + i * 16.5, 1.5, 6.05); grp.add(band);
+      const band2 = band.clone(); band2.position.z = -6.05; grp.add(band2);
     }
     const glowTex = this._makeSatLightTexture();
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTex, color: 0x88a0ff, transparent: true,
       blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0,
     }));
-    glow.scale.set(14, 14, 1); glow.position.set(-38, 0, 0); grp.add(glow);
+    glow.scale.set(10, 10, 1); glow.position.set(-38, 0, 0); grp.add(glow);
 
     const fwd = this._forwardVec();
     const { right, up } = this._basisFromDir(fwd);
@@ -2440,6 +2535,9 @@ const MarathonWorld = {
       scenarioBase: { hullMats: [hullMat, accentMat], lightMat, glow },
       scenarioCleanup: null,
     };
+    // g50 — edge wireframe rides the hull fade; generic _syncMats hook in
+    // _tickFlyby means no surgery on the scenario tick branch.
+    fake._syncMats = () => { wireMat.opacity = hullMat.opacity * 0.85; };
     this.flybyShips.push(fake);
     if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
     if (this._flashHint) this._flashHint('spawned: mothership reveal', 'info');
@@ -3462,8 +3560,11 @@ const MarathonWorld = {
   // 1. CCS BATTLECRUISER — purple ribbed Covenant cruiser, gravity-lift glow
   _spawnCcsBattlecruiser(){
     const grp = new THREE.Group();
-    const hullMat = new THREE.MeshBasicMaterial({ color: 0x2a0a48, transparent: true, opacity: 0 });
-    const ribMat  = new THREE.MeshBasicMaterial({ color: 0x110422, transparent: true, opacity: 0 });
+    // g50 — same treatment as the mothership: hull + ribs lifted out of
+    // invisible-black, neon edge wireframe for structure, glows shrunk so
+    // halation stops ghosting blocks around them.
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x3c1a63, transparent: true, opacity: 0 });
+    const ribMat  = new THREE.MeshBasicMaterial({ color: 0x201040, transparent: true, opacity: 0 });
     const trimMat = new THREE.MeshBasicMaterial({
       color: 0x6a3acc, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false,
@@ -3477,18 +3578,24 @@ const MarathonWorld = {
     }
     const bridge = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 9), hullMat);
     bridge.position.set(24, 7, 0); grp.add(bridge);
+    const wireMat = new THREE.LineBasicMaterial({
+      color: 0x6a3acc, transparent: true, opacity: 0,
+    });
+    grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(spine.geometry), wireMat));
+    const bridgeWire = new THREE.LineSegments(new THREE.EdgesGeometry(bridge.geometry), wireMat);
+    bridgeWire.position.copy(bridge.position); grp.add(bridgeWire);
     const lift = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 12, 14), trimMat);
     lift.position.y = -10; grp.add(lift);
     const liftGlow = new THREE.Sprite(new THREE.SpriteMaterial({
       map: this._makeSatLightTexture(), color: 0xcc88ff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false,
     }));
-    liftGlow.scale.set(22, 30, 1); liftGlow.position.set(0, -22, 0); grp.add(liftGlow);
+    liftGlow.scale.set(17, 24, 1); liftGlow.position.set(0, -22, 0); grp.add(liftGlow);
     const engGlow = new THREE.Sprite(new THREE.SpriteMaterial({
       map: this._makeSatLightTexture(), color: 0x9966ff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false,
     }));
-    engGlow.scale.set(16, 16, 1); engGlow.position.set(-42, 0, 0); grp.add(engGlow);
+    engGlow.scale.set(12, 12, 1); engGlow.position.set(-42, 0, 0); grp.add(engGlow);
 
     const fwd = this._forwardVec();
     const { right, up } = this._basisFromDir(fwd);
@@ -3509,6 +3616,8 @@ const MarathonWorld = {
       scenarioBase: { hullMat, ribMat, trimMat, liftGlow, engGlow },
       scenarioCleanup: null,
     };
+    // g50 — wire opacity rides the hull fade (generic _syncMats hook).
+    fake._syncMats = () => { wireMat.opacity = hullMat.opacity * 0.8; };
     this.flybyShips.push(fake);
     if (!this._followDisabled) this._scenarioFollow = { ships: [fake] };
     if (this._flashHint) this._flashHint('spawned: CCS battlecruiser', 'info');
@@ -3692,8 +3801,10 @@ const MarathonWorld = {
   // 6. FROZEN CAPITAL — dark powered-down warship tumbles end-over-end
   _spawnFrozenCapital(){
     const grp = new THREE.Group();
-    const hullMat = new THREE.MeshBasicMaterial({ color: 0x12131a, transparent: true, opacity: 0 });
-    const accentMat = new THREE.MeshBasicMaterial({ color: 0x1c1d28, transparent: true, opacity: 0 });
+    // g50 — hull lifted out of invisible-black + brighter wire (same
+    // capital-ship readability pass as mothership/CCS).
+    const hullMat = new THREE.MeshBasicMaterial({ color: 0x232532, transparent: true, opacity: 0 });
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x2e3040, transparent: true, opacity: 0 });
     const spine = new THREE.Mesh(new THREE.BoxGeometry(74, 8, 12), hullMat); grp.add(spine);
     for (let i = 0; i < 4; i++) {
       const pod = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 11), hullMat);
@@ -3701,7 +3812,7 @@ const MarathonWorld = {
     }
     const bridge = new THREE.Mesh(new THREE.BoxGeometry(11, 7, 8), accentMat);
     bridge.position.set(20, 7, 0); grp.add(bridge);
-    const wireMat = new THREE.LineBasicMaterial({ color: 0x223040, transparent: true, opacity: 0 });
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x3a4a66, transparent: true, opacity: 0 });
     const wire = new THREE.LineSegments(new THREE.EdgesGeometry(spine.geometry), wireMat);
     grp.add(wire);
 
@@ -5183,10 +5294,26 @@ const MarathonWorld = {
       ? this.blackHole.grp.position.clone()
       : null;
     const anchor = focusedT || blackHoleBait;
+    // g49 — 40% of focused flybys now shave the title itself (2–8u) instead
+    // of the wider 8–28u pass, so ships visibly cut over/through the song
+    // you're looking at.
     const offsetMag = anchor
-      ? (focusedT ? 8 + Math.random() * 20 : 60 + Math.random() * 80)
+      ? (focusedT
+          ? (Math.random() < 0.40 ? 2 + Math.random() * 6 : 8 + Math.random() * 20)
+          : 60 + Math.random() * 80)
       : 50 + Math.random() * 90;
-    const offsetSign = Math.random() < 0.5 ? -1 : 1;
+    let offsetSign = Math.random() < 0.5 ? -1 : 1;
+    if (focusedT) {
+      // g51 — force the pass onto the FAR side of the title relative to the
+      // camera. The g49 thru-passes aimed at the title, but travel mode
+      // parks the camera only ~14u behind it, so ships kept crossing at
+      // point-blank range — engine flames filling the frame ("SHITTY
+      // RECTANGLES" screenshot's right edge). Crossing behind the title
+      // still reads as "through the song" from where you stand, without
+      // ever flying through your face.
+      const camToTitle = focusedT.clone().sub(this.camera.position);
+      if (perp.dot(camToTitle) * offsetSign < 0) offsetSign = -offsetSign;
+    }
     const baseStart = new THREE.Vector3()
       .copy(dir).multiplyScalar(-spawnRadius)
       .add(perp.clone().multiplyScalar(offsetMag * (anchor ? offsetSign : 1)));
@@ -5250,6 +5377,8 @@ const MarathonWorld = {
 
       // Scripted-scenario overrides for combat
       this._tickScenario(s, t, dt);
+      // g50 — generic material-sync hook (edge wireframes riding hull fades).
+      if (s._syncMats) s._syncMats();
 
       // Skip default rotation when a scripted scenario is driving this ship.
       if (s.scenario) {
@@ -5331,7 +5460,7 @@ const MarathonWorld = {
       // so ships visibly stream around / across / past the focused title.
       const focused = !!this.focused;
       const activeFlybys = this.flybyShips.filter(s => s.active && !s.scenario).length;
-      const cap = focused ? 4 : 3;
+      const cap = focused ? 5 : 3;   // g49 — one more concurrent ship around a focused title
       if (activeFlybys < cap) {
         this._spawnFlyby();
         this._nextFlybyAt = focused
@@ -5386,7 +5515,10 @@ const MarathonWorld = {
       ['eva',          () => this._spawnEvaTether()],
       // g12 cameos — iconic floating one-shots
       ['ccs',          () => this._spawnCcsBattlecruiser()],
-      ['keyship',      () => this._spawnKeyshipDescent()],
+      // g49 — keyship pulled from ambient rotation ("ugly ass bell remove
+      // that tho" — the tan truncated-cone hull + glowing gold rings read
+      // as a bell when it parked 140u in front of the camera). Same
+      // treatment as the g43 pelican: admin button still triggers it.
       ['ringfrag',     () => this._spawnRingFragment()],
       ['monolith',     () => this._spawnMonolith()],
       ['stargate',     () => this._spawnStargateKawoosh()],
@@ -5778,6 +5910,7 @@ const MarathonWorld = {
       uniform float uTime;
       uniform float uBass;
       uniform float uHueOffset;
+      uniform float uFade;
       varying vec3 vNormal;
       varying vec3 vView;
       vec3 hsl2rgb(float h, float s, float l){
@@ -5795,8 +5928,18 @@ const MarathonWorld = {
         // faint volume read. Still well below bloom threshold so it doesn't
         // blob.
         vec3 body = vec3(0.08, 0.11, 0.18);
+        // g50 — per-facet brightness variance. Detail-0 geometry carries flat
+        // per-face normals, so this hash is constant across each face: every
+        // facet catches a different amount of light and the solid reads as a
+        // cut crystal instead of a uniformly-filled polygon ("rotating
+        // rectangles" complaint).
+        float facet = fract(sin(dot(floor(vNormal * 8.0) + 0.5, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
         vec3 col = mix(body, edge, fres);
-        float a = 0.40 + fres * 0.75;
+        col *= 0.78 + facet * 0.50;
+        // g50 — uFade: proximity fade driven from tick (travel mode parks the
+        // camera inside the shard shell; a shard 2u away used to fill the
+        // screen as a flat quad).
+        float a = (0.40 + fres * 0.75) * uFade;
         gl_FragColor = vec4(col, a);
       }
     `;
@@ -5811,11 +5954,13 @@ const MarathonWorld = {
 
     for (let i = 0; i < COUNT; i++) {
       const geo = shapes[i % shapes.length]();
+      const hueOffset = Math.random();
       const mat = new THREE.ShaderMaterial({
         uniforms: {
           uTime:      { value: Math.random() * 10 },
           uBass:      { value: 0 },
-          uHueOffset: { value: Math.random() },
+          uHueOffset: { value: hueOffset },
+          uFade:      { value: 1 },
         },
         vertexShader: fresnelVS,
         fragmentShader: fresnelFS,
@@ -5825,6 +5970,15 @@ const MarathonWorld = {
         blending: THREE.AdditiveBlending,
       });
       const m = new THREE.Mesh(geo, mat);
+      // g50 — bright crystal edge lines. The facet silhouette needs drawn
+      // edges to read as geometry at close range; without them a face-on
+      // octahedron is just a filled diamond. Hue synced to the body shader
+      // in _tickShards.
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat));
 
       // g26 — distance distribution rebalanced for real depth perception.
       // Was 32 shards all at 50–270u (title-shell range), so the entire
@@ -5868,12 +6022,13 @@ const MarathonWorld = {
       };
 
       this.scene.add(m);
-      this.shards.push({ mesh: m, mat, drift });
+      this.shards.push({ mesh: m, mat, drift, edgeMat, hueOffset });
     }
   },
 
   _tickShards(t, dt, bass){
     if (!this.shards) return;
+    const camPos = this.camera.position;
     this.shards.forEach(s => {
       const d = s.drift;
       s.mesh.rotation.x += d.spinX * dt;
@@ -5884,6 +6039,15 @@ const MarathonWorld = {
       s.mesh.position.z = d.base.z + Math.sin(t * d.freq * 0.85 + d.phase * 1.3) * d.amp;
       s.mat.uniforms.uTime.value = t;
       s.mat.uniforms.uBass.value = bass;
+      // g50 — proximity fade: 0 at ≤8u from the camera → 1 at ≥18u, so a
+      // shard can never fill the windshield as a giant flat quad now that
+      // travel mode parks the camera inside the shard shell. Edge lines
+      // fade with it and stay hue-synced to the body shader.
+      const camD = s.mesh.position.distanceTo(camPos);
+      const fade = Math.min(1, Math.max(0, (camD - 8) / 10));
+      s.mat.uniforms.uFade.value = fade;
+      s.edgeMat.color.setHSL((t * 0.025 + s.hueOffset) % 1, 0.70, 0.65);
+      s.edgeMat.opacity = 0.55 * fade;
     });
   },
 
@@ -6302,9 +6466,14 @@ const MarathonWorld = {
       fog: false,
     });
 
-    const orangeNeon = neonMat(0xff8030, 1.6);
-    const tealNeon   = neonMat(0x55e0ff, 1.4);
-    const windowGlow = neonMat(0xffce80, 1.0);
+    // g52 — intensities disciplined ("these fucking space rectangles /
+    // christmas lights" screenshots). At 1.6/1.4 the pinstripes peaked at
+    // ~2.2× color — every sub-pixel sliver of the thin stripes bloomed into
+    // a glitter dot and the CA pass fringed the rows red/blue. Still neon,
+    // no longer floodlights.
+    const orangeNeon = neonMat(0xff8030, 0.9);
+    const tealNeon   = neonMat(0x55e0ff, 0.8);
+    const windowGlow = neonMat(0xffce80, 0.55);
 
     // ---- Main spine (long horizontal hull) ----
     const spineGeo = new THREE.CylinderGeometry(7.5, 7.5, 180, 12, 1, false);
@@ -6385,9 +6554,13 @@ const MarathonWorld = {
     // 3 thruster cones — store mats so we can pulse them
     const thrusters = [];
     for (let i = 0; i < 3; i++) {
+      // g52 — thruster intensity 1.6 (inherited from orangeNeon.clone())
+      // → 1.0, halo opacity 0.18 → 0.12. The three over-driven cones were
+      // the stacked orange chevrons ghosting into halation blocks at the
+      // frame edge in the user's screenshots.
       const t = new THREE.Mesh(
         new THREE.ConeGeometry(3.5, 6, 14),
-        orangeNeon.clone()
+        neonMat(0xff8030, 1.0)
       );
       t.position.set(-16, -7 + i * 7, 0);
       t.rotation.z = Math.PI / 2;
@@ -6397,7 +6570,7 @@ const MarathonWorld = {
       const halo = new THREE.Mesh(
         new THREE.ConeGeometry(5.5, 9, 14),
         new THREE.MeshBasicMaterial({
-          color: 0xff8030, transparent: true, opacity: 0.18,
+          color: 0xff8030, transparent: true, opacity: 0.12,
           blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
         })
       );
@@ -6423,30 +6596,36 @@ const MarathonWorld = {
       grp.add(tip);
     }
 
-    // ---- Window strips along the spine (lit rectangles) ----
-    const windowStripGeo = new THREE.PlaneGeometry(2.4, 0.4);
-    for (let x = -70; x <= 70; x += 6) {
-      for (let row = 0; row < 2; row++) {
-        const w = new THREE.Mesh(windowStripGeo, windowGlow);
-        w.position.set(x, -2 + row * 4, 7.55);
-        grp.add(w);
-        // Mirror on the back face
-        const w2 = new THREE.Mesh(windowStripGeo, windowGlow);
-        w2.position.set(x, -2 + row * 4, -7.55);
-        w2.rotation.y = Math.PI;
-        grp.add(w2);
-      }
+    // ---- Window bands along the spine ----
+    // g52 — was 96 discrete 2.4u window planes (24 columns × 2 rows × 2
+    // sides); each one bloomed into its own dot at landmark distance =
+    // the christmas-light rows in the screenshots. Two long deck bands
+    // per side read as continuous lit decks (same fix as the g51
+    // mothership bands).
+    const windowBandGeo = new THREE.PlaneGeometry(140, 0.45);
+    for (let row = 0; row < 2; row++) {
+      const w = new THREE.Mesh(windowBandGeo, windowGlow);
+      w.position.set(0, -2 + row * 4, 7.55);
+      grp.add(w);
+      const w2 = new THREE.Mesh(windowBandGeo, windowGlow);
+      w2.position.set(0, -2 + row * 4, -7.55);
+      w2.rotation.y = Math.PI;
+      grp.add(w2);
     }
 
     // ---- Neon pinstripe accents (long thin glowing lines) ----
-    const stripeGeo = new THREE.BoxGeometry(170, 0.18, 0.18);
+    // g52 — thickness 0.18 → 0.55. At landmark distance (~250–400u) a
+    // 0.18u line is deep sub-pixel: it rasterized as intermittent bright
+    // slivers = the DOTTED red/blue rows in the user's screenshots.
+    // 0.55u resolves as a continuous line from where the camera lives.
+    const stripeGeo = new THREE.BoxGeometry(170, 0.55, 0.55);
     const stripeOrange = new THREE.Mesh(stripeGeo, orangeNeon);
     stripeOrange.position.set(0, 6.3, 7.6);
     grp.add(stripeOrange);
     const stripeOrange2 = stripeOrange.clone();
     stripeOrange2.position.set(0, 6.3, -7.6);
     grp.add(stripeOrange2);
-    const stripeTeal = new THREE.Mesh(new THREE.BoxGeometry(170, 0.16, 0.16), tealNeon);
+    const stripeTeal = new THREE.Mesh(new THREE.BoxGeometry(170, 0.5, 0.5), tealNeon);
     stripeTeal.position.set(0, -6.3, 7.6);
     grp.add(stripeTeal);
     const stripeTeal2 = stripeTeal.clone();
@@ -8040,6 +8219,79 @@ const MarathonWorld = {
       // Particle opacity rides with halo (also smoothed bass)
       a.particles.material.opacity = 0.55 + (isHover || isFocus ? 0.30 : 0) + smoothedBass * 0.15;
     });
+
+    // g49 — roaming aura: snaps to the focused title when it's not a
+    // featured one (those already carry their own g27 aura). Fades in/out
+    // so select/release never pops.
+    const fa = this.focusAura;
+    if (fa) {
+      const f = this.focused;
+      const hasOwn = !!f && this.titleAuras.some(a => a.title.index === f.index);
+      const on = !!f && !hasOwn;
+      const targetOp = on ? (0.30 + bass * 0.16) : 0;
+      fa.halo.material.opacity += (targetOp - fa.halo.material.opacity) * 0.10;
+      fa.particles.material.opacity += ((on ? 0.70 : 0) - fa.particles.material.opacity) * 0.10;
+      const vis = fa.halo.material.opacity > 0.01;
+      fa.halo.visible = vis;
+      fa.particles.visible = vis;
+      if (f) {
+        const center = f.mesh.position;
+        const w = f.mesh.geometry.parameters.width;
+        fa.halo.position.copy(center);
+        const targetScale = w * 2.1;
+        fa.halo.scale.x += (targetScale - fa.halo.scale.x) * 0.10;
+        fa.halo.scale.y = fa.halo.scale.x;
+        const pos = fa.particles.geometry.attributes.position.array;
+        const boost = 1.0 + (this._breath || 0) * 0.25;
+        fa.orbit.forEach((p, i) => {
+          p.angle += dt * p.speed * boost;
+          const rad = w * 0.5 * p.radiusK + 0.6;
+          pos[i * 3]     = center.x + Math.cos(p.angle) * rad;
+          pos[i * 3 + 1] = center.y + Math.sin(p.tilt * 2.0) * Math.sin(p.angle) * rad;
+          pos[i * 3 + 2] = center.z + Math.cos(p.tilt * 2.0) * Math.sin(p.angle) * rad;
+        });
+        fa.particles.geometry.attributes.position.needsUpdate = true;
+      }
+    }
+  },
+
+  // g49 — one reusable halo + orbital ring for whatever non-featured title
+  // is focused. Featured titles keep their dedicated g27 auras; every other
+  // select used to get nothing, which is a big part of why selecting felt
+  // flat.
+  _buildFocusAura(){
+    const haloMat = new THREE.SpriteMaterial({
+      map: this._makeHaloTexture(),
+      color: 0xbfd4ff,
+      transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const halo = new THREE.Sprite(haloMat);
+    halo.visible = false;
+    this.scene.add(halo);
+
+    const N = 16;
+    const positions = new Float32Array(N * 3);
+    const orbit = [];
+    for (let i = 0; i < N; i++) {
+      orbit.push({
+        angle: Math.random() * Math.PI * 2,
+        speed: 0.5 + Math.random() * 0.7,
+        radiusK: 0.62 + Math.random() * 0.55,
+        tilt: Math.random() * Math.PI,
+      });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      size: 0.30, map: this._makeDotTexture(), color: 0xcfe0ff,
+      transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+      depthWrite: false, sizeAttenuation: true,
+    });
+    const particles = new THREE.Points(geo, mat);
+    particles.visible = false;
+    this.scene.add(particles);
+    this.focusAura = { halo, particles, orbit };
   },
 
   /* ---------- Foreground dust (g27) ----------
@@ -8160,15 +8412,19 @@ const MarathonWorld = {
     // Measure at requested size, then shrink fontSize if the laid-out width
     // would exceed the texture cap — otherwise long titles get clipped (the
     // canvas hard-caps at MAX_W and the text gets centered + sliced).
+    // g49 — Chakra Petch (squared techno display face) replaces Space
+    // Grotesk for the baked song titles. Falls back to Space Grotesk if the
+    // webfont hasn't landed yet; init rebakes once it does.
+    const FONT = (fs2) => `700 ${fs2}px "Chakra Petch", "Space Grotesk", Inter, system-ui, sans-serif`;
     let fs = fontSize;
-    mctx.font = `800 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+    mctx.font = FONT(fs);
     let measured = mctx.measureText(text).width;
     let padding = Math.floor(fs * 0.4);
     let tw = Math.ceil(measured) + padding * 2;
     if (tw > MAX_W) {
       const scale = MAX_W / tw;
       fs = Math.max(40, Math.floor(fs * scale));
-      mctx.font = `800 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+      mctx.font = FONT(fs);
       measured = mctx.measureText(text).width;
       padding = Math.floor(fs * 0.4);
       tw = Math.ceil(measured) + padding * 2;
@@ -8180,7 +8436,7 @@ const MarathonWorld = {
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, w, h);
-    ctx.font = `800 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+    ctx.font = FONT(fs);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
@@ -8190,6 +8446,25 @@ const MarathonWorld = {
     tex.magFilter = THREE.LinearFilter;
     tex.needsUpdate = true;
     return tex;
+  },
+
+  // g49 — rebake every title texture (called once the Chakra Petch webfont
+  // finishes loading, in case the initial bake fell back to Space Grotesk).
+  // Glyph metrics differ between the faces, so the plane geometry is
+  // rebuilt from the new texture aspect at the SAME world width — tier
+  // sizing is preserved, only the letterforms change.
+  _rebakeTitles(){
+    if (!this.titles) return;
+    this.titles.forEach(n => {
+      const w = n.mesh.geometry.parameters.width;
+      const tex = this._makeTitleTexture(n.track.title, 140);
+      const aspect = tex.image.width / tex.image.height;
+      n.mesh.geometry.dispose();
+      n.mesh.geometry = new THREE.PlaneGeometry(w, w / aspect);
+      const old = n.mesh.material.uniforms.uTex.value;
+      n.mesh.material.uniforms.uTex.value = tex;
+      if (old && old.dispose) old.dispose();
+    });
   },
 
   /* ---------- Composer ---------- */
@@ -8373,6 +8648,9 @@ const MarathonWorld = {
     this.drag.active = true;
     // User taking manual control kills the scenario follow-cam.
     this._scenarioFollow = null;
+    // g48 — and the travel gaze autopilot (the positional glide continues;
+    // only the look steering is handed back).
+    this._travelGaze = false;
     this.drag.x0 = e.clientX;
     this.drag.y0 = e.clientY;
     this.drag.lx = e.clientX;
@@ -8466,6 +8744,7 @@ const MarathonWorld = {
         <button data-act="clear">clear all flybys</button>
         <button data-act="cap-random">🎲 hop to random title</button>
         <button data-act="reset-cam">reset camera</button>
+        <button data-act="travel-toggle" id="mw-travel">travel: <span>ON</span></button>
         <button data-act="cap-png">📸 save canvas as PNG</button>
         <button data-act="cap-hud" id="mw-cap-hud">hide HUD: <span>OFF</span></button>
         <button data-act="follow-toggle" id="mw-admin-follow-btn">follow-cam: <span id="mw-admin-follow-state">auto</span></button>
@@ -8491,7 +8770,6 @@ const MarathonWorld = {
         <button data-act="el-nebula"    id="mw-el-nebula">nebula: <span>ON</span></button>
         <button data-act="el-haze"      id="mw-el-haze">haze: <span>ON</span></button>
         <button data-act="el-satellites" id="mw-el-satellites">satellites: <span>ON</span></button>
-        <button data-act="el-shards"    id="mw-el-shards">shards: <span>ON</span></button>
         <button data-act="el-fragments" id="mw-el-fragments">text fragments: <span>ON</span></button>
         <button data-act="el-streaks"   id="mw-el-streaks">streaks: <span>ON</span></button>
         <button data-act="el-fog"       id="mw-el-fog">fog patches: <span>ON</span></button>
@@ -8631,6 +8909,7 @@ const MarathonWorld = {
         else if (act === 'spawn-forerunner') this._adminSpawnType('forerunner', { group: 1 });
         else if (act === 'clear') this._adminClearFlybys();
         else if (act === 'reset-cam') this._adminResetCamera();
+        else if (act === 'travel-toggle') this._adminToggleTravel();
         else if (act === 'follow-toggle') this._adminToggleFollow();
         else if (act === 'hue-toggle') this._hueAuto = (this._hueAuto === false);
         else if (act === 'hue-bump') this._hueShift = ((this._hueShift || 0) + 0.10) % 1;
@@ -8759,7 +9038,6 @@ const MarathonWorld = {
       elState('mw-el-nebula',     this.nebula ? this.nebula.visible : true);
       elState('mw-el-haze',       this.haze ? this.haze.visible : true);
       elState('mw-el-satellites', this.satellites ? this.satellites.every(s => s.grp.visible) : true);
-      elState('mw-el-shards',     this.shards ? this.shards.every(s => s.mesh.visible) : true);
       elState('mw-el-fragments',  this.fragments ? this.fragments.every(f => f.mesh.visible) : true);
       elState('mw-el-streaks',    this.streaks ? this.streaks.every(s => s.mesh.visible) : true);
       elState('mw-el-fog',        this.fogPatches ? this.fogPatches.every(f => f.visible) : true);
@@ -9139,7 +9417,22 @@ const MarathonWorld = {
     this.gaze.pitch = 0;
     this._targetYaw = null;
     this._targetPitch = null;
+    // g48 — glide the camera anchor home to origin.
+    this._camGoal = new THREE.Vector3(0, 0, 0);
+    this._travelGaze = false;
     if (this.focused) this._release();
+  },
+
+  // g48 — toggle click-to-travel. OFF restores the b109 cockpit lock
+  // (title flies to you) and glides the camera home.
+  _adminToggleTravel(){
+    this.travelMode = !this.travelMode;
+    const el = document.getElementById('mw-travel');
+    if (el) el.querySelector('span').textContent = this.travelMode ? 'ON' : 'OFF';
+    if (!this.travelMode) {
+      this._camGoal = new THREE.Vector3(0, 0, 0);
+      this._travelGaze = false;
+    }
   },
 
   // Switch the visual focus to whatever track is currently playing in the
@@ -9155,6 +9448,13 @@ const MarathonWorld = {
     if (cur < 0) return;
     const node = this.titles.find(n => n.index === cur);
     if (!node) return;
+    // g48 — travel mode: prev/next hops the camera to the new track's slot
+    // (gaze autopilot steers en route) instead of the g18 snap+fly.
+    if (this.travelMode) {
+      this._focus(node, { skipPlay: true });
+      this._ensurePlay();
+      return;
+    }
     // Snap camera to new title's bearing — instant. Kills any in-flight
     // _targetYaw/_targetPitch lerp and any drag-inertia residue so the
     // animate loop has a clean state to fly from.
@@ -9205,7 +9505,9 @@ const MarathonWorld = {
     //   'look' (HUD prev/next) → title stays at its constellation slot, camera
     //          rotates (yaw/pitch lerp) to face the title's basePos. So the
     //          user "looks toward" the new song instead of pulling it to them.
-    this.focusMode = (opts && opts.mode) || 'fly';
+    // g48 — travel mode overrides both legacy modes: the camera goes to the
+    // title instead of the title coming to the camera.
+    this.focusMode = this.travelMode ? 'travel' : ((opts && opts.mode) || 'fly');
     if (!opts || !opts.skipPlay) {
       this.ctx.onPlay?.(node.index);
       // g18: same retry logic as _syncFocusToCurrent — direct title clicks
@@ -9236,6 +9538,32 @@ const MarathonWorld = {
     const distH = (titleW / 2) / Math.tan(fovRadH / 2) / 0.70;
     const distV = (titleH / 2) / Math.tan(fovRadV / 2) / 0.55;
     node.showcaseDist = Math.max(distH, distV, 14);
+    // g48 — a 0×0 canvas (hidden pane / mid-boot resize) makes camera.aspect
+    // NaN, which flows through the FOV math into showcaseDist. In fly mode
+    // that quietly ate one title's position; in travel mode it would poison
+    // _camBase and black-screen the world permanently. Clamp at the source.
+    if (!isFinite(node.showcaseDist)) node.showcaseDist = 18;
+
+    if (this.focusMode === 'travel') {
+      // g48 — fly the camera to a standoff point in front of the title's
+      // constellation slot. showcaseDist (the viewport-fit math above)
+      // doubles as the arrival distance, so the title lands at the same
+      // screen size the old fly-in produced. Gaze autopilot steers toward
+      // the title during the glide; any drag takes the stick back.
+      const rel = node.basePos.clone().sub(this._camBase);
+      const dist = Math.max(0.001, rel.length());
+      const dir = rel.multiplyScalar(1 / dist);
+      this._camGoal = node.basePos.clone().sub(dir.multiplyScalar(node.showcaseDist));
+      this._travelGaze = true;
+    }
+
+    // g49 — guarantee a ship pass shortly after selecting a song instead of
+    // waiting out the ambient flyby timer. The g35 anchor logic then routes
+    // it near (or now through) this title.
+    if (this._virtualT != null) {
+      const buzzAt = this._virtualT + 0.9 + Math.random() * 0.9;
+      if (this._nextFlybyAt == null || this._nextFlybyAt > buzzAt) this._nextFlybyAt = buzzAt;
+    }
 
     // Focus card
     const focus = document.getElementById('tg-focus');
@@ -9247,6 +9575,14 @@ const MarathonWorld = {
     if (t.isFeatured) meta.push('featured');
     if (t.isNew) meta.push('new');
     document.getElementById('tg-focus-meta').textContent = meta.join(' · ');
+    // g47 — per-track bio. Shows config.json's `description` when filled;
+    // hidden entirely when empty so undescribed tracks stay clean.
+    const bioEl = document.getElementById('tg-focus-bio');
+    if (bioEl) {
+      const bio = (t.description || '').trim();
+      bioEl.textContent = bio;
+      bioEl.style.display = bio ? '' : 'none';
+    }
     focus.style.display = '';
     requestAnimationFrame(() => {
       focus.classList.add('on');
@@ -9281,13 +9617,16 @@ const MarathonWorld = {
     this.focusMode = null;
     this._targetYaw = null;
     this._targetPitch = null;
+    // g48 — travel mode: the camera stays parked where it is. Exploration IS
+    // releasing focus out in the field and clicking onward from there.
+    this._travelGaze = false;
     const focus = document.getElementById('tg-focus');
     if (focus) {
       focus.classList.remove('on');
       setTimeout(() => { if (!this.focused && focus) focus.style.display = 'none'; }, 350);
     }
     const hint = document.getElementById('tg-hint');
-    if (hint) hint.innerHTML = 'drag to look around &nbsp;·&nbsp; click a title';
+    if (hint) hint.innerHTML = 'drag to look around &nbsp;·&nbsp; click a title to fly there &amp; play it';
     if (this._adminUpdateHints) this._adminUpdateHints();
   },
 
@@ -9368,6 +9707,31 @@ const MarathonWorld = {
       if (!stillActive) this._scenarioFollow = null;
     }
 
+    // g48 — travel: glide the camera anchor toward the in-flight goal.
+    // Exponential ease (fast leave, soft arrival), ~2s across the field.
+    if (this._camGoal) {
+      this._camBase.lerp(this._camGoal, Math.min(1, dt * 1.6));
+      if (this._camBase.distanceToSquared(this._camGoal) < 0.04) {
+        this._camBase.copy(this._camGoal);
+        this._camGoal = null;
+      }
+    }
+    // g48 — gaze autopilot while traveling: keep steering toward the focused
+    // title from the moving camera position. _onPointerDown clears the flag
+    // (user drag takes the stick); _release clears it too.
+    if (this._travelGaze && this.focused) {
+      const rel = this.focused.basePos.clone().sub(this._camBase);
+      const rd = Math.max(0.001, rel.length());
+      const ty = Math.atan2(rel.x, -rel.z);
+      const tp = Math.asin(Math.max(-1, Math.min(1, rel.y / rd)));
+      const gk = Math.min(1, dt * 2.2);
+      let dyaw = ty - this.gaze.yaw;
+      if (dyaw > Math.PI)  dyaw -= Math.PI * 2;
+      if (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      this.gaze.yaw   += dyaw * gk;
+      this.gaze.pitch += (tp - this.gaze.pitch) * gk;
+    }
+
     const fwd = this._forwardVec();
     const lookDist = 80;
     const desiredLookAt = fwd.clone().multiplyScalar(lookDist);
@@ -9382,11 +9746,18 @@ const MarathonWorld = {
     const floatX = Math.sin(t * 0.13)         * 0.85 + Math.sin(t * 0.31 + 1.7) * 0.36;
     const floatY = Math.cos(t * 0.17 + 0.4)   * 0.56 + Math.sin(t * 0.41 + 2.3) * 0.28;
     const floatZ = Math.cos(t * 0.11 + 1.1)   * 0.95 + Math.sin(t * 0.27 + 3.1) * 0.32;
-    this.camera.position.set(floatX, floatY, floatZ);
+    // g48 — float rides on top of the (possibly traveled) camera anchor.
+    // The look target is camera-relative, so it shifts by the same anchor
+    // + float offset to keep the forward direction unchanged.
+    this.camera.position.set(
+      this._camBase.x + floatX,
+      this._camBase.y + floatY,
+      this._camBase.z + floatZ
+    );
     this.camera.lookAt(
-      this.cam.lookAt.x + floatX,
-      this.cam.lookAt.y + floatY,
-      this.cam.lookAt.z + floatZ
+      this._camBase.x + this.cam.lookAt.x + floatX,
+      this._camBase.y + this.cam.lookAt.y + floatY,
+      this._camBase.z + this.cam.lookAt.z + floatZ
     );
 
     if (this.haze) {
@@ -9395,7 +9766,7 @@ const MarathonWorld = {
     }
     this._tickStreaks(t, dt);
     this._tickSatellites(t, dt, bass);
-    this._tickShards(t, dt, bass);
+    // this._tickShards(t, dt, bass);   // g51 — shards removed
     this._tickForegroundDust(dt);     // g27 — near-shell dust drift
     this._tickTitleAuras(t, dt, bass); // g27 — featured-title halos + orbital particles
     this._tickFlyby(t, dt);
@@ -9430,7 +9801,7 @@ const MarathonWorld = {
       this.nebula.rotation.x = Math.sin(t * 0.012) * 0.10;
     }
     // g25 — auroras disabled (see _buildAuroras comment in init).
-    // this._tickAuroras(t, bass);
+    // this._tickAuroras(t, bass);   // g52 — wisps removed (space rectangles)
 
     // Fog patches drift slowly + breathe with bass. g21 — added lateral
     // (x/z) drift in addition to the existing vertical bob, so clouds
@@ -9503,6 +9874,13 @@ const MarathonWorld = {
     // sphere never reads as a frozen wall.
     const fwdNow = this._forwardVec();
     const tmpDrift = new THREE.Vector3();
+    // g47 — the playing title visibly sings. Resolve current track + audible
+    // state once per frame; inside the loop it brightens that title and
+    // pulses it with the live bass band so a browsing visitor can always
+    // spot which star the sound is coming from.
+    const curIdx  = this.ctx.getCurrent ? this.ctx.getCurrent() : -1;
+    const aEl     = this.ctx.audio;
+    const audible = !!(aEl && !aEl.paused && aEl.readyState >= 3);
     this.titles.forEach(n => {
       const u = n.mesh.material.uniforms;
       u.uTime.value = t + n.flickerSeed;
@@ -9519,7 +9897,9 @@ const MarathonWorld = {
       u.uFocus.value += (targetF - u.uFocus.value) * Math.min(1, dt * 6);
       // b192: per-title slow breathing (random phase via flickerSeed) +
       // eased twinkle ramp toward the scheduled flash.
-      u.uBreath.value = Math.sin(t * 0.55 + n.flickerSeed * 7.31) * 0.05;
+      const isSinging = audible && curIdx === n.index;
+      u.uBreath.value = Math.sin(t * 0.55 + n.flickerSeed * 7.31) * 0.05
+                      + (isSinging ? 0.10 + bass * 0.35 : 0);
       const targetTw = ((n._twinkleUntil || 0) > t) ? 1.0 : 0.0;
       u.uTwinkle.value += (targetTw - u.uTwinkle.value) * Math.min(1, dt * (targetTw > 0 ? 16 : 6));
       // g26 — feed actual camera-distance to the shader for atmospheric
@@ -9528,7 +9908,7 @@ const MarathonWorld = {
       u.uDist.value = n.mesh.position.distanceTo(this.camera.position);
       let targetOp;
       if (this.focused) targetOp = isFocus ? 1.0 : 0.10;
-      else targetOp = n.baseOpacity;
+      else targetOp = isSinging ? Math.max(n.baseOpacity, 0.75) : n.baseOpacity;
       u.uOpacity.value += (targetOp - u.uOpacity.value) * Math.min(1, dt * 5);
 
       let targetPos;

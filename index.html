@@ -15,7 +15,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Space+Mono&family=Special+Elite&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Space+Mono&family=Special+Elite&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Chakra+Petch:wght@600;700&display=swap" rel="stylesheet">
 <!-- b095: importmap so Three.js postprocessing examples (which use bare
      `import ... from 'three'`) resolve correctly when loaded over CDN -->
 <script type="importmap">
@@ -2615,17 +2615,24 @@
     font-family:'Space Mono',ui-monospace,monospace;
   }
   .tg-focus-title{
-    font-family:'Space Grotesk',Inter,system-ui,sans-serif;
-    font-weight:800; font-size:clamp(48px, 8.5vw, 132px);
-    line-height:.95; letter-spacing:-.025em;
+    /* g49 — Chakra Petch matches the new baked in-world title font */
+    font-family:'Chakra Petch','Space Grotesk',Inter,system-ui,sans-serif;
+    font-weight:700; font-size:clamp(44px, 8vw, 120px);
+    line-height:.98; letter-spacing:-.01em;
     color:#fff; margin:0 0 18px;
-    text-transform:lowercase;
+    text-transform:uppercase;
     text-shadow:0 0 28px rgba(255,255,255,.10);
   }
   .tg-focus-meta{
     color:#9aa0aa; font-size:13px; letter-spacing:.06em;
     font-family:'Space Mono',ui-monospace,monospace;
     margin-bottom:24px;
+  }
+  /* g47 — per-track bio on the focus card (config.json `description`) */
+  .tg-focus-bio{
+    color:#b9bfc9; font-size:15px; line-height:1.55;
+    font-family:'Space Grotesk',Inter,system-ui,sans-serif;
+    max-width:52ch; margin:-8px 0 24px;
   }
   .tg-focus-actions{ display:flex; gap:24px; flex-wrap:wrap; }
   .tg-act{

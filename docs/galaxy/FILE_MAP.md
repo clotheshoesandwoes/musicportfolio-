@@ -2,11 +2,11 @@
 
 **Scope:** the main page at `/` (and its alias `/world`). Track titles drifting in a 3D void, with permanent landmarks (Marathon ship, Halo ringworld, distant core), audio-reactive shaders, and 30+ scripted scenarios spawnable via the `~` admin panel.
 
-**Build:** g46
-**Updated:** 2026-05-25
+**Build:** g52
+**Updated:** 2026-08-01
 
 ## Scope-owned files (this chat freely edits these)
-- [js/marathon-world.js](../../js/marathon-world.js) — the entire WebGL galaxy scene. Mounts as `window.MarathonWorld = { init, destroy }` and is booted by `index.html`'s `bootMarathonWorld()`. Builds nebula skybox, starfield, distant core (Saturn-observatory), drift haze, fog patches, fibonacci-sphere title placement, fragments, streaks, satellites, shards, Halo ringworld landmark, Marathon ship landmark, Traveler overhead landmark, nav buoys, flyby ship pool (longsword/banshee/pelican/forerunner), bolt particles, post-FX stack (bloom + CA + scanlines + grain + vignette + halation + DoF + god-rays + lens dirt + anamorphic flares), HUD, admin panel, scripted scenarios. Locked-camera at origin, drag-look only.
+- [js/marathon-world.js](../../js/marathon-world.js) — the entire WebGL galaxy scene. Mounts as `window.MarathonWorld = { init, destroy }` and is booted by `index.html`'s `bootMarathonWorld()`. Builds nebula skybox, starfield, distant core (Saturn-observatory), drift haze, fog patches, fibonacci-sphere title placement, fragments, streaks, satellites (shards removed g51), Halo ringworld landmark, Marathon ship landmark, Traveler overhead landmark, nav buoys, flyby ship pool (longsword/banshee/pelican/forerunner), bolt particles, post-FX stack (bloom + CA + scanlines + grain + vignette + halation + DoF + god-rays + lens dirt + anamorphic flares), HUD, admin panel, scripted scenarios. Locked-camera at origin, drag-look only.
 - [js/builds/galaxy.js](../../js/builds/galaxy.js) — `window.BUILD_GALAXY` constant displayed in the galaxy HUD's build chip.
 - [docs/galaxy/CHANGELOG.md](CHANGELOG.md) — galaxy build history (g1 onward).
 - [docs/galaxy/FILE_MAP.md](FILE_MAP.md) — this file.
@@ -24,7 +24,8 @@
 4. Validate the JS module before shipping: `cp js/marathon-world.js c:/tmp/mw.mjs && node -c c:/tmp/mw.mjs` — `node --check` on the original file silently passes raw-backtick template-literal errors that crash the browser.
 
 ## Architecture summary
-- Camera locked at origin (cockpit lock from b109). Drag-look = yaw/pitch only. No movement.
+- **g48 travel mode (default ON):** camera anchor `_camBase` glides through the field — click a title and the camera flies to a standoff point in front of its constellation slot (`_camGoal`, eased lerp `dt*1.6`), gaze autopilot steers en route (killed by any drag), and releasing focus parks you out there. The g21 idle float rides on top of the anchor. Admin `travel: ON/OFF` toggle restores the b109 cockpit lock (title flies to camera) and glides home; `reset camera` also glides the anchor back to origin. Titles never leave their slots in travel mode.
+- Legacy (travel OFF): camera locked at origin (cockpit lock from b109). Drag-look = yaw/pitch only.
 - Title sphere at radius 130 — 117 track titles distributed via fibonacci sphere across three tiers (featured / newer / archive).
 - Permanent landmarks at distinct bearings around the 360° void (g/b238 360° spread):
   - Marathon ship — front-left at `(-340, 36, -120)`

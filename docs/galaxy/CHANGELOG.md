@@ -4,6 +4,139 @@ Per-scene history for the main page (`/`) starting at the post-split point. Buil
 
 ---
 
+## g52 — 2026-08-01 — Wisps removed + Marathon landmark identified as the real "christmas ship" and disciplined
+
+User (screenshot circling a green rectangular patch and a vertical amber smudge, with the dotted ship in frame yet again): "bro these fucking space rectangles what are they are theyre still fucked."
+
+**1. The circled rectangles = the g49 near-field wisps. Removed.** The ribbon planes' noise bands read as glowing rectangles, especially edge-on (fog patches are round radial sprites — they can't make corners, which is how the wisps were conclusively identified). `_buildAuroras(true)` + `_tickAuroras` disabled again. The aurora system's full arc: built g23, disabled g25 (competed with titles), revived near-only g49 (travel depth), killed g52 (space rectangles). If the travel band needs volume later it must come from round soft media (fog-patch sprites, dust), never rectangular sheets.
+
+**2. The dotted red/blue ship was NEVER the mothership — it's the Marathon landmark**, permanent at (-340, 36, -120), which is why it sat in the same spot across all three of the user's screenshots (a 22s cameo can't do that; I dismissed the Marathon earlier after checking only its amber windows, not its pinstripes). The dotted look decoded:
+- Pinstripes are 170u boxes only **0.18u thick** — deep sub-pixel at the ~250–400u the camera sees them from, so they rasterize as intermittent bright slivers: a DOTTED orange row + a DOTTED teal row (the "red over blue" rows). Fix: thickness → 0.55/0.50 (resolves as a continuous line).
+- Neon intensities 1.6/1.4 peaked at ~2.2× color — every sliver bloomed and the CA pass fringed the rows. → orangeNeon 0.9, tealNeon 0.8.
+- **96 individual window planes** (24 cols × 2 rows × 2 sides) each bloomed into a dot. → 2 long deck bands per side (140×0.45, same g51-mothership treatment), windowGlow intensity 1.0 → 0.55.
+- The stacked orange chevrons at frame edge = the 3 thruster cones inheriting intensity 1.6; halation ghosted them into blocks. → cones rebuilt at intensity 1.0, halo cones 0.18 → 0.12 opacity.
+
+(g51's mothership band fix stays — that cameo had the same disease; it just wasn't the ship in the screenshots.)
+
+Files: `js/marathon-world.js` (aurora call-sites, `_buildMarathonShip` neon intensities + window bands + stripe thickness + thrusters), `js/builds/galaxy.js` (g51 → g52), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Headless verification: `mw.auroras` undefined (wisps gone); Marathon carries 4 pinstripes at 0.55/0.50 thickness, 4 window bands (was 96 window planes), 3 thrusters at uIntensity 1.0, 20 neon mats still registered for the bass tick. On-screen look pass still needed. Localhost-only, no deploy.
+
+---
+
+## g51 — 2026-08-01 — Shards DELETED, mothership dot-rows → deck bands, focused flybys forced to the far side of the title
+
+User (with screenshot circling the g50 crystal shards, the mothership light rows, and an engine at frame edge): "SHITTY RECTANGLES JUST SPIN LOOKS TERRIBLE".
+
+**1. Shards removed entirely.** Third strike (g26 built them, g50 tried the crystal treatment, still terrible) — and the honest verdict is they never had a reason to exist: random floating polyhedra are decoration with no root in the music. `_buildShards`/`_tickShards` calls commented out (functions kept in source as the revert path, g25-auroras precedent), admin `shards:` toggle + its state line removed.
+
+**2. Mothership window rows → deck bands.** The g50 dimming wasn't enough — 12 discrete strips per flank still read as christmas-light dot rows, and the CA pass still split them into red/blue dotted lines. Replaced with 4 long unbroken window bands per flank (13u each, gaps reading as bulkheads) at the same sub-bloom color.
+
+**3. Focused flybys cross the FAR side of the title.** Root cause of the point-blank engine crossings: g49 thru-passes aim at the focused title, but travel mode (g48) parks the camera only ~`showcaseDist` (~14u) behind it — so a "2–8u past the title" pass could cross ~6u from the LENS. New rule in `_spawnFlyby`: when focused, the lateral offset sign is forced so the pass point sits on the opposite side of the title from the camera (`perp·(title−camera)` sign check). From where you stand the ship still visibly cuts across/behind the song — it just can never fly through your face again.
+
+Files: `js/marathon-world.js` (init + animate shard call-sites, admin panel button + state line, `_spawnMothershipReveal` band loop, `_spawnFlyby` far-side sign), `js/builds/galaxy.js` (g50 → g51), `docs/galaxy/FILE_MAP.md` (build + scope line), this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Headless verification: `mw.shards` undefined after boot, admin panel renders without the shards button, mothership carries 8 window bands (4 per flank) instead of 24 strips, and 8 spawned focused flybys passed 2.3–25u from the focused title while never approaching the camera closer than 52.7u. Localhost-only, no deploy.
+
+---
+
+## g50 — 2026-08-01 — Model pass 1: shards become cut crystals (no more "rotating rectangles"), capital ships get visible hulls + disciplined lights
+
+User (with screenshot of two flat lavender quads near a focused title): "no those things are just rotating rectangles now it looks really badly done".
+
+**The rectangles = the g26 shards.** They were never flat planes — they're detail-0 solids (icosa/octa/tetra/cone/dodeca) with a fresnel shader — but detail-0 geometry has flat per-face normals, so fresnel evaluates to ONE color per face: a face-on octahedron rendered as a solid filled diamond. Harmless as distant glints from the origin lock; travel mode (g48) parks the camera IN the mid-tier shard band (50–130u), where they became screen-filling flat quads. Three fixes in `_buildShards`/`_tickShards`:
+
+- **Per-facet brightness variance** — a hash of the (per-face-constant) normal scales each facet 0.78–1.28×, so adjacent faces differ and the solid reads as a cut crystal.
+- **Crystal edge lines** — `EdgesGeometry` LineSegments child per shard, additive, hue-synced per-frame to the body shader's drifting hue (`setHSL` in tick), opacity rides the proximity fade.
+- **Proximity fade** — new `uFade` uniform driven from tick: 0 at ≤8u from the camera → 1 at ≥18u. A shard can never fill the windshield again.
+
+**The "christmas lights" ship identified: Mothership Reveal** (previous build's open question). `_spawnMothershipReveal` loops 12 additive window strips down BOTH hull flanks at `0x6c98ff` — bright enough that each dot bloomed individually, and the post-FX chromatic-aberration pass split the rows into the red-over-blue dotted lines in the user's screenshots. The hull (`0x1a1438` near-black `MeshBasicMaterial` boxes) is invisible against the void, so the ship rendered as light-rows floating on nothing, and the oversized engine glow sprite (14u) triggered blocky halation ghosts. Same construction school: CCS battlecruiser, frozen capital.
+
+**Capital readability pass (all three):**
+- Hulls lifted out of invisible-black: mothership `0x1a1438 → 0x2c2650`, CCS `0x2a0a48 → 0x3c1a63` + ribs `0x110422 → 0x201040`, frozen `0x12131a → 0x232532` + accent `0x1c1d28 → 0x2e3040`.
+- Edge wireframes on spine + bridge (mothership `0x5a5f9e`, CCS neon `0x6a3acc`; frozen's existing wire brightened `0x223040 → 0x3a4a66`). Wires fade with the hull via a new generic `s._syncMats` hook called from `_tickFlyby` — zero surgery on the scenario tick branches.
+- Window strips dimmed below the bloom threshold (`0x6c98ff → 0x4668a8`) — lit windows, not per-dot LEDs, and the CA pass has nothing hot to split.
+- Glows shrunk so halation stops ghosting: mothership engine 14→10, CCS engine 16→12, CCS gravity lift 22×30→17×24.
+
+Files: `js/marathon-world.js` (`_buildShards` + `_tickShards`, `_spawnMothershipReveal`, `_spawnCcsBattlecruiser`, `_spawnFrozenCapital`, `_tickFlyby` sync hook), `js/builds/galaxy.js` (g49 → g50), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Headless verification (manually-ticked frames): 32 shards all carry `uFade` + edge-line children + hueOffset; a shard parked 2u from the camera fades to 0 (edges too) while a 120u shard holds fade 1; spawned mothership carries 2 wireframes whose opacity tracks hull fade at exactly 0.85× (0.306 vs 0.36 mid-reveal), window strips `#4668a8`, hull `#2c2650`. Facet-variance and edge look need an eyeball pass on screen. Localhost-only, no deploy.
+
+---
+
+## g49 — 2026-08-01 — Select-moment pass: keyship "bell" cut, guaranteed title buzzes, roaming focus aura, near-field wisps, Chakra Petch titles
+
+User (four messages + two screenshots): "increase the chances of space ships flying by it … fly over or thru the title", "when a title is selected can we do something more or cooler", "the font for all our songs sucks", "idk how i feel aobut this ugly ass bell remove that tho", "i want the models to be improved and the background to not feel so flat skytbox like?" Also: "i love the new mobility transoport system moving from song to song tho beautiful" — travel mode stays.
+
+**1. The "bell" identified + cut.** Screenshot 1's tan bell with the blazing orange ring = the g12 **Keyship Descent** cameo (`_spawnKeyshipDescent`): khaki truncated-cone hull (`CylinderGeometry(8,14,44)`, `0x8a7e5a`) + two additive gold tori (bloom turns them into the fat orange ring) + point-glow sprite (the small dot), parked 140u in front of the camera by the ambient scenario scheduler. Removed from the ambient rotation pool — exact g43-pelican treatment; the admin "forerunner keyship descent" button still works.
+
+**2. Ships buzz the selected song — guaranteed and closer.** The g35 anchor logic already routed flybys 8–28u past a focused title; what was missing: (a) you could wait seconds for the timer, (b) passes never cut through the title. Now `_focus` pulls `_nextFlybyAt` in to +0.9–1.8s (a ship shows up as/just after you arrive), 40% of focused flybys shave the title at 2–8u ("over or thru"), and the concurrent-flyby cap while focused goes 4 → 5.
+
+**3. Roaming focus aura (cooler select).** Featured titles have g27 auras; selecting any OTHER title got nothing. New `_buildFocusAura`: one reusable soft halo sprite + 16-particle orbital ring that snaps to whatever non-featured title is focused, fades in/out (never pops), halo scaled to title width ×2.1, orbit speed breathing with the smoothed bass. Ticked at the end of `_tickTitleAuras`.
+
+**4. Near-field wisps (background depth).** Travel mode exposed the flatness: the nebula skybox sits at r=600 and nothing lived in the r=95–240 band the camera now flies through. Discovered mid-build: the whole g23 aurora system was **disabled since g25** (`_buildAuroras` + `_tickAuroras` commented out — the 5 big far ribbons competed with titles, and the disable comment said "re-enable later if a different approach calls for them"). This is that approach: `_buildAuroras(nearOnly)` re-enabled building ONLY 8 new dim wisp ribbons inside the travel shell (r=95–240, w 44–82, `near: true` flag; new per-ribbon `uAlpha` uniform 0.12–0.14 vs the far ribbons' 0.22). The 5 far ribbons stay off exactly as g25 decided. `_tickAuroras` re-enabled in animate. Every flight now slides cloud layers across the sky at visibly different rates.
+
+**5. Chakra Petch titles (font).** Baked in-world titles: Space Grotesk 800 → **Chakra Petch 700** (squared techno display face — reads sci-fi HUD, strong big-size silhouettes for the glitch/hue/breath shader effects). `_makeTitleTexture` font strings centralized in a `FONT()` helper with Space Grotesk fallback; new `_rebakeTitles()` re-bakes all textures AND rebuilds each plane at the same world width with the new texture aspect (glyph metrics differ) once `document.fonts` lands the face — guarded by `document.fonts.check` so warm loads don't double-bake. Focus card `.tg-focus-title` switched to Chakra Petch 700 uppercase to match the in-world stars (buttons/meta stay lowercase Grotesk/Mono). Google Fonts link += `Chakra+Petch:wght@600;700`.
+
+**Deferred — model overhaul (g50 candidate).** "these models need to be heavily improved" (screenshot 2: long capital hull with rainbow-dot running lights + blocky red engine glow). That ship wasn't conclusively identified (Marathon landmark's windows are uniform amber `0xffce80`, distress beacon is disciplined red/amber/white — the rainbow-dot builder is one of the ~30 cameo capitals). Every ambient spawn flashes its name in the HUD ("spawned: …") — catch the name next time it appears and the remodel can be surgical. A proper fleet-wide pass (light discipline, layered engine flames, hull paneling) deserves its own build with eyes on screen.
+
+Files: `js/marathon-world.js` (scenario pool, `_spawnFlyby`, flyby cap, `_focus` buzz, `_buildFocusAura` + `_tickTitleAuras` tail, aurora SETUPS + `uAlpha`, `_makeTitleTexture` + `_rebakeTitles` + init font hook), `index.html` (Google Fonts link, `.tg-focus-title` CSS), `js/builds/galaxy.js` (g48 → g49), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Headless-pane verification (manually-ticked frames): 8 wisps built, all inside r=260, uAlpha 0.12–0.14; focus aura fades in on a non-featured title (halo opacity 0.35 after 40 ticks, positioned exactly on the title mesh); Chakra Petch confirmed loaded + all 72 title textures baked non-zero; selecting a title pulled the next flyby to +1.29s; camGoal stayed finite. Visual taste pass (wisp brightness, aura size, font feel at scale) needs eyes on screen. Localhost-only, no deploy.
+
+---
+
+## g48 — 2026-08-01 — TRAVEL MODE: the camera flies to the song. The galaxy becomes a place you move through, not a poster you look at
+
+User: "none ofr those change the world or explorability or make the portfolio any cooler i dont think" (after g47's feedback-honesty pass and a list of smaller ideas).
+
+Correct critique — every prior galaxy build kept the b109 cockpit lock: camera bolted to the origin, drag-look only. Nothing can feel explorable when you can never move. g48 unbolts it.
+
+**How it works:**
+
+- New camera anchor `this._camBase` (Vector3). The g21/g26 idle float — previously computed around a hardcoded origin — now rides on top of the anchor, and the camera-relative look target shifts by the same offset so forward direction is unchanged.
+- **Click a title → the camera glides through the field to it.** `_focus` in travel mode computes `_camGoal = basePos − dir · showcaseDist` (the existing viewport-fit standoff math, so the title arrives at the same screen size the old fly-in produced) and the title STAYS at its constellation slot — the world no longer rearranges itself around a static viewer; the viewer moves through the world. Anchor eases toward the goal at `dt*1.6` (exponential: fast leave, soft arrival, ~2s across the field). En route, every landmark parallaxes — the depth work from g21–g46 finally gets a moving eye to perform for.
+- **Gaze autopilot**: while traveling, yaw/pitch steer continuously toward the focused title from the *moving* camera position (shortest-arc yaw wrap, `dt*2.2`). Any `pointerdown` hands the stick back instantly (same pattern as the scenario follow-cam kill) — the positional glide continues, you just look where you want. This deliberately avoids the g18 look-mode promotion trap: no promotion states, just continuous correction with a kill switch.
+- **Release = you stay parked out there.** `_release` doesn't move the camera. Click the next title from wherever you are — hop star to star through the inside of the field. That IS the explorability.
+- **Prev/next travel too**: `_syncFocusToCurrent` in travel mode routes through `_focus` (flight + autopilot) instead of the g18 gaze-snap.
+- **Escape hatches**: admin `travel: ON/OFF` toggle (OFF restores the exact b109 cockpit-lock behavior and glides you home); `reset camera` now also glides the anchor back to origin.
+- Music: unchanged wiring — the song starts at click, so it soundtracks the flight and is audibly going by the time you arrive.
+
+Focused-title screen framing in travel mode comes from camera arrival, not the title flying forward — the title-loop `isFocus && focusMode === 'fly'` branch already skips travel, no change needed there.
+
+Hint copy: "drag to look around · click a title to fly there & play it".
+
+Files: `js/marathon-world.js` (init state, `_focus` travel branch, animate anchor-glide + gaze autopilot + camera offset, `_onPointerDown`, `_release`, `_syncFocusToCurrent`, `_adminResetCamera`, new `_adminToggleTravel`, admin button + dispatch, hint strings), `js/builds/galaxy.js` (g47 → g48), `docs/galaxy/FILE_MAP.md` (build + architecture summary), this CHANGELOG.
+
+**NaN guard (found during verification):** a 0×0 canvas (hidden pane / mid-boot resize) makes `camera.aspect` NaN, which flowed through the FOV math into `showcaseDist`. In fly mode that quietly ate one title's position; in travel mode it poisoned `_camBase` → permanent black screen. `showcaseDist` now clamps to 18 via `isFinite` at the source (protects both modes).
+
+Validation: node -c on .mjs copy → OK. Headless-pane verification via manually-ticked animate frames (rAF is frozen in a hidden pane; each tick followed by cancelAnimationFrame so no stacked loops), aspect patched to 16:9 to dodge the 0×0-canvas NaN: click set goal exactly `standoff` short of the title along the approach line ([52.1,11.5,−34.8] for title [63.5,14,−42.4], standoff 14); anchor glided origin → 2.2u from goal over ~170 ticks (goal-clear still pending in the exponential tail — expected); gaze yaw 0.97 vs ideal 0.98 (looking at the title); release parked the camera in place; toggle OFF glided home (62u → 13u in 80 ticks). Real-feel pass (motion comfort, arrival framing, speed) needs eyes on screen — tune `1.6` (glide) / `2.2` (gaze) to taste. Localhost-only, no deploy.
+
+---
+
+## g47 — 2026-08-01 — "Reads as a music player" pass: honest focus-card state + bio line + playing title pulses with the bass
+
+User: "no way to tell its a music libarry also upon pressing any song title it doesnt automatically play the song, i need to still press the polay button" / "people should click my sogn and it plays and maybe we write lil bios".
+
+**Diagnosis first.** Click-to-play was already wired (`_focus → ctx.onPlay → playIndex → audio.play()` all sync inside the gesture) and verified working on localhost. What was broken is the *feedback*: the focus card showed a static "play" button + a "— now playing —" kicker regardless of actual audio state. Click a title → seconds of buffering silence + a play button staring at you = "it didn't play, I have to press play." Worse, pressing that button fired `onPlay` again, resetting `audio.src` and restarting the network load on a track that was already coming.
+
+**Four changes:**
+
+1. **Focus card reflects the real audio state** (the complaint fix). `_updatePlayer` (runs every frame) now drives the kicker + action button from the audio element itself: `— loading —`/`loading…` while `!paused && readyState < 3`, `— now playing —`/`pause` once audible, `— paused —`/`play` when paused. One source of truth — no separate state flag.
+2. **Card button toggles instead of restarting.** If the focused track is already current, the button calls `onTogglePlay` (pause/resume). `onPlay` + `_ensurePlay` only fire when focusing a different track.
+3. **Bio line on the focus card.** New `#tg-focus-bio` div between meta and actions; shows `track.description` from config.json when non-empty, `display:none` when empty. CSS added next to the other `tg-focus` rules in index.html (galaxy HUD block): Space Grotesk 15px, #b9bfc9, max 52ch. All descriptions are currently empty — the mechanism ships first, content comes from the artist.
+4. **The playing title visibly sings.** In the title loop, the current track's title (when audio is actually audible) gets `uBreath += 0.10 + bass * 0.35` — brightness pulses with the live bass band (analyser already sampled per frame) — and an opacity floor of 0.75 when nothing is focused, so the star you're hearing is the brightest thing in the sky. Zero shader changes; rides the existing b192 breath channel.
+
+Plus the hint copy now says what the site is: "drag to look around · click a title to play it" (both the boot string and the `_release` restore string).
+
+**Not a bug after all (documented for the record):** R2 production audio is healthy — 200 + `Access-Control-Allow-Origin: https://cantmute.me` on probe. An earlier "all 72 files 403" scare was Python's urllib user-agent getting bot-blocked by Cloudflare; curl with a browser UA passes. `audio-mp3/` remains git-ignored, so the b144 local fallback does nothing in production — R2 is the only prod source.
+
+Files: `js/marathon-world.js` (focus card HTML + action handler, `_updatePlayer` state sync, `_focus` bio population, title-loop singing pulse, two hint strings), `index.html` (`.tg-focus-bio` CSS in the galaxy HUD block), `js/builds/galaxy.js` (g46 → g47), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Localhost-verified in a live (headless-pane) browser: card shows "pause"/"— now playing —" while audible and "play"/"— paused —" when paused (via manual `_updatePlayer` ticks — rAF doesn't fire in a hidden pane), bio hidden when empty, new hint copy live, `_readBass()` returning 0.21 live so the singing pulse has real input. The visual pulse itself needs an on-screen session to eyeball. Note: the galaxy module is cached hard by Chromium (plain `<script src>`, the b221 problem) — hard-reload (Ctrl+Shift+R) to see g47. Localhost-only, no deploy.
+
+---
+
 ## g46 — 2026-05-25 — Halo host moon: pushed further out + soft glow halo + improved rocky textures (mare patches, sharper craters, surface bumps)
 
 User (with screenshot of the g45 moon working but bare): "a bit furthrer out and give it a tiny moon glow yknow and fix texturing a bit".

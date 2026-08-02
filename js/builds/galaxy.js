@@ -6,4 +6,4 @@
    on different scenes never race over a shared file.
    Format: g### (incremented per galaxy build).
    ========================================================= */
-window.BUILD_GALAXY = 'g46';
+window.BUILD_GALAXY = 'g52';
