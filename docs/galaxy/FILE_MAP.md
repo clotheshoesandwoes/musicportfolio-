@@ -2,8 +2,8 @@
 
 **Scope:** the main page at `/` (and its alias `/world`). Track titles drifting in a 3D void, with permanent landmarks (Marathon ship, Halo ringworld, distant core), audio-reactive shaders, and 30+ scripted scenarios spawnable via the `~` admin panel.
 
-**Build:** g52
-**Updated:** 2026-08-01
+**Build:** g54
+**Updated:** 2026-08-02
 
 ## Scope-owned files (this chat freely edits these)
 - [js/marathon-world.js](../../js/marathon-world.js) — the entire WebGL galaxy scene. Mounts as `window.MarathonWorld = { init, destroy }` and is booted by `index.html`'s `bootMarathonWorld()`. Builds nebula skybox, starfield, distant core (Saturn-observatory), drift haze, fog patches, fibonacci-sphere title placement, fragments, streaks, satellites (shards removed g51), Halo ringworld landmark, Marathon ship landmark, Traveler overhead landmark, nav buoys, flyby ship pool (longsword/banshee/pelican/forerunner), bolt particles, post-FX stack (bloom + CA + scanlines + grain + vignette + halation + DoF + god-rays + lens dirt + anamorphic flares), HUD, admin panel, scripted scenarios. Locked-camera at origin, drag-look only.

@@ -2876,6 +2876,18 @@
     .tg-brand{ font-size:15px; }
     .tg-focus{ padding:0 0 10vh 6vw; }
     .tg-focus-title{ font-size:clamp(36px, 11vw, 72px); }
+    /* g53 — de-clutter: the three external-site links crowd a 375px top
+       bar; socials + nav stay. */
+    .tg-sites{ display:none; }
+    /* g54 — compact the top-left stack (it ate ~25% of the screen) and
+       size controls for thumbs instead of cursors. */
+    .tg-meta{ font-size:10px; opacity:.7; }
+    .tg-player{ margin-top:8px; max-width:none; padding-right:96px; }
+    .tg-player-controls{ gap:10px; margin-bottom:8px; }
+    .tg-pp-btn{ padding:10px 14px; }
+    .tg-player-progress{ height:6px; }
+    .tg-nav{ margin-top:10px; gap:18px; }
+    .tg-nav a, .tg-nav button.tg-admin-link{ font-size:13px; padding-bottom:4px; }
     /* b186: admin drawer on mobile — same scale-down + tiny-blur treatment */
     .mw-admin{
       left:16px; right:16px; width:auto;
@@ -2902,6 +2914,11 @@
       transform:translateX(3px);
     }
     .mw-admin-label{ font-size:10.5px; }
+  }
+  /* g53 — no hover on touch devices; the bottom-right hover readout can
+     never show anything useful there. */
+  @media (pointer: coarse){
+    .tg-hover{ display:none; }
   }
 
   @media (max-width:900px){

@@ -4,6 +4,44 @@ Per-scene history for the main page (`/`) starting at the post-split point. Buil
 
 ---
 
+## g54 — 2026-08-02 — Mobile pass 2: stuck-hover ghost bug fixed + top HUD compacted for thumbs
+
+User (screenshot of the phone experience): "this the mobile experience idk how can u make it better" — showing a stack of ghosted "CONVINCED" copies mid-screen and the top-left HUD eating ~25% of the viewport.
+
+**1. The ghost stack diagnosed and fixed.** Reproduced live in an emulated 375×812 viewport with a canvas-pixel capture: the ghosting is the *hover* glitch (`gAmt = 0.18 + uHover×1.10`) running at full crank permanently. On touch there is no mousemove, so once a tap (or the g53 fat-finger snap) set `this.hovered`, nothing ever cleared it — the tapped title sat in maximum glitch displacement forever. `_onPointerUp` now clears `hovered` (+ the readout) once any tap/drag resolves on the mobile tier. Also restructured the tap branch (release no longer early-returns) so the clear covers every path, including drag-ends. Desktop mouse behavior unchanged — `_onMove` re-raycasts continuously there.
+
+**2. Top HUD compacted + thumb-sized (index.html ≤760px block, CSS only).** Meta line (session · tracks · build) down to 10px at 70% opacity; player block pulled up (margin 14→8) and allowed full width minus the right column; transport buttons grown to ~44px touch targets (padding 10px 14px, gap 10); progress bar 3px → 6px so it's actually seekable by thumb; nav links up to 13px with more padding and gap. Net: shorter stack, bigger targets.
+
+Files: `js/marathon-world.js` (`_onPointerUp`), `index.html` (g54 lines in the ≤760px galaxy CSS block), `js/builds/galaxy.js` (g53 → g54), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Verified live at 375×812: synthetic tap 20px off "Convinced" → fat-finger snap → focused → `hovered` cleared at pointerup → `uHover` decayed to 0 within 40 ticks; canvas-pixel capture shows the title rendering as clean solid letters (the stuck-glitch ghost stack from the user's screenshot is gone). CSS: buttons 43px wide (10px/14px padding), progress 6px, nav 13px, meta 10px, full top-left stack down to 189px. Real-phone feel check still recommended. Localhost-only, no deploy.
+
+---
+
+## g53 — 2026-08-02 — Mobile tier: perf pipeline for phones + fat-finger tap assist + HUD de-clutter
+
+User: "the mobile cantmute.me site is kinda shitty can we pls make it better".
+
+Diagnosis: the galaxy had ZERO mobile branches — phones ran the identical desktop pipeline (full post-FX stack, all particle systems, DPR 1.6, desktop ship traffic) and precise-raycast-only tapping. "Shitty" = slideshow framerate + untappable titles, not the design.
+
+**1. Mobile tier detection** (`this.mobileTier`): coarse pointer OR viewport < 820px, resolved once at init before the renderer/builders.
+
+**2. Performance:**
+- Pixel ratio cap 1.6 → **1.15** on mobile (≈2× fewer shaded pixels on a 3× phone screen).
+- Post-FX: anamorphic flares, lens dirt, god-rays, halation OFF (uniform toggles zeroed in `_setupComposer`; `_autoHalo` already defaults false so the b172 auto-cycle can't re-enable halation). Color grade, scanlines, grain, vignette stay — cheap, they carry the look. Bloom stays (identity).
+- Particle counts: foreground dust 500 → 220, text fragments 70 → 28, fog patches 18 → 10.
+- Traffic: flyby cap 5/3 → 3/2 (focused/idle), scenario scheduler gaps ×1.7.
+
+**3. Fat-finger tap assist** (`_raycast`): on a miss, mobile snaps to the nearest on-screen title within ~36px of the tap (projected screen-space distance). Thumbs can't hit a thin drifting plane; this alone makes browsing feel functional on a phone.
+
+**4. HUD de-clutter (index.html galaxy CSS):** `.tg-sites` (three external site links) hidden ≤760px — socials + catalog/scenes nav stay; `.tg-hover` readout hidden on coarse pointers (hover never fires there).
+
+Files: `js/marathon-world.js` (init detection + DPR, `_setupComposer` toggles, 3 particle counts, flyby cap, scenario gaps, `_raycast` assist), `index.html` (two CSS blocks), `js/builds/galaxy.js` (g52 → g53), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Verified live in an emulated 375×812 touch viewport: mobileTier true, pixelRatio 1.15, flares/dirt/god-rays/halation uniforms all 0 (grade still on), dust 220 / fragments 28 / fog 10, `.tg-hover` + `.tg-sites` computed display:none, and a tap aimed 25px off a title snapped hover onto it ("Wait / Weight"). Desktop regression pass at 1280×720: mobileTier false, full counts (70/500), all FX on. Real-device feel (frame rate, tap comfort) still deserves a check on an actual phone. Localhost-only, no deploy (deploy of g47–g52 commit still parked pending GitHub collaborator invite acceptance).
+
+---
+
 ## g52 — 2026-08-01 — Wisps removed + Marathon landmark identified as the real "christmas ship" and disciplined
 
 User (screenshot circling a green rectangular patch and a vertical amber smudge, with the dotted ship in frame yet again): "bro these fucking space rectangles what are they are theyre still fucked."

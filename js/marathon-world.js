@@ -414,8 +414,16 @@ const MarathonWorld = {
     this.adminEl = this._buildAdminPanel();
     container.appendChild(this.adminEl);
 
+    // g53 — mobile tier. Phones were running the identical desktop pipeline
+    // (every post-FX pass, all particle systems, DPR 1.6) — the site read as
+    // "shitty" on mobile because it was a slideshow, not because of the
+    // design. Coarse pointer OR narrow viewport = mobile tier: lower DPR,
+    // expensive post passes off, particle counts cut, calmer ship traffic,
+    // fat-finger tap assist.
+    this.mobileTier = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || window.innerWidth < 820;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.mobileTier ? 1.15 : 1.6));
     this.renderer.setClearColor(0x040406, 1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -692,7 +700,7 @@ const MarathonWorld = {
   _buildFogPatches(){
     // 18 large soft sprites at varying depths — gives the void a sense of
     // moving air without going full smoke-effect.
-    const N = 18;
+    const N = this.mobileTier ? 10 : 18;   // g53 — fewer overdraw-heavy patches on phones
     const tex = this._makeFogPatchTexture();
     this.fogPatches = [];
     for (let i = 0; i < N; i++) {
@@ -759,7 +767,7 @@ const MarathonWorld = {
     const all = this.ctx.tracks || [];
     if (!all.length) return;
     const charset = '0123456789!@#$%/:_-=*?<>[]{}|';
-    const N = 70;
+    const N = this.mobileTier ? 28 : 70;   // g53 — fewer baked-canvas fragments on phones
     this.fragments = [];
     for (let i = 0; i < N; i++) {
       const r = 200 + Math.random() * 280;
@@ -5460,7 +5468,9 @@ const MarathonWorld = {
       // so ships visibly stream around / across / past the focused title.
       const focused = !!this.focused;
       const activeFlybys = this.flybyShips.filter(s => s.active && !s.scenario).length;
-      const cap = focused ? 5 : 3;   // g49 — one more concurrent ship around a focused title
+      // g49 — one more concurrent ship around a focused title.
+      // g53 — mobile halves the traffic (draw calls + the per-ship ticks).
+      const cap = this.mobileTier ? (focused ? 3 : 2) : (focused ? 5 : 3);
       if (activeFlybys < cap) {
         this._spawnFlyby();
         this._nextFlybyAt = focused
@@ -5485,9 +5495,12 @@ const MarathonWorld = {
       return;
     }
     this._fireRandomScenario();
+    // g53 — scenarios are the heaviest ambient spawns (multi-ship, smoke
+    // pools, ephemeral meshes); mobile stretches the gaps ~1.7×.
+    const mob = this.mobileTier ? 1.7 : 1;
     this._nextScenarioAt = this.focused
-      ? t + 4 + Math.random() * 5     // 4–9s when focused
-      : t + 10 + Math.random() * 8;   // 10–18s when not
+      ? t + (4 + Math.random() * 5) * mob     // 4–9s when focused (desktop)
+      : t + (10 + Math.random() * 8) * mob;   // 10–18s when not (desktop)
   },
 
   _fireRandomScenario(){
@@ -8307,7 +8320,7 @@ const MarathonWorld = {
     // near distance (r=6) the closest particles read as big chunky boxes.
     // Now: soft circular sprite texture + smaller size + ~5× drift speed
     // so they visibly stream past the camera instead of just bobbing.
-    const N = 500;
+    const N = this.mobileTier ? 220 : 500;   // g53 — fewer dust motes on phones
     const positions = new Float32Array(N * 3);
     const drift = [];
     for (let i = 0; i < N; i++) {
@@ -8509,6 +8522,17 @@ const MarathonWorld = {
       fragmentShader: POST_FRAGMENT,
     });
     this.composer.addPass(this.postPass);
+    if (this.mobileTier) {
+      // g53 — cut the expensive cinematic branches on phones. Color grade,
+      // scanlines, grain and vignette stay (cheap, they carry the look);
+      // anamorphic flares, lens dirt, god-rays and halation are desktop
+      // luxuries. (_autoHalo already defaults false, so nothing re-enables
+      // halation unless admin explicitly does.)
+      this.postPass.uniforms.uFlaresOn.value = 0;
+      this.postPass.uniforms.uDirtOn.value = 0;
+      this.postPass.uniforms.uGodraysOn.value = 0;
+      this.postPass.uniforms.uHaloStyle.value = 0;
+    }
   },
 
   /* ---------- Lens dirt texture (procedural greasy fingerprint mask) ---------- */
@@ -8670,8 +8694,17 @@ const MarathonWorld = {
     if (!this.drag.active) return;
     this.drag.active = false;
     if (this.drag.totalPx < 10) {
-      if (this.focused) { this._release(); return; }
-      if (this.hovered) this._focus(this.hovered);
+      if (this.focused) { this._release(); }
+      else if (this.hovered) this._focus(this.hovered);
+    }
+    // g54 — touch has no hover: clear it once the tap/drag resolves. Without
+    // this, the last tapped (or fat-finger-snapped) title kept uHover at
+    // full crank forever — the stacked ghost-"CONVINCED" screenshot was a
+    // title stuck in max hover-glitch displacement.
+    if (this.mobileTier) {
+      this.hovered = null;
+      const hoverEl = document.getElementById('tg-hover');
+      if (hoverEl) hoverEl.textContent = '';
     }
   },
 
@@ -8695,7 +8728,25 @@ const MarathonWorld = {
     this.ray.setFromCamera(this.mouse.ndc, this.camera);
     const meshes = this.titles.map(t => t.mesh);
     const hits = this.ray.intersectObjects(meshes, false);
-    const hit = hits[0]?.object?.userData;
+    let hit = hits[0]?.object?.userData;
+    // g53 — fat-finger assist: on the mobile tier, a miss snaps to the
+    // nearest on-screen title within ~36px of the tap. Thumbs can't hit a
+    // thin drifting plane; requiring pixel-precise raycasts made the whole
+    // site feel broken on phones.
+    if ((!hit || !hit.isTitle) && this.mobileTier) {
+      const w = this.renderer.domElement.clientWidth || 1;
+      const h = this.renderer.domElement.clientHeight || 1;
+      let best = 36 * 36, snapped = null;
+      this.titles.forEach(n => {
+        const v = n.mesh.position.clone().project(this.camera);
+        if (!(v.z > -1 && v.z < 1)) return;
+        const dx = (v.x - this.mouse.ndc.x) * w * 0.5;
+        const dy = (v.y - this.mouse.ndc.y) * h * 0.5;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best) { best = d2; snapped = n; }
+      });
+      if (snapped) hit = snapped.mesh.userData;
+    }
     const hoverEl = document.getElementById('tg-hover');
     if (hit && hit.isTitle) {
       this.hovered = this.titles.find(t => t.index === hit.index);
