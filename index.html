@@ -2429,6 +2429,11 @@
   }
   .mw-hud{
     position:fixed; inset:0; z-index:2; pointer-events:none;
+    /* g55 — explicit size, same workaround .mw-canvas already uses: an
+       ancestor re-anchors fixed positioning to a zero-height box, so
+       inset:0 alone computed to height:0 (bottom-anchored HUD children have
+       been painting off-screen because of this). dvh preferred on mobile. */
+    width:100vw; height:100vh; height:100dvh;
     font-family:'Space Mono','SF Mono',ui-monospace,Menlo,monospace;
     font-size:12px; letter-spacing:.04em; line-height:1.5; color:#9aa0aa;
   }
@@ -2876,9 +2881,9 @@
     .tg-brand{ font-size:15px; }
     .tg-focus{ padding:0 0 10vh 6vw; }
     .tg-focus-title{ font-size:clamp(36px, 11vw, 72px); }
-    /* g53 — de-clutter: the three external-site links crowd a 375px top
-       bar; socials + nav stay. */
-    .tg-sites{ display:none; }
+    /* g56 — the g53 "de-clutter" hid seankani.com / gridon.life here; user
+       wants them present on every size. Compact instead of hidden. */
+    .tg-sites a{ font-size:11px; }
     /* g54 — compact the top-left stack (it ate ~25% of the screen) and
        size controls for thumbs instead of cursors. */
     .tg-meta{ font-size:10px; opacity:.7; }
@@ -2920,6 +2925,10 @@
   @media (pointer: coarse){
     .tg-hover{ display:none; }
   }
+
+  /* g57 — the g55 mobile feed CSS removed with the feed itself. The .mw-hud
+     explicit-height fix from that build stays (it repaired a real layout
+     bug that predates the feed). */
 
   @media (max-width:900px){
     main.editorial{ padding:0 18px 64px; }

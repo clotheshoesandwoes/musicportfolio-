@@ -4,6 +4,67 @@ Per-scene history for the main page (`/`) starting at the post-split point. Buil
 
 ---
 
+## g57 — 2026-08-02 — Mobile feed REVERTED: phones get the full galaxy back
+
+User: "i hate this new list u made what the fuck bro  no i wanterd it to be cool nice explroation and fitted wel to the screen not add this huge ugly scroll that REMOVES THE ENTIRE EXPERIENCE".
+
+Clear brief correction — the ask was always "make the galaxy EXPERIENCE work well on a phone," not "replace it with a library list." The g55 feed removed the thing the site is. Deleted outright (git history is the revert path — no dead code kept):
+
+- init feed-build call + title-mesh hiding — gone; mobile renders all 72 titles in 3D again.
+- `_buildMobileFeed` method — deleted (75 lines).
+- `_updatePlayer` feed/bar sync block, animate scroll-drift block, `_bassNow` stash — gone.
+- `_buildTitleAuras` / `_buildFocusAura` / `_syncFocusToCurrent` mobile early-returns — removed; auras, focus flights, and prev/next travel all work on mobile again.
+- index.html: all `.tg-mfeed` / `.tg-mrow` / `.tg-mbar` / `.tg-mobile` CSS removed.
+
+**What mobile keeps (the invisible wins):** g53 perf tier (DPR cap, expensive FX off, reduced counts, calmer traffic), g53/g56 tap-snap (36px on touch — titles are actually hittable, tap → fly → play), g54 stuck-hover fix + compact HUD + thumb-size controls, g55's `.mw-hud` explicit-height fix (real pre-existing bug — also keeps the bottom hint on-screen), g56 restored site links.
+
+Mobile now = the same travel-mode galaxy as desktop, tuned to run and touch well. "Fitted well to the screen" beyond this (title scale on small viewports, FOV, HUD footprint) — awaiting the user's direction with the working baseline back.
+
+Files: `js/marathon-world.js`, `index.html`, `js/builds/galaxy.js` (g56 → g57), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK; zero `mfeed`/`tg-mrow`/`tg-mbar`/`_feedPitch` references remain. Verified mobile 375×812: feed + bar gone, 72 titles visible in 3D, 14 featured auras + focus aura rebuilt, perf tier intact (DPR 1.15, flares 0, dust 220), and a synthetic tap 22px off "Wait / Weight" snapped → focused → audio playing → camera traveling. Desktop 1280×800: full FX, 72 titles, travel mode, no feed. Localhost-only, no deploy.
+
+---
+
+## g56 — 2026-08-02 — Site links restored on small screens + click-snap made universal
+
+User (screenshot of a narrow desktop window in sphere mode, red marks over the top-right): "missing other links like seankani.com and gridon.life / also idk when i click on asong title it SHOULD auto play the song".
+
+**1. `.tg-sites` restored everywhere.** The g53 "de-clutter" hid seankani.com / gridon.life / kani.studio under 760px — user wants them present. Now compacted (11px) instead of hidden.
+
+**2. Click-snap for every pointer.** The screenshot state exposed a tier mismatch: a desktop window narrowed below 760px gets the mobile *CSS* but keeps the desktop *JS* paradigm (mobileTier is captured at init — no feed, no fat-finger assist). Aiming a cursor at thin drifting 3D titles with zero tolerance means near-miss clicks do nothing, which reads as "clicking doesn't play." The g53 snap assist in `_raycast` is now universal: touch keeps the 36px radius, fine pointers get a tight 20px. Click near a title → it resolves, travels, plays.
+
+Known limitation, deliberately not engineered around: the mobile/desktop paradigm (feed vs sphere) is chosen once at init. Resizing across the boundary mid-session keeps the loaded paradigm until reload — switching live would mean tearing down/rebuilding the feed, auras, and title visibility mid-audio for an edge case.
+
+Files: `js/marathon-world.js` (`_raycast` snap gate + radius), `index.html` (`.tg-sites` rule), `js/builds/galaxy.js` (g55 → g56), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Verified: desktop 1280×800 (mobileTier false) — aiming 15px off "Shoebox" snaps hover onto it, 60px off resolves nothing (20px radius respected); phone 375×812 — `.tg-sites` visible with all three links at 11px on-screen, feed intact at 72 rows. Localhost-only, no deploy.
+
+---
+
+## g55 — 2026-08-02 — MOBILE SIGNAL FEED: phones get their own native form of the galaxy
+
+User: "nah like overall experienedc just aint it how to make it better on mobile".
+
+Correct — polishing the desktop paradigm on a phone was never going to land. The 360° drag-look sphere through a 375px keyhole means tiny scattered words, aimless swiping, and an interaction model that fights every phone instinct. g55 gives mobile its own form of the same identity instead of a worse copy of the desktop one.
+
+**The paradigm:** the galaxy keeps rendering as the living world (nebula, starfield, dust, fragments, landmarks, flybys — all the g53-tier cheap versions), and the LIBRARY becomes a vertical feed of big Chakra Petch titles layered over it:
+
+- **`_buildMobileFeed()`** (mobile tier only; `.tg-mobile` class on the HUD root gates CSS). Sections mirror the sphere's tiers — `new` → `featured` → `archive`, newest first within each, tiny lowercase mono section labels. Rows are `<button>`s: 26px Chakra Petch uppercase title + year in mono.
+- **Tap = play instantly** (`onPlay` + `_ensurePlay`, inside the tap gesture).
+- **Scroll IS travel**: the feed's scroll position maps to camera pitch (+0.22 → −0.22) and yaw (0 → 0.9 rad); animate lerps gaze toward those targets, so digging deeper into the catalog visibly pans + tilts the galaxy behind the list.
+- **The playing row sings**: `.is-playing` gets white + a text-glow whose radius rides the live bass band (`--mpulse` CSS var set per frame from `_readBass`, stashed as `this._bassNow` in animate). Row auto-scrolls into view on track change.
+- **Bottom now-playing bar** in thumb reach: title, time, play/pause, next, seekable hairline progress — synced every frame in `_updatePlayer` from the audio element (same one-source rule as g47). Safe-area padded.
+- **Desktop untouched.** On mobile: title meshes hidden (`visible = false` — the sphere becomes backdrop data), `_buildTitleAuras`/`_buildFocusAura` early-return (no orphan halos), `_syncFocusToCurrent` early-returns (prev/next changes audio only — no camera flights at invisible titles), top-left player block + hint + hover hidden via `.tg-mobile` CSS (brand/meta/nav + socials stay, z-indexed above the feed so they remain tappable).
+
+Files: `js/marathon-world.js` (feed build call + title hiding in init, `_buildMobileFeed`, `_updatePlayer` feed/bar sync, animate bass stash + scroll-drift lerp, three early-return gates), `index.html` (g55 CSS block: feed, rows, sections, bar, z-index gating), `js/builds/galaxy.js` (g54 → g55), `docs/galaxy/FILE_MAP.md`, this CHANGELOG.
+
+Validation: node -c on .mjs copy → OK. Verified live at 375×812 (touch emulation): feed built with 72 rows under new/featured/archive labels, all title meshes hidden, desktop player block display:none, nav links still hit-testable through the feed's transparent top padding; tapping row idx 2 started audio (paused:false), bar title read "odst", row got `.is-playing`; scrolling to 70% set the yaw target to 0.63 and the camera lerped toward it. Desktop regression at 1280×800: mobileTier false, no feed/bar, 72 title meshes visible, desktop player intact. Real-phone pass (scroll feel, row sizes, bar reachability) is the remaining check. Localhost-only, no deploy.
+
+**Hotfix (same build, found from the user's "i dont like this" screenshot — feed died into blackness after 3 rows):** `.mw-hud` computed to **height 0**. Its `position:fixed; inset:0` is re-anchored by an ancestor to a zero-height containing block — the exact quirk `.mw-canvas` already works around with explicit `width:100vw;height:100vh`. Consequences before the fix: the feed (`inset:0` inside the hud) collapsed to a 208px scrollport whose bottom mask-fade landed mid-screen (3 visible rows dissolving into void), the bottom bar anchored to a phantom bottom, and — dormant for months — the bottom-anchored `.tg-bl` hint and `.tg-br` hover readout have been painting off-viewport on desktop this whole time. Fix: `.mw-hud` gets explicit `width:100vw; height:100vh` (+ `100dvh` for mobile URL bars), canvas-precedent style. Re-verified: hud 812px, feed clientHeight 812, 14 rows in the viewport, bar flush at the true bottom; desktop 1280×800 hud 800px and the "drag to look around" hint on-screen 24px from the bottom — restored intended behavior, not a regression.
+
+---
+
 ## g54 — 2026-08-02 — Mobile pass 2: stuck-hover ghost bug fixed + top HUD compacted for thumbs
 
 User (screenshot of the phone experience): "this the mobile experience idk how can u make it better" — showing a stack of ghosted "CONVINCED" copies mid-screen and the top-left HUD eating ~25% of the viewport.

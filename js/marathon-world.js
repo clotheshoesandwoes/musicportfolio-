@@ -474,6 +474,11 @@ const MarathonWorld = {
     this._buildNavBuoys();
     this._buildNeuronThreads();
 
+    // g57 — the g55 mobile feed is GONE ("i hate this new list … it REMOVES
+    // THE ENTIRE EXPERIENCE"). Mobile is the full 3D galaxy again — travel,
+    // titles, everything — running on the g53 perf tier with the g53/g56
+    // tap-snap so titles are actually hittable by thumb.
+
     this.clock = new THREE.Clock();
     this.ray = new THREE.Raycaster();
 
@@ -8729,14 +8734,16 @@ const MarathonWorld = {
     const meshes = this.titles.map(t => t.mesh);
     const hits = this.ray.intersectObjects(meshes, false);
     let hit = hits[0]?.object?.userData;
-    // g53 — fat-finger assist: on the mobile tier, a miss snaps to the
-    // nearest on-screen title within ~36px of the tap. Thumbs can't hit a
-    // thin drifting plane; requiring pixel-precise raycasts made the whole
-    // site feel broken on phones.
-    if ((!hit || !hit.isTitle) && this.mobileTier) {
+    // g53 — fat-finger assist: a miss snaps to the nearest on-screen title.
+    // g56 — now universal: mouse users in small windows were also aiming at
+    // thin drifting planes with zero tolerance, and near-miss clicks doing
+    // nothing read as "clicking a title doesn't play it." Touch keeps the
+    // generous 36px radius; pointers get a tight 20px.
+    if (!hit || !hit.isTitle) {
       const w = this.renderer.domElement.clientWidth || 1;
       const h = this.renderer.domElement.clientHeight || 1;
-      let best = 36 * 36, snapped = null;
+      const snapPx = this.mobileTier ? 36 : 20;
+      let best = snapPx * snapPx, snapped = null;
       this.titles.forEach(n => {
         const v = n.mesh.position.clone().project(this.camera);
         if (!(v.z > -1 && v.z < 1)) return;
