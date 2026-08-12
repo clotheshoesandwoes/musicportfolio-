@@ -318,6 +318,30 @@ function tidy(t){
   return t.replace(/'/g, '’');
 }
 
+// Same slug rule as the main site, so /t/<slug> and #<slug> always agree.
+function slugify(s){
+  return String(s || '').toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+}
+function trackBySlug(slug){
+  if (!slug) return -1;
+  slug = slug.toLowerCase();
+  for (var i = 0; i < TRACKS.length; i++){
+    if (slugify(TRACKS[i].title) === slug) return i;
+  }
+  var n = parseInt(slug, 10);                       // #12 works too
+  if (!isNaN(n) && n >= 1 && n <= TRACKS.length) return n - 1;
+  return -1;
+}
+// replaceState, not pushState — swiping 72 tracks must not bury the back button.
+function markUrl(){
+  var t = TRACKS[cur];
+  if (!t) return;
+  var h = '#' + slugify(t.title);
+  if (location.hash !== h){
+    try { history.replaceState(null, '', location.pathname + location.search + h); } catch(e){}
+  }
+}
+
 var inkOrder = [];
 
 // stable per-track hash — same song is always the same colour, across reloads
@@ -427,8 +451,20 @@ Promise.all([
     t.idxD = Math.round(lerp(70, 118, wd));
   });
 
+  // a shared link lands on its song. no autoplay — browsers block it without a
+  // gesture, so it sits ready and the first tap starts it.
+  var want = trackBySlug(decodeURIComponent((location.hash || '').replace(/^#/, '')));
+  if (want >= 0) cur = want;
+
   buildIndex();
   boot();
+  markUrl();
+
+  // someone edits the hash, or uses back/forward
+  window.addEventListener('hashchange', function(){
+    var i = trackBySlug(decodeURIComponent((location.hash || '').replace(/^#/, '')));
+    if (i >= 0 && i !== cur) jump(i);
+  });
 }).catch(function(e){
   document.getElementById('lines').textContent = 'data unavailable';
   console.error(e);
@@ -1098,6 +1134,7 @@ function render(){
   if (t.bone)  document.documentElement.style.setProperty('--bone', t.bone);
   // the tab carries the record, not the prototype's codename
   document.title = (t.title ? t.title + ' — ' : '') + SITE_TITLE;
+  markUrl();
   document.getElementById('pos').innerHTML =
     ('0'+(cur+1)).slice(-2) + '<span class="cnt">/' + ('0'+TRACKS.length).slice(-2) + '</span>';
   document.getElementById('yrbtn').textContent = t.date ? t.date.slice(0,4) : '——';
