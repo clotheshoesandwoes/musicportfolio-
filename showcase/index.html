@@ -724,7 +724,7 @@ function drawField(progress){
         down[q] = cnt ? acc/cnt : 0;
       }
       var pass = down;                               // two light blur passes
-      for (var k2=0;k2<2;k2++){
+      for (var k2=0;k2<1;k2++){
         var next = new Float32Array(target);
         for (q=0;q<target;q++){
           var pm = pass[Math.max(0,q-1)], pc = pass[q], pp = pass[Math.min(target-1,q+1)];
@@ -736,13 +736,21 @@ function drawField(progress){
     }
   }
 
+  // Live level per band while playing, so the trace answers the music instead
+  // of sitting there as six fixed hairlines.
+  var lb = playing ? liveBands() : null;
+
   for (var b=0;b<6;b++){
+    var lv = lb ? lb[b] : 0;
     var base = ch - strat*b - strat*0.10;   // bass at the foot, treble at the head
-    var mt = strat*0.92;                    // barely overlap — no more tangling
+    // amplitude rides its own band's live level; the whole line also lifts a
+    // little on a hit, which is what reads as movement at a glance
+    var mt = strat*(1.02 + lv*0.62);
+    var lift = lv*strat*0.20;
     var arr = sm[b], m2 = arr.length, cw2 = cw/(m2-1);
     var pts = [];
     for (var i=0;i<m2;i++){
-      pts.push([i*cw2, base - Math.pow(arr[i], 1.35)*mt]);
+      pts.push([i*cw2, base - lift - Math.pow(arr[i], 1.22)*mt]);
     }
 
     var trace = function(){
@@ -758,29 +766,29 @@ function drawField(progress){
     // a whisper of tone under the ridge so the stack still reads as strata
     trace();
     ctx2d.lineTo(cw, base); ctx2d.lineTo(0, base); ctx2d.closePath();
-    ctx2d.fillStyle = 'rgba(237,233,225,0.07)';
+    ctx2d.fillStyle = 'rgba(237,233,225,0.05)';
     ctx2d.fill();
 
     if (!playing){
       trace();
-      ctx2d.strokeStyle = 'rgba(237,233,225,0.62)';
-      ctx2d.lineWidth = 1;
+      ctx2d.strokeStyle = 'rgba(237,233,225,0.78)';
+      ctx2d.lineWidth = 1.25;
       ctx2d.stroke();
     } else {
       // behind the playhead: inked. ahead of it: still faint.
       ctx2d.save();
       ctx2d.beginPath(); ctx2d.rect(0,0,px,ch); ctx2d.clip();
       trace();
-      ctx2d.strokeStyle = 'rgba(237,233,225,0.96)';
-      ctx2d.lineWidth = 1.5;
+      ctx2d.strokeStyle = 'rgba(237,233,225,1)';
+      ctx2d.lineWidth = 1.8;
       ctx2d.stroke();
       ctx2d.restore();
 
       ctx2d.save();
       ctx2d.beginPath(); ctx2d.rect(px,0,cw-px,ch); ctx2d.clip();
       trace();
-      ctx2d.strokeStyle = 'rgba(237,233,225,0.40)';
-      ctx2d.lineWidth = 1;
+      ctx2d.strokeStyle = 'rgba(237,233,225,0.46)';
+      ctx2d.lineWidth = 1.1;
       ctx2d.stroke();
       ctx2d.restore();
     }
@@ -1035,6 +1043,34 @@ function wireAnalyser(){
 
 // Level relative to the track's own moving average, so the type answers the
 // beat rather than pinning at the top of a loud, limited mix.
+// Live level per band, each tracked against its own slow average so every
+// line moves on its own terms — the bass line answers kicks, the top line
+// answers hats — instead of all six riding one overall loudness.
+var lbEdge=[40,100,250,600,1500,4000,10000];
+var lbSlow=[0,0,0,0,0,0], lbSpread=[8,8,8,8,8,8], lbInit=false;
+var lbOut=[0,0,0,0,0,0];
+function liveBands(){
+  if (!analy || !freq) return null;
+  analy.getByteFrequencyData(freq);
+  var binHz = actx.sampleRate / analy.fftSize, b, i;
+  for (b=0;b<6;b++){
+    var lo=Math.max(1,Math.round(lbEdge[b]/binHz));
+    var hi=Math.max(lo+1,Math.round(lbEdge[b+1]/binHz));
+    hi=Math.min(hi,freq.length-1);
+    var sum=0,c=0;
+    for(i=lo;i<=hi;i++){ sum+=freq[i]*freq[i]; c++; }
+    var avg=Math.sqrt(sum/Math.max(1,c));
+    if(!lbInit){ lbSlow[b]=avg; lbSpread[b]=8; }
+    lbSlow[b]+=(avg-lbSlow[b])*0.02;
+    var dev=avg-lbSlow[b];
+    lbSpread[b]+=(Math.abs(dev)-lbSpread[b])*0.03;
+    var v=clamp(0.5+dev/(lbSpread[b]*2.6+4),0,1);
+    lbOut[b]+=(v-lbOut[b])*0.35;          // smooth so it breathes, not jitters
+  }
+  lbInit=true;
+  return lbOut;
+}
+
 function liveBass(){
   if (!analy || !freq) return -1;
   analy.getByteFrequencyData(freq);
