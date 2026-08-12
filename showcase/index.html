@@ -284,14 +284,26 @@ var PALETTES = [
     {h:210,s:12,l:72},{h:210,s:14,l:78},{h:210,s:16,l:84},{h:210,s:18,l:90} ] }
 ];
 
-var pal = 0;
+// pal = -1 means AUTO: each song carries its own palette. 0..n-1 pins one.
+var pal = -1;
 try {
   var sp = localStorage.getItem('kani.pal');
   if (sp !== null){
     var n = parseInt(sp, 10);
-    if (n >= 0 && n < PALETTES.length) pal = n;
+    if (n >= -1 && n < PALETTES.length) pal = n;
   }
 } catch(e){}
+
+// Walk the palettes with a stride that is coprime with their count, from a
+// random start. Every track therefore differs from the one before it AND the
+// one after it, all palettes get used evenly, and the run is reshuffled each
+// visit rather than being the same order forever.
+var palSeed = Math.random();
+var PAL_STRIDE = [3, 5, 7][Math.floor(palSeed * 3) % 3];
+var PAL_START = Math.floor(palSeed * PALETTES.length);
+function autoPal(idx){
+  return ((PAL_START + idx * PAL_STRIDE) % PALETTES.length + PALETTES.length) % PALETTES.length;
+}
 
 var SITE_TITLE = 'can’t mute me.';
 var triedLocal = {};           // R2 miss -> retried once against the site's own copy
@@ -369,8 +381,11 @@ function mixInk(a, b, t){
 // low-end rank, plus a small deterministic jitter so neighbours never collide.
 // Scrolling the catalogue therefore changes colour on every song.
 function assignInks(){
-  var inks = PALETTES[pal].inks, n = inks.length, N = inkOrder.length;
+  var N = inkOrder.length;
   inkOrder.forEach(function(t, i){
+    var pIdx = (pal >= 0) ? pal : autoPal(t.idx);
+    var inks = PALETTES[pIdx].inks, n = inks.length;
+    t.palName = PALETTES[pIdx].name;
     var p = N > 1 ? i / (N - 1) : 0;
     var f = p * (n - 1);
     var k = Math.min(n - 2, Math.floor(f));
@@ -403,21 +418,31 @@ function assignInks(){
   bgSet = -1;
 }
 function cyclePalette(dir){
-  pal = (pal + (dir || 1) + PALETTES.length) % PALETTES.length;
+  // -1 (auto) sits in the ring alongside the pinned palettes
+  var span = PALETTES.length + 1;
+  pal = ((pal + 1 + (dir || 1)) % span + span) % span - 1;
   try { localStorage.setItem('kani.pal', String(pal)); } catch(e){}
   assignInks();
   var t = TRACKS[cur];
-  if (t) document.documentElement.style.setProperty('--ink', t.ink);
-  idxRows.forEach(function(r, i){
-    if (TRACKS[i]) r.style.color = '';
-  });
-  var el = document.getElementById('palname');
-  if (el){
-    el.textContent = PALETTES[pal].name;
-    el.classList.remove('flash');
-    void el.offsetWidth;
-    el.classList.add('flash');
+  if (t){
+    document.documentElement.style.setProperty('--ink', t.ink);
+    if (t.plate) document.documentElement.style.setProperty('--plate', t.plate);
+    if (t.bone)  document.documentElement.style.setProperty('--bone', t.bone);
   }
+  idxRows.forEach(function(r, i){ if (TRACKS[i]) r.style.color = ''; });
+  flashPal();
+}
+
+// The label shows whatever the CURRENT song is wearing, so it keeps up as the
+// palette changes song to song instead of naming a global setting.
+function flashPal(){
+  var el = document.getElementById('palname');
+  if (!el) return;
+  var t = TRACKS[cur];
+  el.textContent = (pal >= 0) ? PALETTES[pal].name : ((t && t.palName) || 'AUTO');
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
 }
 
 /* ---------------- data ---------------- */
@@ -446,7 +471,8 @@ Promise.all([
       date: m.date || c.date || '',
       dur: m.duration, bpm: m.bpm, rms: m.rmsDb,
       ratio: (bal[0]+bal[1])/(bal[4]+bal[5]),
-      raw: m, bands: null
+      raw: m, bands: null,
+      idx: TRACKS.length
     });
   });
 
@@ -1182,6 +1208,7 @@ function render(){
   // the tab carries the record, not the prototype's codename
   document.title = (t.title ? t.title + ' — ' : '') + SITE_TITLE;
   markUrl();
+  flashPal();
   document.getElementById('pos').innerHTML =
     ('0'+(cur+1)).slice(-2) + '<span class="cnt">/' + ('0'+TRACKS.length).slice(-2) + '</span>';
   document.getElementById('yrbtn').textContent = t.date ? t.date.slice(0,4) : '——';
@@ -1321,7 +1348,7 @@ function frame(){
 function boot(){
   measReady();
   sizeCanvas();
-  document.getElementById('palname').textContent = PALETTES[pal].name;
+  flashPal();   // handles AUTO (pal = -1), where PALETTES[pal] does not exist
   document.documentElement.classList.add('paper');   // rests on paper, darkens to play
   initBG();
 
