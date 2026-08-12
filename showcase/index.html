@@ -294,7 +294,8 @@ try {
 } catch(e){}
 
 var SITE_TITLE = 'can’t mute me.';
-var dead = {};                 // files that 404 — skipped rather than silently failing
+var dead = {};                 // files that 404 everywhere — skipped, not silently failed
+var triedLocal = {};           // R2 miss -> retried against the site's own copy
 var AUDIO_BASE = '/audio-mp3/';
 var TRACKS = [], cur = 0, playing = false, idxOpen = false;
 var audio = null, actx = null, analy = null, freq = null, srcNode = null, wired = false, switching = false;
@@ -755,8 +756,22 @@ function ensureAudio(){
   audio.addEventListener('error', function(){
     var t = TRACKS[cur];
     if (!t) return;
-    var want = AUDIO_BASE + encodeURIComponent(t.file);
-    if (audio.getAttribute('src') !== want) return;   // stale error from a swap
+    var want  = AUDIO_BASE + encodeURIComponent(t.file);
+    var local = '/audio-mp3/' + encodeURIComponent(t.file);
+    var src   = audio.getAttribute('src');
+    if (src !== want && src !== local) return;        // stale error from a swap
+    // R2 miss -> try the copy shipped with the site before giving up. Same
+    // fallback the main page has used since b144.
+    if (src === want && AUDIO_BASE !== '/audio-mp3/' && !triedLocal[t.file]){
+      triedLocal[t.file] = true;
+      switching = true;
+      setTimeout(function(){ switching = false; }, 900);
+      audio.setAttribute('src', local);
+      audio.load();
+      var pr = audio.play();
+      if (pr && pr.catch) pr.catch(function(){});
+      return;
+    }
     dead[t.file] = true;
     var n = TRACKS.length, k, idx;
     for (k = 1; k <= n; k++){
