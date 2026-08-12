@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<title>Kani — Pressure</title>
+<title>can’t mute me.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=block" rel="stylesheet">
@@ -293,6 +293,8 @@ try {
   }
 } catch(e){}
 
+var SITE_TITLE = 'can’t mute me.';
+var dead = {};                 // files that 404 — skipped rather than silently failing
 var AUDIO_BASE = '/audio-mp3/';
 var TRACKS = [], cur = 0, playing = false, idxOpen = false;
 var audio = null, actx = null, analy = null, freq = null, srcNode = null, wired = false, switching = false;
@@ -395,6 +397,7 @@ Promise.all([
   var isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1'
              || /^192\.168\./.test(host) || /^10\./.test(host) || host === '';
   AUDIO_BASE = isLocal ? '/audio-mp3/' : (cfg.audioBase || '/audio-mp3/');
+  if (cfg.tagline) { SITE_TITLE = cfg.tagline; document.title = SITE_TITLE; }
 
   cfg.tracks.forEach(function(c){
     var m = marks.tracks[c.file];
@@ -746,6 +749,27 @@ function ensureAudio(){
   audio.addEventListener('playing', function(){ switching = false; setPlaying(true); });
   // swapping src fires pause; that must not flip the page back to plate
   audio.addEventListener('pause', function(){ if (!switching) setPlaying(false); });
+  // A track whose file is missing used to swallow every click in silence —
+  // press play, nothing happens, forever. Mark it dead and move to the next
+  // one that works, so play always does something on the first press.
+  audio.addEventListener('error', function(){
+    var t = TRACKS[cur];
+    if (!t) return;
+    var want = AUDIO_BASE + encodeURIComponent(t.file);
+    if (audio.getAttribute('src') !== want) return;   // stale error from a swap
+    dead[t.file] = true;
+    var n = TRACKS.length, k, idx;
+    for (k = 1; k <= n; k++){
+      idx = (cur + k) % n;
+      if (!dead[TRACKS[idx].file]){
+        cur = idx;
+        stamp();
+        setTimeout(function(){ play(); }, 90);
+        return;
+      }
+    }
+    setPlaying(false);
+  });
 }
 
 // Load the current track's source WITHOUT starting playback, so the timeline
@@ -1057,6 +1081,8 @@ function render(){
   document.documentElement.style.setProperty('--ink', t.ink);
   if (t.plate) document.documentElement.style.setProperty('--plate', t.plate);
   if (t.bone)  document.documentElement.style.setProperty('--bone', t.bone);
+  // the tab carries the record, not the prototype's codename
+  document.title = (t.title ? t.title + ' — ' : '') + SITE_TITLE;
   document.getElementById('pos').innerHTML =
     ('0'+(cur+1)).slice(-2) + '<span class="cnt">/' + ('0'+TRACKS.length).slice(-2) + '</span>';
   document.getElementById('yrbtn').textContent = t.date ? t.date.slice(0,4) : '——';
