@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#050506">
+<title>Kani — Slab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@87.5,500;87.5,800&family=IBM+Plex+Mono:wght@400;500&display=block" rel="stylesheet">
+<style>
+  :root{
+    --ink:#e9e3d6;
+    --dim:#8f887a;
+    --hot:#ff6a2c;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#050506;overflow:hidden;overscroll-behavior:none}
+  body{
+    font-family:"Archivo",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    color:var(--ink);
+  }
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;opacity:0;transition:opacity .8s ease}
+  #gl.on{opacity:1}
+
+  /* ---- boot ---- */
+  #boot{position:fixed;inset:0;background:#050506;display:flex;align-items:center;justify-content:center;z-index:40;transition:opacity .7s ease}
+  #boot.gone{opacity:0;pointer-events:none}
+  #bootline{width:min(58vw,300px);height:2px;background:#1b1a18;position:relative;overflow:hidden}
+  #bootfill{position:absolute;left:0;top:0;bottom:0;width:0%;background:#6a6255;transition:width .25s linear}
+
+  /* ---- hud ---- */
+  #hud{position:fixed;inset:0;z-index:20;pointer-events:none}
+
+  #bar{
+    position:absolute;left:0;right:0;bottom:0;
+    padding:0 16px calc(16px + env(safe-area-inset-bottom)) 16px;
+    padding-top:56px;
+    display:flex;align-items:flex-end;gap:14px;
+    background:linear-gradient(to top, rgba(3,3,4,.92) 0%, rgba(3,3,4,.72) 45%, rgba(3,3,4,0) 100%);
+  }
+  #pp{
+    pointer-events:auto;
+    flex:0 0 auto;width:54px;height:54px;border:0;border-radius:3px;
+    background:linear-gradient(#3a3630,#211e1a);
+    box-shadow:inset 0 1px 0 rgba(255,240,214,.22), inset 0 -2px 3px rgba(0,0,0,.6), 0 2px 5px rgba(0,0,0,.55);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:transform .06s ease, box-shadow .06s ease;
+  }
+  #pp:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,240,214,.10), inset 0 -1px 2px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.5)}
+  #pp svg{width:20px;height:20px;fill:#efe7d8}
+  #pp .ic-pause{display:none}
+  #pp.playing .ic-play{display:none}
+  #pp.playing .ic-pause{display:block}
+
+  #meta{flex:1 1 auto;min-width:0;padding-bottom:4px}
+  #ttl{
+    font-weight:800;font-size:15px;line-height:1.15;letter-spacing:.005em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#efe9dc;
+  }
+  #sub{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:400;
+    color:var(--dim);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #sub b{font-weight:500;color:#c3bbab}
+
+  #prog{position:absolute;left:0;right:0;bottom:calc(86px + env(safe-area-inset-bottom));height:2px;background:rgba(255,255,255,.07)}
+  #progf{height:100%;width:0%;background:var(--hot);box-shadow:0 0 6px rgba(255,106,44,.55)}
+
+  #rail{position:absolute;right:9px;top:14vh;bottom:22vh;width:1px;background:rgba(255,255,255,.09)}
+  #railk{position:absolute;left:-1px;width:3px;height:20px;background:#cdc3b0;transform:translateY(0)}
+
+  #top{
+    position:absolute;left:16px;top:calc(14px + env(safe-area-inset-top));
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;color:#6d675c;letter-spacing:.02em;
+  }
+
+  #err{position:fixed;inset:0;z-index:60;display:none;padding:28px;background:#050506;
+    font-family:"IBM Plex Mono",monospace;font-size:12px;color:#c8564a;white-space:pre-wrap;overflow:auto}
+
+  @media (min-width:820px){
+    #bar{padding-left:26px;padding-right:26px;padding-bottom:22px}
+    #ttl{font-size:17px}
+    #prog{bottom:calc(94px + env(safe-area-inset-bottom))}
+    #top{left:26px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <div id="top">KANI</div>
+  <div id="rail"><div id="railk"></div></div>
+  <div id="prog"><div id="progf"></div></div>
+  <div id="bar">
+    <button id="pp" aria-label="Play">
+      <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
+      <svg class="ic-pause" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+    </button>
+    <div id="meta">
+      <div id="ttl">&nbsp;</div>
+      <div id="sub">&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<div id="boot"><div id="bootline"><div id="bootfill"></div></div></div>
+<div id="err"></div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const $ = s => document.querySelector(s);
+const errBox = $('#err');
+function fail(e){
+  errBox.style.display = 'block';
+  errBox.textContent = (e && (e.stack || e.message)) || String(e);
+  console.error(e);
+}
+window.addEventListener('error', ev => fail(ev.error || ev.message));
+
+/* ------------------------------------------------------------------ *
+ *  constants
+ * ------------------------------------------------------------------ */
+const DPR      = Math.min(window.devicePixelRatio || 1, 1.5);
+const SPACING  = 3.5;      // z distance between consecutive stones
+const SIDE_X   = 1.50;     // lateral offset of each row
+const TURN     = 0.42;     // yaw of each stone toward the corridor
+const CAM_Y    = 1.90;
+const PPU      = 232;      // engraving texture pixels per world unit
+const SLOTS    = 7;
+const W_SLAB   = 1.72;
+const MARG     = 0.26;
+const MAXHALF  = 0.56;
+
+const b64 = s => { const bin = atob(s); const a = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i] = bin.charCodeAt(i); return a; };
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp  = (a,b,t) => a + (b-a)*t;
+const invl  = (a,b,v) => clamp((v-a)/(b-a), 0, 1);
+const mmss  = s => { s = Math.max(0, Math.floor(s)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
+
+/* ------------------------------------------------------------------ *
+ *  load
+ * ------------------------------------------------------------------ */
+const bootfill = $('#bootfill');
+let bootPct = 0;
+const bump = p => { bootPct = Math.max(bootPct, p); bootfill.style.width = bootPct + '%'; };
+bump(8);
+
+const [marks, cfg] = await Promise.all([
+  fetch('/data/marks.json').then(r => r.json()),
+  fetch('/config.json').then(r => r.json())
+]);
+bump(48);
+
+try {
+  await Promise.all([
+    document.fonts.load('800 120px Archivo'),
+    document.fonts.load('500 120px Archivo'),
+    document.fonts.load('500 40px "IBM Plex Mono"'),
+    document.fonts.load('400 40px "IBM Plex Mono"')
+  ]);
+  await document.fonts.ready;
+} catch(e){ /* fall back to system faces */ }
+bump(62);
+
+/* ---- build the track table -------------------------------------- */
+const raw = cfg.tracks.filter(t => marks.tracks[t.file]);
+
+// per-band corpus normalisation for `balance`
+const bMin = new Array(6).fill(Infinity), bMax = new Array(6).fill(-Infinity);
+for(const t of raw){ const bal = marks.tracks[t.file].balance;
+  for(let k=0;k<6;k++){ if(bal[k]<bMin[k]) bMin[k]=bal[k]; if(bal[k]>bMax[k]) bMax[k]=bal[k]; } }
+
+let dMin = Infinity, dMax = -Infinity, rMin = Infinity, rMax = -Infinity,
+    cMin = Infinity, cMax = -Infinity, oMin = Infinity, oMax = -Infinity;
+for(const t of raw){ const m = marks.tracks[t.file];
+  dMin=Math.min(dMin,m.duration); dMax=Math.max(dMax,m.duration);
+  rMin=Math.min(rMin,m.rmsDb);    rMax=Math.max(rMax,m.rmsDb);
+  cMin=Math.min(cMin,m.crest);    cMax=Math.max(cMax,m.crest);
+  oMin=Math.min(oMin,m.onsetRate);oMax=Math.max(oMax,m.onsetRate); }
+
+const TRACKS = raw.map((t, i) => {
+  const m = marks.tracks[t.file];
+  const bal = [];
+  for(let k=0;k<6;k++) bal[k] = invl(bMin[k], bMax[k], m.balance[k]);
+
+  // lobe width shares — bass-heavy tracks get a fat core, bright ones wide outer flutes
+  let sum = 0; const share = [];
+  for(let k=0;k<6;k++){ share[k] = 0.42 + bal[k]*0.95; sum += share[k]; }
+  for(let k=0;k<6;k++) share[k] /= sum;
+
+  const tilt   = (bal[3]+bal[4]+bal[5])/3 - (bal[0]+bal[1]+bal[2])/3;   // -1 dark .. +1 bright
+  const dN     = invl(Math.log(dMin), Math.log(dMax), Math.log(m.duration));
+  const rN     = invl(rMin, rMax, m.rmsDb);
+  const cN     = invl(cMin, cMax, m.crest);
+  const oN     = invl(oMin, oMax, m.onsetRate);
+
+  const H = 4.15 + dN * 2.35;              // longer song = taller stone
+  const D = 0.27 + rN * 0.36;              // louder = thicker stone
+  const ti = invl(-0.45, 0.45, tilt);
+  const stone = new THREE.Color().setRGB(
+    lerp(0.105, 0.330, ti),
+    lerp(0.092, 0.314, ti),
+    lerp(0.082, 0.298, ti)
+  );
+
+  return {
+    i, file: t.file, title: (t.title || m.title || '').trim(),
+    date: (t.date || m.date || '').trim(),
+    duration: m.duration, bpm: m.bpm, rmsDb: m.rmsDb, crest: m.crest,
+    bands: m.bands.map(b64), share, H, D, stone,
+    polish: 0.10 + cN * 0.85,              // dynamic = polished, compressed = matte
+    grain:  oN,                            // busy = coarser stone
+    x: (i % 2 === 0 ? -1 : 1) * SIDE_X,
+    z: -i * SPACING,
+    rotY: (i % 2 === 0 ? 1 : -1) * TURN,
+    viewd: 0, layout: null, mesh: null, mat: null, slot: -1
+  };
+});
+const N_TRACKS = TRACKS.length;
+for(const t of TRACKS){ t.viewd = 4.70 + (t.H - 4.15) * 0.85; t.aimY = t.H*0.49 + 0.22; }
+bump(70);
+
+/* ------------------------------------------------------------------ *
+ *  face layout + engraving
+ * ------------------------------------------------------------------ */
+const G = v => { const n = Math.round(clamp(v,0,1) * 255); return 'rgb(' + n + ',' + n + ',' + n + ')'; };
+
+function fitTitle(ctx, S, text, maxW){
+  const words = text.split(/\s+/).filter(Boolean);
+  const lim = maxW * S;
+  for(let fs = 0.44; fs >= 0.125; fs -= 0.015){
+    const maxLines = fs >= 0.29 ? 2 : fs >= 0.20 ? 3 : 4;
+    ctx.font = '800 ' + (fs*S).toFixed(1) + 'px Archivo, sans-serif';
+    const lines = []; let cur = '', fits = true;
+    for(const w of words){
+      if(ctx.measureText(w).width > lim){ fits = false; break; }   // one word too wide for the stone
+      const trial = cur ? cur + ' ' + w : w;
+      if(ctx.measureText(trial).width <= lim) cur = trial;
+      else { lines.push(cur); cur = w; }
+    }
+    if(!fits) continue;
+    if(cur) lines.push(cur);
+    if(lines.length <= maxLines) return { fs, lines };
+  }
+  const fs = 0.125;                                               // last resort: break mid-word
+  ctx.font = '800 ' + (fs*S).toFixed(1) + 'px Archivo, sans-serif';
+  const lines = []; let cur = '';
+  for(const ch of text){
+    const trial = cur + ch;
+    if(!cur || ctx.measureText(trial).width <= lim) cur = trial;
+    else { lines.push(cur); cur = ch; }
+  }
+  if(cur) lines.push(cur);
+  return { fs, lines: lines.slice(0, 5) };
+}
+
+// measure once, cache; layout is in world units measured DOWN from the top of the stone
+function layoutOf(tr, ctx, S){
+  if(tr.layout) return tr.layout;
+  const inner = W_SLAB - MARG*2;
+  const t = fitTitle(ctx, S, tr.title.toUpperCase(), inner);
+  let y = 0.30;
+  const headBase = y + 0.14; y += 0.14 + 0.30;
+  const titleTop = y;
+  const lead = t.fs * 1.14;
+  y += t.lines.length * lead;
+  const titleBot = y;
+  y += 0.34;
+  const markTop = y;
+  const markBot = tr.H - 0.80;
+  const numBase = tr.H - 0.36;
+  tr.layout = { fs: t.fs, lines: t.lines, headBase, titleTop, titleBot, lead,
+                markTop, markBot: Math.max(markBot, markTop + 0.55), numBase };
+  return tr.layout;
+}
+
+function carveText(ctx, S, text, x, y, fs, align, depth){
+  ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const px = x*S, py = y*S;
+  const ramp = [[0.150,0.13],[0.108,0.31],[0.068,0.52],[0.032,0.74]];
+  for(const [k,v] of ramp){
+    ctx.lineWidth = Math.max(1, fs*k*S);
+    ctx.strokeStyle = G(v*depth);
+    ctx.strokeText(text, px, py);
+  }
+  ctx.fillStyle = G(depth);
+  ctx.fillText(text, px, py);
+}
+
+function carveRect(ctx, S, x, y, w, h, depth){
+  const b = Math.min(h, w) * 0.55 + 0.006;
+  ctx.fillStyle = G(depth*0.17); ctx.fillRect((x-b)*S, (y-b)*S, (w+2*b)*S, (h+2*b)*S);
+  ctx.fillStyle = G(depth*0.46); ctx.fillRect((x-b*0.5)*S, (y-b*0.5)*S, (w+b)*S, (h+b)*S);
+  ctx.fillStyle = G(depth);      ctx.fillRect(x*S, y*S, w*S, h*S);
+}
+
+function drawFace(canvas, tr){
+  const S  = PPU;
+  const cw = Math.max(4, Math.round(W_SLAB*S));
+  const ch = Math.max(4, Math.round(cw * tr.H / W_SLAB));
+  if(canvas.width !== cw || canvas.height !== ch){ canvas.width = cw; canvas.height = ch; }
+  const ctx = canvas.getContext('2d', { willReadFrequently:false });
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,cw,ch);
+
+  const L  = layoutOf(tr, ctx, S);
+  const cx = W_SLAB/2;
+
+  /* header — index + date */
+  const monoS = 0.135;
+  ctx.font = '500 ' + (monoS*S).toFixed(1) + 'px "IBM Plex Mono", monospace';
+  carveText(ctx, S, String(tr.i+1).padStart(2,'0'), MARG, L.headBase, monoS, 'left', 0.86);
+  if(tr.date) carveText(ctx, S, tr.date.replace(/-/g,'.'), W_SLAB-MARG, L.headBase, monoS, 'right', 0.72);
+
+  /* rule under the header */
+  carveRect(ctx, S, MARG, L.headBase + 0.115, W_SLAB - MARG*2, 0.011, 0.62);
+
+  /* title */
+  ctx.font = '800 ' + (L.fs*S).toFixed(1) + 'px Archivo, sans-serif';
+  for(let i=0;i<L.lines.length;i++){
+    carveText(ctx, S, L.lines[i], MARG, L.titleTop + L.lead*(i+1) - L.fs*0.24, L.fs, 'left', 1.0);
+  }
+
+  /* the mark — 6 mirrored flutes, time running down the stone.
+     widths are smoothed so the silhouette flows; depth stays raw so the cut keeps its grain */
+  const markH = L.markBot - L.markTop;
+  const rowH  = markH / 256;
+  const hp    = Math.ceil(rowH*S) + 1;
+  const bev   = 0.030;
+  if(!tr.edges){
+    const sm = tr.bands.map(b => {
+      const o = new Float32Array(256);
+      for(let r=0;r<256;r++){
+        let s = 0, n = 0;
+        for(let j=-6;j<=6;j++){ const q = r+j; if(q>=0 && q<256){ s += b[q]; n++; } }
+        o[r] = s/n/255;
+      }
+      return o;
+    });
+    const E = new Float32Array(256*7), DP = new Float32Array(256*6);
+    for(let r=0;r<256;r++){
+      let e = 0;
+      for(let k=0;k<6;k++){
+        e += (0.18 + 0.82*sm[k][r]) * tr.share[k] * MAXHALF;
+        E[r*7+k+1] = e;
+        const raw = tr.bands[k][r]/255;
+        DP[r*6+k] = clamp(0.30 + 0.66*sm[k][r] + 0.07*(raw - sm[k][r]), 0.14, 1);
+      }
+    }
+    tr.edges = E; tr.depth = DP;
+  }
+  const E = tr.edges;
+  for(let r=0;r<256;r++){
+    const yp = (L.markTop + r*rowH) * S;
+    const o  = r*7, od = r*6;
+    const outer = E[o+6];
+    ctx.fillStyle = G(0.12);
+    ctx.fillRect((cx-outer-bev)*S, yp, (2*(outer+bev))*S, hp);
+    ctx.fillStyle = G(0.34);
+    ctx.fillRect((cx-outer-bev*0.5)*S, yp, (2*(outer+bev*0.5))*S, hp);
+    for(let k=5;k>=0;k--){
+      ctx.fillStyle = G(tr.depth[od+k]);
+      ctx.fillRect((cx-E[o+k+1])*S, yp, (2*E[o+k+1])*S, hp);
+    }
+    for(let k=1;k<6;k++){                                   // ribs standing between the flutes
+      const rw = 0.009;
+      ctx.fillStyle = G(0.14);
+      ctx.fillRect((cx+E[o+k]-rw*0.5)*S, yp, rw*S, hp);
+      ctx.fillRect((cx-E[o+k]-rw*0.5)*S, yp, rw*S, hp);
+    }
+  }
+
+  /* time notches down the right of the mark */
+  const cands = [5,10,15,30,60,120,300];
+  let iv = cands[cands.length-1];
+  for(const c of cands){ if(tr.duration/c <= 15){ iv = c; break; } }
+  const tickX = cx + MAXHALF + 0.055;
+  let n = 0;
+  for(let s=iv; s<tr.duration; s+=iv){
+    n++;
+    const yy = L.markTop + (s/tr.duration)*markH;
+    const major = (n % 4 === 0);
+    carveRect(ctx, S, tickX, yy, major ? 0.105 : 0.055, 0.012, major ? 0.85 : 0.60);
+  }
+
+  /* footer numbers */
+  const numS = 0.145;
+  ctx.font = '500 ' + (numS*S).toFixed(1) + 'px "IBM Plex Mono", monospace';
+  carveText(ctx, S, tr.bpm + ' BPM', MARG, L.numBase, numS, 'left', 0.88);
+  carveText(ctx, S, mmss(tr.duration), W_SLAB-MARG, L.numBase, numS, 'right', 0.88);
+
+  /* uv-space fill stops (v = 1 at the top of the stone) */
+  tr.vTop  = 1 - (0.22)          / tr.H;
+  tr.vMkT  = 1 - (L.markTop)     / tr.H;
+  tr.vMkB  = 1 - (L.markBot)     / tr.H;
+  tr.vEnd  = 1 - (L.numBase+0.10)/ tr.H;
+  return { cw, ch };
+}
+
+/* ------------------------------------------------------------------ *
+ *  shaders
+ * ------------------------------------------------------------------ */
+const NOISE = `
+float hash21(vec2 p){
+  vec3 q = fract(vec3(p.xyx) * vec3(0.1031,0.1030,0.0973));
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.x + q.y) * q.z);
+}
+float vn(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(mix(hash21(i), hash21(i+vec2(1.0,0.0)), f.x),
+             mix(hash21(i+vec2(0.0,1.0)), hash21(i+vec2(1.0,1.0)), f.x), f.y);
+}
+float fbm3(vec2 p){
+  float s = 0.0, a = 0.5;
+  for(int i=0;i<3;i++){ s += a*vn(p); p = p*2.07 + vec2(1.7,-2.3); a *= 0.5; }
+  return s;
+}`;
+
+const LIGHTCOMMON = `
+uniform vec3 uL0P, uL0C; uniform float uL0I;
+uniform vec3 uL1P, uL1C; uniform float uL1I;
+uniform vec3 uGP,  uGlowCol; uniform float uGI;
+uniform vec3 uSky, uGnd, uFogCol;
+uniform float uFogD;
+
+vec3 pointLit(vec3 W, vec3 P, vec3 C, float I, vec3 N, vec3 V, vec3 alb, float occ, float shin, float sk){
+  vec3 d = P - W; float dist = length(d); d /= max(dist, 1e-4);
+  float at = I / (1.0 + 0.30*dist*dist);
+  float nd = max(dot(N,d), 0.0);
+  vec3 H = normalize(d + V);
+  float sp = pow(max(dot(N,H),0.0), shin) * sk * step(0.001, nd);
+  return C * at * occ * (alb*nd + vec3(sp));
+}
+vec3 fogTone(vec3 col, float dc){
+  float f = 1.0 - exp(-uFogD*uFogD*dc*dc);
+  return mix(col, uFogCol, clamp(f, 0.0, 1.0));
+}
+vec3 finish(vec3 col){
+  col = col / (1.0 + col*0.80);
+  col = pow(max(col, vec3(0.0)), vec3(0.4545));
+  return clamp(col*1.06 - 0.022, 0.0, 1.0);
+}`;
+
+const SLAB_VERT = `
+attribute float aFace;
+varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying float vFace;
+void main(){
+  vUv = uv; vFace = aFace;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vW = wp.xyz;
+  vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const SLAB_FRAG = `
+precision highp float;
+uniform sampler2D uMark;
+uniform vec2  uTexel;
+uniform float uHasMark, uCut, uPolish, uGrain, uGlowAmt, uFillY, uBass, uSelf;
+uniform vec3  uStone, uTan, uBit;
+varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying float vFace;
+` + NOISE + LIGHTCOMMON + `
+void main(){
+  vec3 N = normalize(vN);
+  vec3 V = normalize(cameraPosition - vW);
+  float h = 0.0;
+
+  if(uHasMark > 0.5){
+    float hC = texture2D(uMark, vUv).r;
+    float hL = texture2D(uMark, vUv - vec2(uTexel.x, 0.0)).r;
+    float hR = texture2D(uMark, vUv + vec2(uTexel.x, 0.0)).r;
+    float hD = texture2D(uMark, vUv - vec2(0.0, uTexel.y)).r;
+    float hU = texture2D(uMark, vUv + vec2(0.0, uTexel.y)).r;
+    h = hC * vFace;
+    N = normalize(N + (uTan*(hR-hL) + uBit*(hU-hD)) * (uCut * vFace));
+  }
+
+  vec3 T  = normalize(cross(N, abs(N.y) > 0.9 ? vec3(1.0,0.0,0.0) : vec3(0.0,1.0,0.0)));
+  vec3 B2 = cross(N, T);
+
+  vec2 sp = vec2(vW.x*0.75 + vW.z*0.75, vW.y);
+  float m1 = fbm3(sp*2.1);
+  float m2 = vn(sp*44.0 + 7.3);
+  float gs = 150.0 + uGrain*220.0;
+  float g0 = vn(sp*gs);
+  float gx = vn(sp*gs + vec2(0.7,0.0)) - g0;
+  float gy = vn(sp*gs + vec2(0.0,0.7)) - g0;
+  N = normalize(N + (T*gx + B2*gy) * (0.15 + uGrain*0.22));
+
+  float pit = smoothstep(0.66, 0.93, m2) * uGrain;
+  vec3 alb = uStone * (0.78 + 0.36*m1) * (0.92 + 0.16*g0);
+  alb *= 1.0 - pit*0.22;
+  alb *= mix(1.0, 0.90, h);
+
+  float occ = (1.0 - h*0.42) * (1.0 - pit*0.25);
+  float shin = mix(9.0, 110.0, uPolish);
+  float sk   = mix(0.055, 0.42, uPolish) * (0.70 + 0.6*g0);
+
+  vec3 col = vec3(0.0);
+  col += pointLit(vW, uL0P, uL0C, uL0I, N, V, alb, occ, shin, sk);
+  col += pointLit(vW, uL1P, uL1C, uL1I, N, V, alb, occ, shin, sk);
+  if(uGI > 0.002) col += pointLit(vW, uGP, uGlowCol, uGI, N, V, alb, occ, shin, sk*0.55) * (1.0 - uSelf*0.86);
+  col += alb * mix(uGnd, uSky, N.y*0.5 + 0.5) * occ * occ;
+  col += alb * vec3(0.030,0.036,0.050) * max(dot(N, normalize(vec3(0.12,0.30,-1.0))), 0.0) * occ;
+
+  if(uGlowAmt > 0.002 && uHasMark > 0.5){
+    float inCut  = smoothstep(0.13, 0.42, h);
+    float dy     = vUv.y - uFillY;
+    float played = smoothstep(-0.0015, 0.005, dy);
+    float edge   = exp(-abs(dy) * (62.0 + 70.0*uBass));
+    vec3  gc     = mix(uGlowCol, vec3(1.0,0.94,0.84), clamp(edge, 0.0, 1.0));
+    col += gc * inCut * (0.50 + 0.65*h) * (played*0.62 + edge*3.2) * uGlowAmt * (0.85 + 0.4*uBass);
+  }
+
+  col = fogTone(col, length(cameraPosition - vW));
+  gl_FragColor = vec4(finish(col), 1.0);
+}`;
+
+const FLOOR_VERT = `
+varying vec3 vW;
+void main(){
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vW = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const FLOOR_FRAG = `
+precision highp float;
+uniform vec3  uFloor;
+uniform float uSpacing, uSideX, uCount, uPlayAmt;
+uniform vec3  uPlayPos;
+varying vec3 vW;
+` + NOISE + LIGHTCOMMON + `
+void main(){
+  vec2 sp = vW.xz;
+  float m  = fbm3(sp*1.5);
+  float g0 = vn(sp*34.0);
+  float gx = vn(sp*34.0 + vec2(0.7,0.0)) - g0;
+  float gy = vn(sp*34.0 + vec2(0.0,0.7)) - g0;
+  vec3 N = normalize(vec3(gx*0.55, 1.0, gy*0.55));
+  vec3 V = normalize(cameraPosition - vW);
+
+  vec3 alb = uFloor * (0.55 + 0.62*m) * (0.90 + 0.22*g0);
+
+  float ao = 1.0;
+  float base = floor(-vW.z / uSpacing + 0.5);
+  for(int k=-1;k<=1;k++){
+    float idx = base + float(k);
+    if(idx < -0.5 || idx > uCount - 0.5) continue;
+    float sx = -uSideX * cos(idx * 3.14159265);
+    vec2 d = vec2(vW.x - sx, vW.z + idx*uSpacing) / vec2(1.15, 0.72);
+    ao *= mix(0.16, 1.0, smoothstep(0.70, 2.5, length(d)));
+  }
+
+  vec3 col = vec3(0.0);
+  col += pointLit(vW, uL0P, uL0C, uL0I, N, V, alb, ao, 150.0, 0.55);
+  col += pointLit(vW, uL1P, uL1C, uL1I, N, V, alb, ao, 190.0, 0.60);
+  if(uGI > 0.002) col += pointLit(vW, uGP, uGlowCol, uGI, N, V, alb, ao, 120.0, 0.30);
+  col += alb * uGnd * 1.4 * ao;
+
+  if(uPlayAmt > 0.002){
+    float pd = length(vW - uPlayPos);
+    col += uGlowCol * uPlayAmt * exp(-pd*0.46) * 0.30 * ao;
+  }
+
+  col = fogTone(col, length(cameraPosition - vW));
+  gl_FragColor = vec4(finish(col), 1.0);
+}`;
+
+/* ------------------------------------------------------------------ *
+ *  scene
+ * ------------------------------------------------------------------ */
+const canvas = $('#gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(DPR);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setClearColor(0x050506, 1);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 260);
+
+const shared = {
+  uL0P: { value: new THREE.Vector3() },
+  uL0C: { value: new THREE.Color(1.0, 0.885, 0.735) },
+  uL0I: { value: 5.1 },
+  uL1P: { value: new THREE.Vector3() },
+  uL1C: { value: new THREE.Color(0.44, 0.60, 1.0) },
+  uL1I: { value: 4.2 },
+  uGP:  { value: new THREE.Vector3() },
+  uGlowCol: { value: new THREE.Color(1.0, 0.34, 0.11) },
+  uGI:  { value: 0.0 },
+  uSky: { value: new THREE.Color(0.017, 0.021, 0.032) },
+  uGnd: { value: new THREE.Color(0.008, 0.007, 0.006) },
+  uFogCol: { value: new THREE.Color(0.014, 0.016, 0.023) },
+  uFogD: { value: 0.062 },
+  uBass: { value: 0.0 }
+};
+
+const BLANK = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 2;
+  const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0,0,2,2);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+})();
+
+function slabMaterial(tr, tan, bit, hasMark){
+  return new THREE.ShaderMaterial({
+    vertexShader: SLAB_VERT,
+    fragmentShader: SLAB_FRAG,
+    uniforms: Object.assign({}, shared, {
+      uMark:   { value: BLANK },
+      uTexel:  { value: new THREE.Vector2(0.001, 0.001) },
+      uHasMark:{ value: hasMark ? 1 : 0 },
+      uCut:    { value: 2.6 },
+      uPolish: { value: tr ? tr.polish : 0.5 },
+      uGrain:  { value: tr ? tr.grain : 0.4 },
+      uGlowAmt:{ value: 0 },
+      uSelf:   { value: 0 },
+      uFillY:  { value: 1 },
+      uStone:  { value: tr ? tr.stone : new THREE.Color(0.34,0.32,0.30) },
+      uTan:    { value: tan },
+      uBit:    { value: bit }
+    })
+  });
+}
+
+/* ---- geometry: stone + plinth merged, aFace flags the engraved face ---- */
+function mergePair(a, b){
+  const g = new THREE.BufferGeometry();
+  const ap = a.attributes.position.array, bp = b.attributes.position.array;
+  const an = a.attributes.normal.array,   bn = b.attributes.normal.array;
+  const au = a.attributes.uv.array,       bu = b.attributes.uv.array;
+  const ai = a.index.array,               bi = b.index.array;
+  const ac = a.attributes.position.count;
+  const pos = new Float32Array(ap.length + bp.length); pos.set(ap); pos.set(bp, ap.length);
+  const nor = new Float32Array(an.length + bn.length); nor.set(an); nor.set(bn, an.length);
+  const uvs = new Float32Array(au.length + bu.length); uvs.set(au); uvs.set(bu, au.length);
+  const idx = new Uint16Array(ai.length + bi.length);
+  idx.set(ai);
+  for(let i=0;i<bi.length;i++) idx[ai.length + i] = bi[i] + ac;
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal',   new THREE.BufferAttribute(nor, 3));
+  g.setAttribute('uv',       new THREE.BufferAttribute(uvs, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  const face = new Float32Array(pos.length/3);
+  for(let i=16;i<20;i++) face[i] = 1;                 // +Z plane of the first box
+  g.setAttribute('aFace', new THREE.BufferAttribute(face, 1));
+  return g;
+}
+
+function makeSlabGeo(w, h, d){
+  const stone = new THREE.BoxGeometry(w, h, d);
+  const sp = stone.attributes.position;
+  for(let i=0;i<sp.count;i++){                        // batter: slight inward taper toward the top
+    if(sp.getY(i) > 0){ sp.setX(i, sp.getX(i)*0.974); sp.setZ(i, sp.getZ(i)*0.945); }
+  }
+  stone.computeVertexNormals();
+  stone.translate(0, h/2 + 0.16, 0);
+  const plinth = new THREE.BoxGeometry(w + 0.20, 0.16, d + 0.20);
+  plinth.translate(0, 0.08, 0);
+  return mergePair(stone, plinth);
+}
+
+const BIT_Y = new THREE.Vector3(0,1,0);
+
+for(const tr of TRACKS){
+  const geo = makeSlabGeo(W_SLAB, tr.H, tr.D);
+  const tan = new THREE.Vector3(1,0,0).applyAxisAngle(BIT_Y, tr.rotY);
+  const mat = slabMaterial(tr, tan, new THREE.Vector3(0,1,0), false);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(tr.x, 0, tr.z);
+  mesh.rotation.y = tr.rotY;
+  mesh.userData.i = tr.i;
+  mesh.matrixAutoUpdate = false; mesh.updateMatrix(); mesh.updateMatrixWorld(true);
+  scene.add(mesh);
+  tr.mesh = mesh; tr.mat = mat;
+}
+
+/* ---- floor ---- */
+const floorMat = new THREE.ShaderMaterial({
+  vertexShader: FLOOR_VERT,
+  fragmentShader: FLOOR_FRAG,
+  uniforms: Object.assign({}, shared, {
+    uFloor:   { value: new THREE.Color(0.040, 0.037, 0.034) },
+    uSpacing: { value: SPACING },
+    uSideX:   { value: SIDE_X },
+    uCount:   { value: N_TRACKS },
+    uPlayAmt: { value: 0 },
+    uPlayPos: { value: new THREE.Vector3() }
+  })
+});
+const floorGeo = new THREE.PlaneGeometry(60, N_TRACKS*SPACING + 60, 1, 1);
+floorGeo.rotateX(-Math.PI/2);
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.position.set(0, 0, -(N_TRACKS*SPACING)/2 + 12);
+floor.matrixAutoUpdate = false; floor.updateMatrix(); floor.updateMatrixWorld(true);
+scene.add(floor);
+
+/* ---- threshold inscription cut into the floor at the corridor mouth ---- */
+{
+  const PW = 3.4, PH = 4.4, PS = 190;
+  const c = document.createElement('canvas');
+  c.width = Math.round(PW*PS); c.height = Math.round(PH*PS);
+  const x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0,0,c.width,c.height);
+  x.font = '800 ' + (1.00*PS).toFixed(1) + 'px Archivo, sans-serif';
+  carveText(x, PS, (cfg.artist || 'KANI').toUpperCase(), PW/2, 1.78, 1.00, 'center', 1.0);
+  const tag = (cfg.tagline || '').replace(/\.$/, '').toUpperCase();
+  if(tag){
+    x.font = '500 ' + (0.23*PS).toFixed(1) + 'px Archivo, sans-serif';
+    carveText(x, PS, tag, PW/2, 2.36, 0.23, 'center', 0.80);
+  }
+  x.font = '500 ' + (0.21*PS).toFixed(1) + 'px "IBM Plex Mono", monospace';
+  carveText(x, PS, String(N_TRACKS), PW/2, 3.30, 0.21, 'center', 0.86);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.needsUpdate = true;
+
+  const pg = new THREE.PlaneGeometry(PW, PH, 1, 1);
+  pg.rotateX(-Math.PI/2);
+  const pf = new Float32Array(pg.attributes.position.count).fill(1);
+  pg.setAttribute('aFace', new THREE.BufferAttribute(pf, 1));
+  const pm = slabMaterial(null, new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,-1), true);
+  pm.uniforms.uMark.value = tex;
+  pm.uniforms.uTexel.value.set(1.25/c.width, 1.25/c.height);
+  pm.uniforms.uStone.value = new THREE.Color(0.072, 0.068, 0.063);
+  pm.uniforms.uPolish.value = 0.55;
+  pm.uniforms.uGrain.value = 0.35;
+  pm.uniforms.uCut.value = 2.1;
+  const plate = new THREE.Mesh(pg, pm);
+  plate.position.set(-0.85, 0.006, 2.60);
+  plate.matrixAutoUpdate = false; plate.updateMatrix(); plate.updateMatrixWorld(true);
+  scene.add(plate);
+}
+bump(80);
+
+/* ------------------------------------------------------------------ *
+ *  engraving slot pool
+ * ------------------------------------------------------------------ */
+const slots = [];
+for(let s=0;s<SLOTS;s++){
+  const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  slots.push({ canvas: c, tex: t, idx: -1 });
+}
+
+function bindSlot(slot, tr){
+  if(slot.idx >= 0 && TRACKS[slot.idx]){
+    const old = TRACKS[slot.idx];
+    old.mat.uniforms.uHasMark.value = 0;
+    old.mat.uniforms.uMark.value = BLANK;
+    old.slot = -1;
+  }
+  const { cw, ch } = drawFace(slot.canvas, tr);
+  slot.tex.needsUpdate = true;
+  slot.idx = tr.i;
+  tr.slot = slots.indexOf(slot);
+  tr.mat.uniforms.uMark.value = slot.tex;
+  tr.mat.uniforms.uTexel.value.set(1.25/cw, 1.25/ch);
+  tr.mat.uniforms.uHasMark.value = 1;
+}
+
+function serviceSlots(pos, budget){
+  const want = [];
+  const c = Math.round(pos);
+  for(const off of [0,1,-1,2,3,4,5]){
+    const i = c + off;
+    if(i >= 0 && i < N_TRACKS) want.push(i);
+    if(want.length >= SLOTS) break;
+  }
+  let done = 0;
+  for(const i of want){
+    if(TRACKS[i].slot >= 0) continue;
+    if(done >= budget) break;
+    let best = null, bestScore = -1;
+    for(const s of slots){
+      if(s.idx < 0){ best = s; break; }
+      if(want.indexOf(s.idx) >= 0) continue;
+      const sc = Math.abs(s.idx - pos);
+      if(sc > bestScore){ bestScore = sc; best = s; }
+    }
+    if(!best) break;
+    bindSlot(best, TRACKS[i]);
+    done++;
+  }
+}
+
+/* prime the entrance so the first frame is already carved */
+serviceSlots(0, 4);
+bump(92);
+
+/* ------------------------------------------------------------------ *
+ *  audio
+ * ------------------------------------------------------------------ */
+const audio = new Audio();
+audio.crossOrigin = 'anonymous';
+audio.preload = 'none';
+let actx = null, ana = null, freq = null, bass = 0;
+let playingIdx = -1;
+
+function graph(){
+  if(actx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return;
+  actx = new AC();
+  const src = actx.createMediaElementSource(audio);
+  ana = actx.createAnalyser();
+  ana.fftSize = 256; ana.smoothingTimeConstant = 0.76;
+  freq = new Uint8Array(ana.frequencyBinCount);
+  src.connect(ana); ana.connect(actx.destination);
+}
+
+function playIndex(i){
+  const tr = TRACKS[i];
+  if(!tr) return;
+  if(playingIdx !== i){
+    audio.src = '/audio-mp3/' + encodeURIComponent(tr.file);
+    playingIdx = i;
+  }
+  graph();
+  if(actx && actx.state === 'suspended') actx.resume();
+  audio.play().catch(() => {});
+  syncHud();
+}
+function toggle(i){
+  if(playingIdx === i && !audio.paused) audio.pause();
+  else playIndex(i);
+  syncHud();
+}
+audio.addEventListener('play',  syncHud);
+audio.addEventListener('pause', syncHud);
+audio.addEventListener('ended', () => {
+  const next = playingIdx + 1;
+  if(next < N_TRACKS){ target = next; playIndex(next); }
+  else syncHud();
+});
+
+/* ------------------------------------------------------------------ *
+ *  travel
+ * ------------------------------------------------------------------ */
+let pos = -0.90, vel = 0, target = 0, dragging = false;
+let lastY = 0, lastT = 0, downY = 0, downX = 0, downT = 0, moved = 0;
+const DRAG_K = 0.0031;
+
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+
+const cur = () => clamp(Math.round(pos), 0, N_TRACKS-1);
+
+function pickAt(cx, cy){
+  ndc.x = (cx / window.innerWidth) * 2 - 1;
+  ndc.y = -(cy / window.innerHeight) * 2 + 1;
+  ray.setFromCamera(ndc, camera);
+  const c = cur();
+  const list = [];
+  for(let i = Math.max(0, c-2); i <= Math.min(N_TRACKS-1, c+7); i++) list.push(TRACKS[i].mesh);
+  const hits = ray.intersectObjects(list, false);
+  return hits.length ? hits[0].object.userData.i : -1;
+}
+
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; canvas.setPointerCapture(e.pointerId);
+  lastY = downY = e.clientY; downX = e.clientX;
+  lastT = downT = performance.now(); moved = 0; vel = 0;
+});
+canvas.addEventListener('pointermove', e => {
+  if(!dragging) return;
+  const now = performance.now();
+  const dy = lastY - e.clientY;
+  moved += Math.abs(dy) + Math.abs(e.clientX - downX) * 0.2;
+  pos += dy * DRAG_K;
+  const dt = Math.max(8, now - lastT);
+  vel = lerp(vel, (dy * DRAG_K) / (dt/1000), 0.4);
+  lastY = e.clientY; lastT = now;
+});
+function endDrag(e){
+  if(!dragging) return;
+  dragging = false;
+  const dur = performance.now() - downT;
+  if(moved < 10 && dur < 400){
+    vel = 0;
+    const i = pickAt(e.clientX, e.clientY);
+    if(i >= 0){
+      if(i === cur()) toggle(i);
+      else target = i;
+    }
+  } else {
+    target = null;
+  }
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', () => { dragging = false; target = null; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  pos += e.deltaY * 0.0016 * (e.deltaMode === 1 ? 16 : 1);
+  vel = 0; target = null;
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  const c = cur();
+  if(e.key === 'ArrowDown' || e.key === 'ArrowRight'){ target = clamp(c+1, 0, N_TRACKS-1); vel = 0; e.preventDefault(); }
+  else if(e.key === 'ArrowUp' || e.key === 'ArrowLeft'){ target = clamp(c-1, 0, N_TRACKS-1); vel = 0; e.preventDefault(); }
+  else if(e.code === 'Space'){ toggle(cur()); e.preventDefault(); }
+});
+
+$('#pp').addEventListener('click', () => toggle(cur()));
+
+
+/* ------------------------------------------------------------------ *
+ *  hud
+ * ------------------------------------------------------------------ */
+const ttlEl = $('#ttl'), subEl = $('#sub'), ppEl = $('#pp'),
+      progf = $('#progf'), railk = $('#railk'), rail = $('#rail');
+let hudIdx = -1;
+
+function syncHud(){
+  const i = clamp(Math.round(pos), 0, N_TRACKS-1);
+  const tr = TRACKS[i];
+  if(i !== hudIdx){
+    hudIdx = i;
+    ttlEl.textContent = tr.title;
+    subEl.innerHTML = '<b>' + String(i+1).padStart(2,'0') + '</b> / ' + N_TRACKS +
+      '&nbsp;&nbsp;&nbsp; ' + tr.bpm + ' BPM &nbsp;&nbsp;&nbsp; ' + mmss(tr.duration) +
+      (tr.date ? '&nbsp;&nbsp;&nbsp; ' + tr.date.replace(/-/g,'.') : '');
+  }
+  const on = playingIdx >= 0 && !audio.paused;
+  ppEl.classList.toggle('playing', on);
+  ppEl.setAttribute('aria-label', on ? 'Pause' : 'Play');
+}
+
+/* ------------------------------------------------------------------ *
+ *  loop
+ * ------------------------------------------------------------------ */
+let sizeW = 0, sizeH = 0;
+function resize(){
+  const w = window.innerWidth || 1, h = window.innerHeight || 1;
+  if(w === sizeW && h === sizeH) return;
+  sizeW = w; sizeH = h;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.fov = h > w ? 58 : 56;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+resize();
+
+const camTarget = new THREE.Vector3();
+let glowAmt = 0, playAmt = 0, revealed = false, tPrev = performance.now();
+
+function blend(p, key){
+  const a = TRACKS[clamp(Math.floor(p), 0, N_TRACKS-1)];
+  const b = TRACKS[clamp(Math.floor(p)+1, 0, N_TRACKS-1)];
+  const f = clamp(p - Math.floor(p), 0, 1);
+  return lerp(a[key], b[key], f*f*(3-2*f));
+}
+
+function fillFor(tr, p){
+  if(p < 0.05) return lerp(tr.vTop, tr.vMkT, p/0.05);
+  if(p < 0.95) return lerp(tr.vMkT, tr.vMkB, (p-0.05)/0.90);
+  return lerp(tr.vMkB, tr.vEnd, (p-0.95)/0.05);
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  const now = performance.now();
+  const dt = clamp((now - tPrev)/1000, 0.001, 0.05);
+  tPrev = now;
+  resize();
+
+  /* --- motion --- */
+  if(!dragging){
+    if(target !== null && target !== undefined){
+      const d = target - pos;
+      vel += d * 26 * dt;
+      vel *= Math.pow(0.0016, dt);
+      pos += vel * dt;
+      if(Math.abs(d) < 0.004 && Math.abs(vel) < 0.05){ pos = target; vel = 0; target = null; }
+    } else {
+      pos += vel * dt;
+      vel *= Math.pow(0.0022, dt);
+      if(Math.abs(vel) < 1.35){
+        const snap = clamp(Math.round(pos), 0, N_TRACKS-1);
+        vel += (snap - pos) * 24 * dt;
+        vel *= Math.pow(0.010, dt);
+      }
+    }
+  }
+  if(pos < -0.90){ pos = lerp(pos, -0.90, 1 - Math.pow(0.001, dt)); vel *= 0.5; }
+  if(pos > N_TRACKS-1){ pos = lerp(pos, N_TRACKS-1, 1 - Math.pow(0.001, dt)); vel *= 0.5; }
+
+  /* --- camera: the corridor is narrow in portrait, so the eye turns onto each stone --- */
+  const ap    = clamp(pos, 0, N_TRACKS-1);          // the aim never leaves the corridor
+  const vd    = blend(ap, 'viewd');
+  const camZ  = -pos*SPACING + vd;
+  const camX  = 0.36 * Math.cos(ap*Math.PI);
+  const slabX = -SIDE_X * Math.cos(ap*Math.PI);
+  const slabZ = -ap*SPACING;
+  camera.position.set(camX, CAM_Y, camZ);
+  camTarget.set(slabX, blend(ap, 'aimY'), slabZ);
+  camera.lookAt(camTarget);
+
+  /* --- lights: key hangs high across the corridor so it rakes each face from the side --- */
+  shared.uL0P.value.set(-slabX*0.55, 5.30, slabZ + 1.70);
+  shared.uL1P.value.set(0, 3.2, camZ - 24.0);
+
+  /* --- audio state --- */
+  if(ana){ ana.getByteFrequencyData(freq);
+    let s = 0; for(let i=1;i<9;i++) s += freq[i];
+    bass = lerp(bass, s/(8*255), 0.25);
+  }
+  shared.uBass.value = bass;
+
+  const isOn = playingIdx >= 0 && !audio.paused;
+  const prog = (playingIdx >= 0 && audio.duration) ? clamp(audio.currentTime/audio.duration, 0, 1) : 0;
+  const gTarget = isOn ? 1 : (playingIdx >= 0 && prog > 0.0005 ? 0.34 : 0);
+  glowAmt = lerp(glowAmt, gTarget, 1 - Math.pow(0.02, dt));
+  playAmt = lerp(playAmt, isOn ? 1 : (glowAmt > 0.05 ? 0.35 : 0), 1 - Math.pow(0.05, dt));
+
+  for(const tr of TRACKS){
+    const m = tr.mat.uniforms;
+    if(tr.i === playingIdx){
+      m.uGlowAmt.value = glowAmt;
+      m.uSelf.value = 1;
+      m.uFillY.value = fillFor(tr, prog);
+    } else if(m.uGlowAmt.value !== 0 || m.uSelf.value !== 0){
+      m.uGlowAmt.value = 0;
+      m.uSelf.value = 0;
+    }
+  }
+
+  if(playingIdx >= 0 && playAmt > 0.002){
+    const tr = TRACKS[playingIdx];
+    const nx = Math.sin(tr.rotY), nz = Math.cos(tr.rotY);
+    shared.uGP.value.set(tr.x + nx*1.5, tr.H*0.45 + 0.16, tr.z + nz*1.5);
+    shared.uGI.value = playAmt * (2.6 + bass*2.4);
+    floorMat.uniforms.uPlayAmt.value = playAmt * (0.75 + bass*0.5);
+    floorMat.uniforms.uPlayPos.value.set(tr.x, 0.05, tr.z);
+  } else {
+    shared.uGI.value = 0;
+    floorMat.uniforms.uPlayAmt.value = 0;
+  }
+
+  /* --- visibility + slots --- */
+  for(let i=0;i<N_TRACKS;i++){
+    const d = i - pos;
+    TRACKS[i].mesh.visible = (d > -2.6 && d < 13);
+  }
+  serviceSlots(pos, Math.abs(vel) > 5.5 ? 0 : 1);   // don't cut stone mid-flick
+
+  /* --- hud --- */
+  syncHud();
+  progf.style.width = (prog*100).toFixed(2) + '%';
+  const rh = rail.clientHeight;
+  railk.style.transform = 'translateY(' + (clamp(pos,0,N_TRACKS-1)/(N_TRACKS-1) * (rh-20)).toFixed(1) + 'px)';
+
+  renderer.render(scene, camera);
+
+  if(!revealed){
+    revealed = true;
+    bump(100);
+    canvas.classList.add('on');
+    setTimeout(() => $('#boot').classList.add('gone'), 120);
+  }
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

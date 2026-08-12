@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Kani — Pressure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=block" rel="stylesheet">
+<style>
+:root{
+  --plate:#0B0E14;
+  --bone:#EDE9E1;
+  --ink:#E1261D;
+  --m: clamp(16px, 3.2vw, 44px);
+  --fieldmin: 19vh;
+  --fieldh: var(--fieldmin);
+  --gap: clamp(14px, 2.4vh, 34px);
+  --meta: 13px;
+  --metah: 30px;
+}
+@media (min-width:900px){ :root{ --meta:14px; } }
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{
+  height:100%; background:#0B0E14; overflow:hidden;
+  -webkit-text-size-adjust:100%;
+  font-family:'Archivo',system-ui,sans-serif;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+body{ overscroll-behavior:none; touch-action:none; }
+button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+
+/* ---------- the sheet: everything that inverts ---------- */
+#sheet{ position:fixed; inset:0; isolation:isolate; overflow:hidden; }
+#ground{ position:absolute; inset:0; background:var(--plate); }
+
+#field{ position:absolute; left:0; right:0; top:calc(var(--m) + var(--metah)); height:var(--fieldh); }
+#plate{ display:block; width:100%; height:100%; }
+
+#topmeta{
+  position:absolute; left:var(--m); right:var(--m); top:var(--m); height:var(--metah);
+  display:flex; align-items:flex-start; justify-content:space-between;
+  color:var(--bone); font-size:var(--meta); line-height:1;
+  font-variation-settings:'wght' 500,'wdth' 96; letter-spacing:.01em;
+}
+#topmeta .cnt{ opacity:.55 }
+
+#typewrap{
+  position:absolute; left:var(--m); right:var(--m);
+  top:calc(var(--m) + var(--metah) + var(--fieldmin) + var(--gap));
+  bottom:calc(var(--m) + 34px);
+  display:flex; align-items:flex-end;
+  color:var(--bone);
+  clip-path:inset(0 -100vw 0 -100vw);
+  transition:clip-path 110ms cubic-bezier(.85,0,1,1);
+}
+#typewrap.shut{ clip-path:inset(48% -100vw 48% -100vw); transition-duration:95ms; }
+#lines{ width:100%; }
+#sub{
+  display:block; color:var(--bone); opacity:.55;
+  font-size:clamp(13px,1.6vw,21px); line-height:1.2; letter-spacing:.012em;
+  font-variation-settings:'wght' 600,'wdth' 92;
+  margin-bottom:.75em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ln{ display:block; white-space:pre; line-height:.80; }
+.ln > span{ display:inline-block; transform-origin:left bottom; will-change:font-variation-settings,transform; }
+
+#foot{
+  position:absolute; right:var(--m); bottom:var(--m); height:20px;
+  display:flex; align-items:center; gap:clamp(14px,2.6vw,34px);
+  color:var(--bone); font-size:var(--meta); line-height:1;
+  font-variation-settings:'wght' 500,'wdth' 96; letter-spacing:.015em; white-space:nowrap;
+}
+#foot .dim{ opacity:.55 }
+
+#inv{
+  position:fixed; inset:0; background:#fff; mix-blend-mode:difference; pointer-events:none;
+  transform:translateY(-101%); will-change:transform;
+  transition:transform 440ms cubic-bezier(.7,0,.14,1);
+}
+html.paper #inv{ transform:translateY(0); }
+#bar{
+  position:fixed; left:0; right:0; top:0; height:34vh; background:#fff;
+  mix-blend-mode:difference; pointer-events:none; transform:translateY(-140%); will-change:transform;
+}
+#bar.go{ animation:pass 300ms cubic-bezier(.3,0,.15,1) 1 both; }
+@keyframes pass{ from{ transform:translateY(-115%) } to{ transform:translateY(325%) } }
+
+/* ---------- accent layer: never inverts ---------- */
+#accent{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+#head{
+  position:absolute; top:0; bottom:0; width:1px; background:var(--ink);
+  opacity:0; transform:translateX(-1px);
+}
+#head::after{
+  content:''; position:absolute; left:-1px; width:3px;
+  top:calc(var(--m) + var(--metah)); height:var(--fieldh); background:var(--ink);
+}
+html.playing #head{ opacity:1 }
+#transport{
+  position:absolute; left:var(--m); bottom:var(--m); height:20px;
+  display:flex; align-items:center; gap:11px; pointer-events:auto;
+  color:var(--ink); font-size:var(--meta); line-height:1;
+  font-variation-settings:'wght' 600,'wdth' 96; letter-spacing:.02em;
+}
+#transport::before{ content:''; position:absolute; left:-12px; right:-12px; top:-15px; bottom:-15px; }
+#transport svg{ display:block; overflow:visible }
+#transport .t{ min-width:5.4em; text-align:left; }
+
+/* ---------- index ---------- */
+#index{
+  position:fixed; inset:0; z-index:9; background:var(--plate); color:var(--bone);
+  clip-path:inset(0 0 100% 0); transition:clip-path 180ms cubic-bezier(.3,0,.1,1);
+  pointer-events:none; overflow:hidden;
+}
+html.paper #index{ background:#F4F1EB; color:#12161E; }
+html.idx #index{ clip-path:inset(0 0 0 0); pointer-events:auto; }
+#idxscroll{
+  position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  touch-action:pan-y; padding:calc(var(--m) + 36px) var(--m) calc(var(--m) + 60px);
+}
+.grp{ margin-bottom:clamp(24px,3.4vh,44px); }
+.yr{
+  display:flex; align-items:baseline; gap:.85em;
+  font-size:clamp(15px,1.5vw,19px); line-height:1; letter-spacing:.02em;
+  font-variation-settings:'wght' 800,'wdth' 78;
+  padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid currentColor;
+}
+.yr i{ font-style:normal; font-size:11px; font-variation-settings:'wght' 500,'wdth' 88; opacity:.5; }
+.rows{ display:grid; grid-template-columns:repeat(auto-fill,minmax(400px,1fr)); column-gap:clamp(20px,3vw,54px); }
+.row{
+  display:flex; align-items:baseline; gap:.7em; width:100%; text-align:left;
+  padding:4px 0; line-height:1.12; opacity:.82;
+}
+.row .n{ font-size:11px; font-variation-settings:'wght' 500,'wdth' 88; opacity:.5; width:2.1em; flex:none; }
+.row .t{ font-size:clamp(15px,1.4vw,20px); flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .d{ font-size:11px; font-variation-settings:'wght' 500,'wdth' 88; opacity:.5; flex:none; }
+.row.on{ color:var(--ink); opacity:1; }
+#idxclose{
+  position:absolute; top:var(--m); right:var(--m); z-index:2; color:inherit;
+  font-size:var(--meta); font-variation-settings:'wght' 600,'wdth' 96; letter-spacing:.02em;
+  padding:10px; margin:-10px;
+}
+#idxtitle{
+  position:absolute; top:var(--m); left:var(--m); z-index:2;
+  font-size:var(--meta); font-variation-settings:'wght' 600,'wdth' 96; letter-spacing:.02em; opacity:.55;
+}
+#meas{ position:absolute; left:-9999px; top:0; white-space:pre; font-size:100px; letter-spacing:0; visibility:hidden; }
+</style>
+</head>
+<body>
+
+<div id="sheet">
+  <div id="ground"></div>
+  <div id="field"><canvas id="plate"></canvas></div>
+  <div id="topmeta">
+    <button id="pos" style="letter-spacing:inherit;font-variation-settings:inherit">01<span class="cnt">/72</span></button>
+    <button id="yrbtn" style="letter-spacing:inherit;font-variation-settings:inherit;border-bottom:1px solid currentColor;padding-bottom:3px">2026</button>
+  </div>
+  <div id="typewrap"><div id="lines"></div></div>
+  <div id="foot">
+    <span id="f-date" class="dim"></span>
+    <span id="f-bpm"></span>
+    <span id="f-dur" class="dim"></span>
+  </div>
+  <div id="inv"></div>
+  <div id="bar"></div>
+</div>
+
+<div id="accent">
+  <div id="head"></div>
+  <button id="transport" aria-label="play / pause">
+    <svg id="glyph" width="13" height="15" viewBox="0 0 13 15" aria-hidden="true"><path id="gp" fill="currentColor" d="M0 0 L13 7.5 L0 15 Z"/></svg>
+    <span class="t" id="clock">0:00</span>
+  </button>
+</div>
+
+<div id="index">
+  <div id="idxtitle">KANI</div>
+  <button id="idxclose">CLOSE</button>
+  <div id="idxscroll"></div>
+</div>
+
+<div id="meas"></div>
+
+<script>
+(function(){
+'use strict';
+
+var W_MIN = 360, W_MAX = 900, D_MIN = 98, D_MAX = 106, FIT_E = 0.5;
+var D_HI = 120;   // the band the block itself may be set in; the narrow end
+function dLo(){ return clamp(66 + (window.innerWidth - 390)*0.043, 66, 88); }
+var K = 0.6;          // how much of the pressure-driven width growth survives tracking
+var LEAD = 0.80;
+
+var clamp = function(v,a,b){ return v<a?a:(v>b?b:v); };
+var lerp = function(a,b,t){ return a+(b-a)*t; };
+
+var INKS = [
+  {h:356,s:86,l:54},
+  {h:334,s:84,l:54},
+  {h:306,s:76,l:52},
+  {h:276,s:72,l:58},
+  {h:238,s:84,l:60},
+  {h:194,s:80,l:41}
+];
+
+var TRACKS = [], cur = 0, playing = false, idxOpen = false;
+var audio = null, actx = null, analy = null, freq = null, srcNode = null, wired = false, switching = false;
+var env = 0, envSlow = 0, slam = 0, hist = [];
+var bSlow = 0, bSpread = 8, bInit = false;
+var ctx2d = null, cv = null, cw = 0, ch = 0;
+var lineEls = [], lineCfg = [], typeReady = false;
+var idxRows = [];
+
+function b64(s){
+  var bin = atob(s), n = bin.length, a = new Uint8Array(n);
+  for (var i=0;i<n;i++) a[i] = bin.charCodeAt(i);
+  return a;
+}
+function mmss(s){
+  s = Math.max(0, Math.floor(s||0));
+  return Math.floor(s/60) + ':' + ('0' + (s%60)).slice(-2);
+}
+function tidy(t){
+  return t.replace(/'/g, '’');
+}
+
+/* ---------------- data ---------------- */
+
+Promise.all([
+  fetch('/data/marks.json').then(function(r){ return r.json(); }),
+  fetch('/config.json').then(function(r){ return r.json(); })
+]).then(function(res){
+  var marks = res[0], cfg = res[1];
+
+  cfg.tracks.forEach(function(c){
+    var m = marks.tracks[c.file];
+    if (!m) return;
+    var bal = m.balance;
+    TRACKS.push({
+      file: c.file,
+      title: tidy(m.title || c.title || ''),
+      date: m.date || c.date || '',
+      dur: m.duration, bpm: m.bpm, rms: m.rmsDb,
+      ratio: (bal[0]+bal[1])/(bal[4]+bal[5]),
+      raw: m, bands: null
+    });
+  });
+
+  // one hot ink per track, rank-quantised across the catalogue so all six inks get used
+  var order = TRACKS.slice().sort(function(a,b){ return b.ratio - a.ratio; });
+  order.forEach(function(t,i){
+    var k = Math.min(INKS.length-1, Math.floor(i / (order.length/INKS.length)));
+    var c = INKS[k];
+    t.ink = 'hsl(' + c.h + ' ' + c.s + '% ' + c.l + '%)';
+  });
+
+  // rest-state axes: loudness -> weight, low-end bias -> width
+  var rmsLo = -20.4, rmsHi = -4.2, rLo = 1.22, rHi = 1.80;
+  TRACKS.forEach(function(t){
+    var lo = clamp((t.rms - rmsLo)/(rmsHi - rmsLo), 0, 1);
+    var wd = clamp((t.ratio - rLo)/(rHi - rLo), 0, 1);
+    t.bias = 0.10 + lo*0.30;
+    t.idxW = Math.round(lerp(280, 820, lo));
+    t.idxD = Math.round(lerp(70, 118, wd));
+  });
+
+  buildIndex();
+  boot();
+}).catch(function(e){
+  document.getElementById('lines').textContent = 'data unavailable';
+  console.error(e);
+});
+
+function bandsOf(t){
+  if (!t.bands){
+    t.bands = t.raw.bands.map(b64);
+    t.pk = b64(t.raw.peaks);
+    // stretch each band across its own working range, so a track's structure
+    // reads instead of six near-saturated bars
+    t.nb = t.bands.map(function(a){
+      var s = Array.prototype.slice.call(a).sort(function(x,y){ return x-y; });
+      var lo = s[Math.floor(s.length*0.20)], hi = s[Math.floor(s.length*0.99)];
+      var out = new Float32Array(a.length), i;
+      if (hi - lo < 45){ for (i=0;i<a.length;i++) out[i] = a[i]/255; }
+      else { for (i=0;i<a.length;i++) out[i] = clamp((a[i]-lo)/(hi-lo), 0, 1); }
+      return out;
+    });
+  }
+  return t.bands;
+}
+
+/* ---------------- typesetting ---------------- */
+
+var meas = document.getElementById('meas');
+function measReady(){
+  meas.style.fontFamily = "'Archivo',system-ui,sans-serif";
+}
+// the only reliable signal that Archivo is actually rendering: two different
+// fallbacks must measure identically.
+function fontLive(){
+  var v = meas.style.fontVariationSettings;
+  meas.style.fontVariationSettings = 'normal';
+  meas.textContent = 'PRESSURE 0123 MWij';
+  meas.style.fontFamily = "'Archivo',monospace";
+  var a = meas.getBoundingClientRect().width;
+  meas.style.fontFamily = "'Archivo',serif";
+  var b = meas.getBoundingClientRect().width;
+  meas.style.fontFamily = "'Archivo',system-ui,sans-serif";
+  meas.style.fontVariationSettings = v;
+  return a > 0 && Math.abs(a - b) < 0.5;
+}
+var dOff = 0;   // per-title width-axis offset: the block is set wide or narrow so it fills the measure
+function axes(e, off){
+  var d = clamp(lerp(D_MIN,D_MAX,e) + (off === undefined ? dOff : off), 62, 125);
+  return "'wght' " + Math.round(lerp(W_MIN,W_MAX,e)) + ", 'wdth' " + d.toFixed(2);
+}
+function w100(s, e, off){
+  meas.style.fontVariationSettings = axes(e, off);
+  meas.textContent = s;
+  return meas.getBoundingClientRect().width;
+}
+function sampW(s, e){
+  return e <= 0.5 ? lerp(s[0], s[1], e*2) : lerp(s[1], s[2], (e-0.5)*2);
+}
+
+function tokens(title){
+  var parts = title.split(/\s+/).filter(Boolean), out = [];
+  for (var i=0;i<parts.length;i++){
+    if (parts[i] === '/' && out.length) out[out.length-1] += ' /';
+    else out.push(parts[i]);
+  }
+  return out;
+}
+
+function splits(words, n){
+  var out = [];
+  (function walk(start, left, acc){
+    if (left === 1){ out.push(acc.concat([words.slice(start).join(' ')])); return; }
+    for (var i=start+1; i<=words.length-(left-1); i++)
+      walk(i, left-1, acc.concat([words.slice(start,i).join(' ')]));
+  })(0, n, []);
+  return out;
+}
+
+function typeset(t){
+  var wrap = document.getElementById('typewrap');
+  var box = wrap.getBoundingClientRect();
+  var M = box.width, AH = box.height;
+  if (M < 80 || AH < 80) return;
+
+  var main = t.title, sub = '';
+  var mm = t.title.match(/^(.+?)\s*\((.+)\)\s*$/);
+  if (mm){ main = mm[1]; sub = mm[2]; }
+
+  var holder = document.getElementById('lines');
+  holder.innerHTML = '';
+  var avail = AH;
+  if (sub){
+    var sEl = document.createElement('span');
+    sEl.id = 'sub';
+    sEl.textContent = '(' + sub.toUpperCase() + ')';
+    holder.appendChild(sEl);
+    var sr = sEl.getBoundingClientRect();
+    avail -= sr.height + parseFloat(getComputedStyle(sEl).marginBottom || 0);
+  }
+
+  dOff = 0;
+  var words = tokens(main.toUpperCase());
+  var maxL = Math.min(words.length, 5);
+  var fitCache = {};
+  var fitW = function(s){
+    if (fitCache[s] === undefined) fitCache[s] = w100(s, FIT_E, 0);
+    return fitCache[s];
+  };
+
+  // One size for the whole block. For each possible number of lines, the width
+  // axis is opened or closed until the longest line reaches the measure at the
+  // same size the height allows — so the block fills the page both ways. The
+  // break that yields the largest type wins.
+  var Dfit = lerp(D_MIN, D_MAX, FIT_E);
+  var loOff = dLo() - Dfit, hiOff = D_HI - Dfit;
+  var best = null;
+
+  for (var L = 1; L <= maxL; L++){
+    var cands = splits(words, L), pick = null;
+    for (var c = 0; c < cands.length; c++){
+      var w = cands[c].map(fitW), mx = 0, sum = 0, wi = 0;
+      for (var i=0;i<w.length;i++){ if (w[i] > mx){ mx = w[i]; wi = i; } sum += w[i]; }
+      if (mx <= 0) continue;
+      var rag = 1 - (sum/w.length)/mx;
+      if (!pick || mx < pick.mx*0.995 || (mx < pick.mx*1.005 && rag < pick.rag))
+        pick = { lines:cands[c], mx:mx, rag:rag, wide:cands[c][wi] };
+    }
+    if (!pick) continue;
+
+    var Sh = avail/(L*LEAD);
+    var need = M*100/Sh;
+    var off = clamp(Dfit*(need/pick.mx - 1), loOff, hiOff), got = pick.mx;
+    if (Math.abs(off) > 0.05){
+      got = w100(pick.wide, FIT_E, off);
+      var slope = (got - pick.mx)/off;
+      if (Math.abs(slope) > 0.01){
+        off = clamp(off + (need - got)/slope, loOff, hiOff);
+        got = w100(pick.wide, FIT_E, off);
+      }
+    }
+    var S = Math.min(Sh, M*100/got);
+    // a short rag is worse than short measure: weight the size by how much of
+    // the measure the longest line can actually reach.
+    var fill = clamp((got*S/100 + 0.055*S*(pick.wide.length-1))/M, 0, 1);
+    var tall = clamp(L*S*LEAD/avail, 0, 1);
+    var score = S * Math.pow(fill, 1.5) * (1 + 0.10*tall);
+    if (!best || score > best.score) best = { S:S, off:off, lines:pick.lines, score:score };
+  }
+  if (!best) best = { S:48, off:0, lines:[main.toUpperCase()] };
+  dOff = best.off;
+
+  lineCfg = best.lines.map(function(txt, i){
+    var samples = [w100(txt, 0), w100(txt, 0.5), w100(txt, 1)];
+    var wfit = sampW(samples, FIT_E);
+    var gaps = Math.max(1, txt.length - 1);
+    var base = clamp((M - wfit*best.S/100)/gaps, 0, best.S*0.055);
+    return { text:txt, size:best.S, samples:samples, wfit:wfit, gaps:gaps, base:base };
+  });
+
+  lineEls = lineCfg.map(function(c){
+    var d = document.createElement('div');
+    d.className = 'ln';
+    d.style.fontSize = c.size.toFixed(2) + 'px';
+    var s = document.createElement('span');
+    s.textContent = c.text;
+    d.appendChild(s); holder.appendChild(d);
+    return s;
+  });
+  typeReady = true;
+  applyPressure(t.bias, true);
+}
+
+function applyPressure(e, force){
+  if (!typeReady) return;
+  for (var i=0;i<lineEls.length;i++){
+    var v = force ? e : (hist.length ? hist[Math.max(0, hist.length-1 - i*2)] : e);
+    var c = lineCfg[i];
+    // the letters swell, and the tracking closes on them: most of the extra
+    // advance width is absorbed, the rest bleeds into the margin.
+    var we = sampW(c.samples, v) * c.size / 100;
+    var wf = c.wfit * c.size / 100;
+    var ls = c.base + (1-K)*(wf - we)/c.gaps;
+    var el = lineEls[i];
+    el.style.fontVariationSettings = axes(v);
+    el.style.letterSpacing = ls.toFixed(2) + 'px';
+    el.style.marginRight = (-ls).toFixed(2) + 'px';
+    el.style.transform = 'scaleY(' + (1 - 0.04*v).toFixed(4) + ')';
+  }
+}
+
+/* ---------------- plate field ---------------- */
+
+function fieldMin(){ return clamp(window.innerHeight*0.19, 104, 210); }
+
+// the mark takes whatever height the title does not: the page is always full,
+// and the ratio of plate to type is set by the title itself.
+function seatField(){
+  var root = document.documentElement;
+  root.style.setProperty('--fieldmin', fieldMin().toFixed(1) + 'px');
+  var fEl = document.getElementById('field');
+  var wrap = document.getElementById('typewrap').getBoundingClientRect();
+  var block = document.getElementById('lines').getBoundingClientRect();
+  var top = fEl.getBoundingClientRect().top;
+  var gap = wrap.top - top - fieldMin();
+  var fh = clamp(wrap.bottom - block.height - gap - top, fieldMin(), window.innerHeight*0.56);
+  root.style.setProperty('--fieldh', fh.toFixed(1) + 'px');
+}
+
+function sizeCanvas(){
+  cv = cv || document.getElementById('plate');
+  ctx2d = ctx2d || cv.getContext('2d');
+  var r = cv.parentNode.getBoundingClientRect();
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  cw = Math.max(1, Math.round(r.width)); ch = Math.max(1, Math.round(r.height));
+  cv.width = Math.round(cw*dpr); cv.height = Math.round(ch*dpr);
+  ctx2d.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function drawField(progress){
+  var t = TRACKS[cur];
+  if (!ctx2d || !t) return;
+  bandsOf(t);
+  ctx2d.clearRect(0,0,cw,ch);
+  var nb = t.nb, n = nb[0].length, strat = ch/6, px = progress*cw, colw = cw/n;
+
+  for (var b=0;b<6;b++){
+    var base = ch - strat*b;             // bass sits at the foot, treble at the head
+    var mt = strat*0.86;
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, base);
+    for (var i=0;i<n;i++){
+      var y = base - (1.3 + Math.pow(nb[b][i], 1.15)*mt);
+      ctx2d.lineTo(i*colw, y);
+      ctx2d.lineTo((i+1)*colw, y);
+    }
+    ctx2d.lineTo(cw, base);
+    ctx2d.closePath();
+
+    if (!playing){
+      ctx2d.fillStyle = 'rgba(237,233,225,0.86)';
+      ctx2d.fill();
+    } else {
+      ctx2d.save(); ctx2d.clip();
+      ctx2d.fillStyle = 'rgba(237,233,225,1)';
+      ctx2d.fillRect(0,0,px,ch);
+      ctx2d.fillStyle = 'rgba(237,233,225,0.55)';
+      ctx2d.fillRect(px,0,cw-px,ch);
+      ctx2d.restore();
+    }
+  }
+}
+
+/* ---------------- audio ---------------- */
+
+function ensureAudio(){
+  if (audio) return;
+  audio = new Audio();
+  audio.crossOrigin = 'anonymous';
+  audio.preload = 'auto';
+  audio.addEventListener('ended', function(){ go(1, true); });
+  audio.addEventListener('playing', function(){ switching = false; setPlaying(true); });
+  // swapping src fires pause; that must not flip the page back to plate
+  audio.addEventListener('pause', function(){ if (!switching) setPlaying(false); });
+}
+
+function wireAnalyser(){
+  if (wired) return;
+  wired = true;
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    actx = new AC();
+    srcNode = actx.createMediaElementSource(audio);
+    analy = actx.createAnalyser();
+    analy.fftSize = 2048; analy.smoothingTimeConstant = 0.55;
+    srcNode.connect(analy); analy.connect(actx.destination);
+    freq = new Uint8Array(analy.frequencyBinCount);
+  } catch(e){ analy = null; }
+}
+
+// Level relative to the track's own moving average, so the type answers the
+// beat rather than pinning at the top of a loud, limited mix.
+function liveBass(){
+  if (!analy || !freq) return -1;
+  analy.getByteFrequencyData(freq);
+  var binHz = actx.sampleRate / analy.fftSize;
+  var lo = Math.max(1, Math.round(38/binHz)), hi = Math.max(lo+1, Math.round(250/binHz));
+  var s = 0, c = 0;
+  for (var i=lo;i<=hi;i++){ s += freq[i]*freq[i]; c++; }
+  var avg = Math.sqrt(s/c);
+  if (avg < 1) return 0;
+  if (!bInit){ bSlow = avg; bSpread = 8; bInit = true; }
+  bSlow += (avg - bSlow) * 0.012;
+  var dev = avg - bSlow;
+  bSpread += (Math.abs(dev) - bSpread) * 0.02;
+  return clamp(0.42 + dev/(bSpread*3 + 5), 0, 1);
+}
+
+function bakedBass(){
+  var t = TRACKS[cur];
+  if (!audio || !t.dur) return 0;
+  bandsOf(t);
+  var u = clamp(audio.currentTime / t.dur, 0, 0.9999);
+  var bi = u*(t.nb[0].length-1), i0 = Math.floor(bi), f = bi-i0;
+  var bass = lerp(t.nb[0][i0], t.nb[0][Math.min(i0+1,255)], f);
+  var pi = u*(t.pk.length-1), p0 = Math.floor(pi);
+  var pk = lerp(t.pk[p0], t.pk[Math.min(p0+1,t.pk.length-1)], pi-p0)/255;
+  return clamp(bass*0.80 + pk*0.34 - 0.10, 0, 1);
+}
+
+/* ---------------- state ---------------- */
+
+function setPlaying(v){
+  if (playing === v) return;
+  playing = v;
+  document.documentElement.classList.toggle('paper', v);
+  document.documentElement.classList.toggle('playing', v);
+  var gp = document.getElementById('gp');
+  gp.setAttribute('d', v ? 'M0 0 H4.4 V15 H0 Z M8.6 0 H13 V15 H8.6 Z' : 'M0 0 L13 7.5 L0 15 Z');
+  var t = TRACKS[cur];
+  drawField(audio && t && t.dur ? clamp(audio.currentTime/t.dur, 0, 1) : 0);
+}
+
+function toggle(){
+  ensureAudio();
+  var want = '/audio-mp3/' + encodeURIComponent(TRACKS[cur].file);
+  if (audio.getAttribute('src') !== want){ play(); return; }
+  if (audio.paused) { if (actx && actx.state === 'suspended') actx.resume(); audio.play(); }
+  else audio.pause();
+}
+
+function play(){
+  ensureAudio();
+  wireAnalyser();
+  if (actx && actx.state === 'suspended') actx.resume();
+  var t = TRACKS[cur];
+  var want = '/audio-mp3/' + encodeURIComponent(t.file);
+  if (audio.getAttribute('src') !== want){
+    switching = true;
+    setTimeout(function(){ switching = false; }, 900);
+    audio.setAttribute('src', want); audio.load();
+  }
+  bInit = false;
+  var pr = audio.play();
+  if (pr && pr.catch) pr.catch(function(){});
+  slam = 1;
+}
+
+function stamp(){
+  var bar = document.getElementById('bar');
+  bar.classList.remove('go'); void bar.offsetWidth; bar.classList.add('go');
+  var wrap = document.getElementById('typewrap');
+  wrap.classList.add('shut');
+  setTimeout(function(){
+    render();
+    wrap.classList.remove('shut');
+    slam = 1;
+    for (var i=0;i<hist.length;i++) hist[i] = 1;
+  }, 100);
+}
+
+var lock = 0;
+function go(step, autoplay){
+  var now = performance.now();
+  if (now - lock < 260) return;
+  lock = now;
+  cur = (cur + step + TRACKS.length) % TRACKS.length;
+  stamp();
+  if (autoplay || playing) setTimeout(play, 110);
+}
+
+function jump(i){
+  if (i === cur){ closeIndex(); play(); return; }
+  cur = i; closeIndex(); stamp(); setTimeout(play, 110);
+}
+
+function render(){
+  var t = TRACKS[cur];
+  document.documentElement.style.setProperty('--ink', t.ink);
+  document.getElementById('pos').innerHTML =
+    ('0'+(cur+1)).slice(-2) + '<span class="cnt">/' + ('0'+TRACKS.length).slice(-2) + '</span>';
+  document.getElementById('yrbtn').textContent = t.date ? t.date.slice(0,4) : '——';
+  document.getElementById('f-date').textContent = t.date || '';
+  document.getElementById('f-bpm').textContent = t.bpm + ' BPM';
+  document.getElementById('f-dur').textContent = mmss(t.dur);
+  document.documentElement.style.setProperty('--fieldmin', fieldMin().toFixed(1) + 'px');
+  typeset(t);
+  seatField();
+  sizeCanvas();
+  drawField(playing && audio && t.dur ? clamp(audio.currentTime/t.dur,0,1) : 0);
+  idxRows.forEach(function(r,i){ r.classList.toggle('on', i === cur); });
+}
+
+/* ---------------- index overlay ---------------- */
+
+function buildIndex(){
+  var host = document.getElementById('idxscroll');
+  var groups = {}, order = [];
+  TRACKS.forEach(function(t,i){
+    var y = t.date ? t.date.slice(0,4) : 'UNDATED';
+    if (!groups[y]){ groups[y] = []; order.push(y); }
+    groups[y].push(i);
+  });
+  order.sort(function(a,b){
+    if (a === 'UNDATED') return 1;
+    if (b === 'UNDATED') return -1;
+    return b.localeCompare(a);
+  });
+  order.forEach(function(y){
+    var g = document.createElement('div'); g.className = 'grp'; g.dataset.year = y;
+    var h = document.createElement('div'); h.className = 'yr';
+    h.innerHTML = '<span></span><i></i>';
+    h.firstChild.textContent = y;
+    h.lastChild.textContent = ('0'+groups[y].length).slice(-2);
+    g.appendChild(h);
+    var rows = document.createElement('div'); rows.className = 'rows';
+    g.appendChild(rows);
+    groups[y].forEach(function(i){
+      var t = TRACKS[i];
+      var b = document.createElement('button');
+      b.className = 'row';
+      b.innerHTML = '<span class="n"></span><span class="t"></span><span class="d"></span>';
+      b.querySelector('.n').textContent = ('0'+(i+1)).slice(-2);
+      var tt = b.querySelector('.t');
+      tt.textContent = t.title.toUpperCase();
+      tt.style.fontVariationSettings = "'wght' " + t.idxW + ", 'wdth' " + t.idxD;
+      b.querySelector('.d').textContent = t.bpm + '  ' + mmss(t.dur);
+      b.addEventListener('click', function(){ jump(i); });
+      rows.appendChild(b);
+      idxRows[i] = b;
+    });
+    host.appendChild(g);
+  });
+}
+
+function openIndex(){
+  idxOpen = true;
+  document.documentElement.classList.add('idx');
+  var t = TRACKS[cur], y = t.date ? t.date.slice(0,4) : 'UNDATED';
+  var g = document.querySelector('.grp[data-year="' + y + '"]');
+  var sc = document.getElementById('idxscroll');
+  if (g) sc.scrollTop = Math.max(0, g.offsetTop - sc.offsetTop - 40);
+}
+function closeIndex(){ idxOpen = false; document.documentElement.classList.remove('idx'); }
+
+/* ---------------- loop ---------------- */
+
+var lastW = 0, lastH = 0, lastFm = '';
+function relayout(){
+  var t = TRACKS[cur];
+  if (!t) return;
+  var fm = fieldMin().toFixed(1) + 'px';
+  if (fm !== lastFm){ lastFm = fm; document.documentElement.style.setProperty('--fieldmin', fm); }
+  var el = document.getElementById('typewrap');
+  if (Math.abs(el.clientWidth - lastW) < 2 && Math.abs(el.clientHeight - lastH) < 2) return;
+  lastW = el.clientWidth; lastH = el.clientHeight;
+  typeset(t);
+  seatField();
+  sizeCanvas();
+  drawField(playing && audio && t.dur ? clamp(audio.currentTime/t.dur,0,1) : 0);
+}
+
+var tick = 0, fontOK = false;
+function frame(){
+  if ((tick++ % 12) === 0){
+    if (!fontOK && TRACKS.length && fontLive()){ fontOK = true; lastW = lastH = 0; }
+    relayout();
+  }
+  var t = TRACKS[cur];
+  var live = playing && audio && !audio.paused;
+  var raw = 0;
+  if (live){
+    var lv = liveBass();
+    raw = lv >= 0 ? lv : bakedBass();
+  }
+  env += (raw - env) * (raw > env ? 0.45 : 0.09);
+  envSlow += (raw - envSlow) * (raw > envSlow ? 0.12 : 0.055);
+  var p = Math.pow(clamp(env*0.68 + envSlow*0.32, 0, 1), 0.9);
+  var bias = t ? t.bias : 0.2;
+  var e = live ? clamp(bias*0.5 + p*0.94, 0, 1) : bias;
+  slam *= 0.90;
+  if (slam > 0.002) e = clamp(e + slam*(1 - e), 0, 1);
+
+  hist.push(e); if (hist.length > 24) hist.shift();
+  applyPressure(e, false);
+
+  if (audio && t && t.dur){
+    var pr = clamp(audio.currentTime / t.dur, 0, 1);
+    document.getElementById('head').style.transform = 'translateX(' + (pr*window.innerWidth) + 'px)';
+    document.getElementById('clock').textContent = playing ? mmss(audio.currentTime) + ' / ' + mmss(t.dur) : mmss(t.dur);
+    if (playing) drawField(pr);
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- input ---------------- */
+
+function boot(){
+  measReady();
+  sizeCanvas();
+
+  // the mark needs no webfont, so it goes up first; the type waits until
+  // Archivo is genuinely rendering, or gives up and uses the fallback metrics.
+  document.documentElement.style.setProperty('--fieldmin', fieldMin().toFixed(1) + 'px');
+  sizeCanvas(); drawField(0);
+
+  var again = function(){ lastW = lastH = 0; render(); };
+  var t0 = Date.now();
+  (function poll(){
+    if (fontLive() || Date.now() - t0 > 4000){ fontOK = fontLive(); again(); }
+    else setTimeout(poll, 50);
+  })();
+  if (document.fonts){
+    if (document.fonts.load) document.fonts.load("400 100px Archivo").then(again, again);
+    if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', again);
+  }
+
+  var rt;
+  window.addEventListener('resize', function(){ clearTimeout(rt); rt = setTimeout(relayout, 110); });
+  if (window.ResizeObserver){
+    new ResizeObserver(function(){ clearTimeout(rt); rt = setTimeout(relayout, 60); })
+      .observe(document.getElementById('typewrap'));
+  }
+
+  var acc = 0, wlock = 0;
+  window.addEventListener('wheel', function(ev){
+    if (idxOpen) return;
+    ev.preventDefault();
+    var now = performance.now();
+    if (now - wlock < 300){ return; }
+    acc += ev.deltaY;
+    if (Math.abs(acc) > 48){ wlock = now; go(acc > 0 ? 1 : -1); acc = 0; }
+  }, { passive:false });
+
+  var ty = 0, tt = 0, tmoved = false;
+  window.addEventListener('touchstart', function(ev){
+    ty = ev.touches[0].clientY; tt = performance.now(); tmoved = false;
+  }, { passive:true });
+  window.addEventListener('touchmove', function(ev){
+    if (idxOpen) return;
+    if (Math.abs(ev.touches[0].clientY - ty) > 8) tmoved = true;
+  }, { passive:true });
+  window.addEventListener('touchend', function(ev){
+    if (idxOpen) return;
+    var dy = ev.changedTouches[0].clientY - ty;
+    if (Math.abs(dy) > 44 && performance.now() - tt < 700) go(dy < 0 ? 1 : -1);
+  }, { passive:true });
+
+  window.addEventListener('keydown', function(ev){
+    var k = ev.key;
+    if (k === 'Escape'){ closeIndex(); return; }
+    if (idxOpen && k !== 'i') return;
+    if (k === ' '){ ev.preventDefault(); toggle(); }
+    else if (k === 'ArrowDown' || k === 'j'){ ev.preventDefault(); go(1); }
+    else if (k === 'ArrowUp' || k === 'k'){ ev.preventDefault(); go(-1); }
+    else if (k === 'i'){ idxOpen ? closeIndex() : openIndex(); }
+  });
+
+  document.getElementById('transport').addEventListener('click', function(ev){ ev.stopPropagation(); toggle(); });
+  document.getElementById('pos').addEventListener('click', function(ev){ ev.stopPropagation(); openIndex(); });
+  document.getElementById('yrbtn').addEventListener('click', function(ev){ ev.stopPropagation(); openIndex(); });
+  document.getElementById('idxclose').addEventListener('click', closeIndex);
+  document.getElementById('sheet').addEventListener('click', function(){ if (!idxOpen) toggle(); });
+
+  requestAnimationFrame(frame);
+
+  // entrance: the plate takes its first impression
+  setTimeout(function(){
+    var bar = document.getElementById('bar');
+    bar.classList.add('go');
+    slam = 1;
+  }, 260);
+}
+
+})();
+</script>
+</body>
+</html>

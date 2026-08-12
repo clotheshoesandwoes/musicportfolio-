@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<title>Kani — Crate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0b0a09; --pale:rgba(238,231,220,.62); }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;overscroll-behavior:none;
+    -webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;color:#efe9e0}
+  body{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  #defocus{position:fixed;inset:0;z-index:0;display:none}
+  #defocus canvas{width:100%;height:100%;display:block}
+  #gl{position:fixed;inset:0;z-index:1;display:block;touch-action:none;-webkit-tap-highlight-color:transparent}
+
+  #ui{position:fixed;inset:0;z-index:2;pointer-events:none;
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  #brand{position:absolute;top:14px;left:16px;font-family:'Anton',sans-serif;font-size:17px;line-height:1;
+      color:#efe9e0;opacity:.9}
+  #ord{position:absolute;top:15px;right:16px;font-size:11px;letter-spacing:.02em;color:var(--pale);
+      font-variant-numeric:tabular-nums}
+
+  #bar{position:absolute;left:0;right:0;bottom:0;height:64px;display:none;align-items:center;gap:12px;
+      padding:0 14px calc(6px + env(safe-area-inset-bottom)) 14px;pointer-events:auto;
+      border-top:1px solid rgba(238,231,220,.13);background:linear-gradient(180deg,rgba(11,10,9,0) 0%,rgba(11,10,9,.86) 46%,rgba(11,10,9,.97) 100%)}
+  #bar.on{display:flex}
+  #pp{width:46px;height:46px;flex:none;border:0;background:none;padding:0;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+  #pp svg{width:19px;height:19px;fill:#efe9e0}
+  #nowt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      font-family:'Anton',sans-serif;font-size:16px;letter-spacing:.005em;line-height:1;padding-top:2px}
+  #nowc{flex:none;font-size:11px;color:var(--pale);font-variant-numeric:tabular-nums}
+  #prog{position:absolute;left:0;bottom:0;height:2px;width:0;background:#d8462a}
+
+  #boot{position:fixed;inset:0;z-index:5;background:var(--bg);display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:16px;transition:opacity .6s ease}
+  #boot.gone{opacity:0;pointer-events:none}
+  #boot .n{font-family:'Anton',sans-serif;font-size:34px;line-height:1}
+  #boot .r{width:140px;height:1px;background:rgba(238,231,220,.18);position:relative}
+  #boot .r i{position:absolute;left:0;top:0;height:1px;width:0;background:#d8462a;transition:width .25s linear}
+  #boot .e{font-size:11px;color:#d8462a;max-width:70%;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div id="defocus"><canvas id="dfc"></canvas></div>
+<canvas id="gl"></canvas>
+
+<div id="ui">
+  <div id="brand">KANI</div>
+  <div id="ord"></div>
+  <div id="bar">
+    <button id="pp" aria-label="play pause"><svg id="ppi" viewBox="0 0 24 24"><rect x="4" y="3" width="6" height="18"/><rect x="14" y="3" width="6" height="18"/></svg></button>
+    <div id="nowt"></div>
+    <div id="nowc">0:00</div>
+    <div id="prog"></div>
+  </div>
+</div>
+
+<div id="boot"><div class="n">KANI</div><div class="r"><i id="bootr"></i></div><div class="e" id="booterr"></div></div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp = (a,b,t) => a + (b-a)*t;
+const bootr = $('#bootr');
+const setBoot = f => { bootr.style.width = (f*140)+'px'; };
+
+/* ============================== data ============================== */
+
+function b64u8(s){ const bin = atob(s); const a = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; }
+const mmss = s => { s = Math.max(0, Math.round(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+
+let cfg, marks, items = [], tracks = [];
+
+async function loadData(){
+  const [c, m] = await Promise.all([
+    fetch('/config.json').then(r=>r.json()),
+    fetch('/data/marks.json').then(r=>r.json())
+  ]);
+  cfg = c; marks = m;
+  setBoot(.22);
+
+  // per-band corpus range, for normalising `balance`
+  const lo = new Array(6).fill(1e9), hi = new Array(6).fill(-1e9);
+  for (const k in m.tracks){ const b = m.tracks[k].balance;
+    for(let i=0;i<6;i++){ if(b[i]<lo[i]) lo[i]=b[i]; if(b[i]>hi[i]) hi[i]=b[i]; } }
+
+  const dLo = Math.log(22), dHi = Math.log(645);
+  let lastYear = null, ord = 0;
+
+  for (const t of c.tracks){
+    const mk = m.tracks[t.file];
+    if (!mk) continue;
+    const year = t.date ? t.date.slice(0,4) : '';
+    if (year !== lastYear){
+      items.push({ kind:'div', year: year || '—', h:1.585, t:0.042 });
+      lastYear = year;
+    }
+    const nb = mk.balance.map((v,i)=> clamp((v-lo[i])/Math.max(1e-6,hi[i]-lo[i]), 0, 1));
+    const warm = ((nb[0]+nb[1])*0.5 - (nb[4]+nb[5])*0.5);            // -1 bright .. +1 bass heavy
+    const dn = clamp((Math.log(Math.max(22, mk.duration)) - dLo)/(dHi-dLo), 0, 1);
+
+    const it = {
+      kind:'trk', ord:++ord, file:t.file, title:mk.title || t.title,
+      date: mk.date || t.date || '', dur: mk.duration, bpm: mk.bpm,
+      crest: mk.crest, rms: mk.rmsDb, onset: mk.onsetRate,
+      isNew: !!t.isNew, isFeat: !!t.isFeatured,
+      warm, nb,
+      bands: mk.bands.map(b64u8), cent: b64u8(mk.cent), peaks: b64u8(mk.peaks),
+      h: 1.5, t: 0.019 + 0.052*dn
+    };
+    // paper stock + printing ink, derived from where the track's weight sits
+    const hue  = warm >= 0 ? 34 - warm*8 : 34 + warm*26;
+    const sat  = 0.07 + 0.13*Math.max(0, warm) + 0.02*Math.max(0,-warm);
+    const lig  = 0.845 - 0.135*Math.max(0, warm) + 0.045*Math.max(0,-warm);
+    it.paper   = `hsl(${hue.toFixed(1)} ${(sat*100).toFixed(0)}% ${(lig*100).toFixed(0)}%)`;
+    it.paperD  = `hsl(${hue.toFixed(1)} ${(sat*100).toFixed(0)}% ${((lig-0.085)*100).toFixed(0)}%)`;
+    it.paperL  = `hsl(${hue.toFixed(1)} ${(sat*80).toFixed(0)}% ${((lig+0.06)*100).toFixed(0)}%)`;
+    it.paperHex = hslHex(hue, sat, lig);
+    it.ink     = warm > 0.10 ? 'hsl(13 46% 17%)'
+               : warm < -0.10 ? 'hsl(213 32% 15%)'
+               : 'hsl(74 18% 13%)';
+    it.accent  = t.isNew ? '#c1361a' : it.ink;
+    items.push(it);
+    tracks.push(it);
+  }
+  // slot geometry
+  let z = 0;
+  items.forEach(it => { it.z = z + it.t*0.5; z += it.t + 0.009; });
+  window.__crateLen = z;
+}
+
+function hslHex(h,s,l){
+  h=((h%360)+360)%360; s=clamp(s,0,1); l=clamp(l,0,1);
+  const a = s*Math.min(l,1-l);
+  const f = n => { const k=(n+h/30)%12; return l - a*Math.max(-1, Math.min(k-3, Math.min(9-k,1))); };
+  return (Math.round(f(0)*255)<<16) | (Math.round(f(8)*255)<<8) | Math.round(f(4)*255);
+}
+
+/* ============================== printed marks ============================== */
+
+/* the band data arrives already contrast stretched, so it sits high and nearly flat and
+   prints as a solid slab. spreading each band by rank puts its own structure back, and a
+   little of the straight percentile stretch keeps the real peaks proud. */
+function stretch(arr){
+  const n = arr.length, hist = new Uint16Array(256);
+  for (let i=0;i<n;i++) hist[arr[i]]++;
+  const cdf = new Float32Array(256);
+  let acc = 0;
+  for (let i=0;i<256;i++){ acc += hist[i]; cdf[i] = (acc - hist[i]*0.5)/n; }
+  const s = Array.from(arr).sort((a,b)=>a-b);
+  const lo = s[Math.floor(n*0.08)], hi = s[Math.floor(n*0.96)], r = Math.max(8, hi-lo);
+  const out = new Float32Array(n);
+  for (let i=0;i<n;i++){
+    const lin = clamp((arr[i]-lo)/r, 0, 1);
+    out[i] = clamp(cdf[arr[i]]*0.66 + lin*0.34, 0, 1);
+  }
+  return out;
+}
+
+let grainPat = null;
+function grain(){
+  if (grainPat) return grainPat;
+  const n = 120, c = document.createElement('canvas'); c.width=c.height=n;
+  const g = c.getContext('2d'), im = g.createImageData(n,n), d = im.data;
+  for(let i=0;i<n*n;i++){ const v = 128 + (Math.random()-0.5)*80; d[i*4]=d[i*4+1]=d[i*4+2]=v; d[i*4+3]=26; }
+  g.putImageData(im,0,0);
+  grainPat = c; return c;
+}
+
+/* top edge + back paper, one small texture per sleeve.
+   canvas rows 0..27  -> the top edge (v across the sleeve thickness, row 0 = front lip)
+   canvas rows 28..47 -> plain stock for the back and side faces                    */
+function edgeCanvas(it){
+  const W = 512, H = 48, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+
+  if (it.kind === 'div'){
+    g.fillStyle = '#3f3729'; g.fillRect(0,0,W,H);
+    g.fillStyle = 'rgba(255,244,224,.20)'; g.fillRect(0,0,W,3);
+    g.fillStyle = 'rgba(0,0,0,.50)'; g.fillRect(0,22,W,6);
+    const gr = g.createLinearGradient(0,28,0,48);
+    gr.addColorStop(0,'#453c2e'); gr.addColorStop(1,'#332c23');
+    g.fillStyle = gr; g.fillRect(0,28,W,20);
+    g.fillStyle = 'rgba(0,0,0,.30)'; g.fillRect(0,44,W,1);
+    return c;
+  }
+
+  g.fillStyle = it.paper; g.fillRect(0,0,W,H);
+
+  // lit front lip of the top edge
+  g.fillStyle = it.paperL; g.fillRect(0,0,W,3);
+
+  // the track's own waveform, printed along the top edge
+  const pk = it.peaks, bot = 21, hgt = 17, NB = 5;
+  g.fillStyle = it.ink;
+  for (let b=0;b<NB;b++){
+    g.globalAlpha = 0.34 + 0.5*((b+0.5)/NB);
+    g.beginPath();
+    for (let x=0;x<512;x++){
+      const v = pk[x]/255;
+      if (Math.min(NB-1, (v*NB)|0) !== b) continue;
+      const h = Math.max(1, v*hgt);
+      g.rect(x, bot-h, 1, h);
+    }
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  g.fillStyle = it.accent; g.fillRect(0, bot+1, W, 1);
+  if (it.isFeat){ g.fillStyle = it.ink; for(let x=8;x<W;x+=64) g.fillRect(x, bot+3, 22, 1); }
+
+  // occlusion toward the back edge, where the next sleeve overhangs
+  const ao = g.createLinearGradient(0,22,0,28);
+  ao.addColorStop(0,'rgba(0,0,0,0)'); ao.addColorStop(1,'rgba(0,0,0,.55)');
+  g.fillStyle = ao; g.fillRect(0,22,W,6);
+
+  // stock for the back / sides: row 28 = sleeve bottom, row 47 = sleeve top
+  const bg = g.createLinearGradient(0,28,0,48);
+  bg.addColorStop(0, it.paper); bg.addColorStop(0.72, it.paper); bg.addColorStop(1, it.paperD);
+  g.fillStyle = bg; g.fillRect(0,28,W,20);
+  // printing near the head of the back — what you read off the stack you have been through
+  g.fillStyle = it.ink;
+  g.globalAlpha = .55; g.fillRect(22, 43, W-44, 1);
+  g.globalAlpha = .95; g.fillRect(22, 45, 66, 3);
+  g.globalAlpha = .55;
+  for (let x=0;x<48;x++){
+    const v = it.peaks[x*10]/255;
+    g.fillRect(104 + x*6, 45, 3, 1 + v*2.5);
+  }
+  g.globalAlpha = .35; g.fillRect(22, 39, W-44, 1);
+  g.globalAlpha = 1;
+  return c;
+}
+
+function fitText(g, text, maxW, maxH, maxLines, hi, lo){
+  const words = text.split(/\s+/);
+  for (let size = hi; size >= lo; size -= 2){
+    g.font = size + 'px Anton, sans-serif';
+    const lines = []; let cur = '';
+    let ok = true;
+    for (const w of words){
+      const trial = cur ? cur+' '+w : w;
+      if (g.measureText(trial).width <= maxW || !cur){ cur = trial; }
+      else { lines.push(cur); cur = w; }
+      if (g.measureText(cur).width > maxW && cur.indexOf(' ') < 0 && size > lo){ ok = false; break; }
+    }
+    if (!ok) continue;
+    lines.push(cur);
+    if (lines.length <= maxLines && lines.length*size*1.02 <= maxH) return { size, lines };
+  }
+  g.font = lo + 'px Anton, sans-serif';
+  return { size: lo, lines: [text] };
+}
+
+const FACE_W = 640, FACE_H = 960;
+const MK = { x0:44, x1:596, y0:498, y1:850 };
+const UMX = [MK.x0/FACE_W, MK.x1/FACE_W];
+const UMY = [1 - MK.y1/FACE_H, 1 - MK.y0/FACE_H];
+
+function drawFace(g, it){
+  const W = FACE_W, H = FACE_H;
+  g.clearRect(0,0,W,H);
+  g.fillStyle = it.paper; g.fillRect(0,0,W,H);
+
+  // uneven printing light across the stock
+  let sh = g.createLinearGradient(0,0,W*0.7,H);
+  sh.addColorStop(0,'rgba(255,255,255,.10)'); sh.addColorStop(.55,'rgba(255,255,255,0)');
+  sh.addColorStop(1,'rgba(0,0,0,.09)');
+  g.fillStyle = sh; g.fillRect(0,0,W,H);
+
+  const ink = it.ink, acc = it.accent;
+  g.textBaseline = 'alphabetic';
+
+  // head: catalogue number, date
+  g.fillStyle = ink;
+  g.font = '54px Anton, sans-serif';
+  g.fillText(String(it.ord).padStart(3,'0'), 44, 96);
+  g.font = '500 21px "IBM Plex Mono", monospace';
+  const dt = it.date || '';
+  if (dt){ const w = g.measureText(dt).width; g.fillText(dt, W-44-w, 92); }
+  g.fillStyle = acc; g.fillRect(44, 116, W-88, dt ? 3 : 3);
+
+  // title
+  const fit = fitText(g, it.title.toUpperCase(), W-86, 268, 4, 116, 30);
+  g.fillStyle = ink;
+  g.font = fit.size + 'px Anton, sans-serif';
+  let y = 162 + fit.size*0.80;
+  for (const ln of fit.lines){ g.fillText(ln, 42, y); y += fit.size*1.02; }
+
+  // measured numbers
+  g.fillStyle = ink; g.globalAlpha = .82;
+  g.font = '500 22px "IBM Plex Mono", monospace';
+  g.fillText(mmss(it.dur), 44, 462);
+  const s2 = it.bpm + ' BPM', w2 = g.measureText(s2).width;
+  g.fillText(s2, (W-w2)/2, 462);
+  const s3 = it.rms.toFixed(1) + ' dB', w3 = g.measureText(s3).width;
+  g.fillText(s3, W-44-w3, 462);
+  g.globalAlpha = 1;
+  g.fillStyle = ink; g.globalAlpha=.35; g.fillRect(44, 476, W-88, 1); g.globalAlpha=1;
+
+  // the mark: six bands of energy over the length of the track, bass at the foot
+  const bw = MK.x1-MK.x0, bh = (MK.y1-MK.y0)/6, cols = 256, cw = bw/cols;
+  for (let b=0;b<6;b++){
+    const base = MK.y1 - b*bh;
+    const arr = stretch(it.bands[b]);
+    g.fillStyle = ink;
+    for (let q=0;q<6;q++){
+      g.globalAlpha = 0.16 + 0.74*((q+0.5)/6);
+      g.beginPath();
+      for (let x=0;x<cols;x++){
+        const v = arr[x];
+        if (Math.min(5, (v*6)|0) !== q) continue;
+        g.rect(MK.x0 + x*cw, base-2-v*(bh-3), Math.max(1, cw-0.35), v*(bh-3));
+      }
+      g.fill();
+    }
+    g.globalAlpha = .30; g.fillStyle = ink;
+    g.fillRect(MK.x0, base-1, bw, 1);
+  }
+  g.globalAlpha = 1;
+
+  // brightness over time, drawn across the whole block
+  g.strokeStyle = acc; g.lineWidth = 2; g.globalAlpha = .85;
+  g.beginPath();
+  for (let x=0;x<256;x++){
+    const v = it.cent[x]/255;
+    const px = MK.x0 + x*cw, py = MK.y1 - v*(MK.y1-MK.y0);
+    x ? g.lineTo(px,py) : g.moveTo(px,py);
+  }
+  g.stroke(); g.globalAlpha = 1;
+
+  // envelope
+  const wy = 902, wh = 46;
+  g.fillStyle = ink; g.globalAlpha = .75;
+  for (let x=0;x<512;x++){
+    const v = it.peaks[x]/255, h = Math.max(1, v*wh);
+    g.fillRect(MK.x0 + x*(bw/512), wy - h/2, Math.max(1, bw/512-0.2), h);
+  }
+  g.globalAlpha = 1;
+  g.fillStyle = ink; g.globalAlpha=.3; g.fillRect(44, 940, W-88, 1); g.globalAlpha=1;
+
+  // stock grain
+  const pat = g.createPattern(grain(),'repeat');
+  g.fillStyle = pat; g.globalAlpha = .55; g.fillRect(0,0,W,H); g.globalAlpha = 1;
+}
+
+/* the divider stands a little proud of the sleeves; only that tab is ever seen,
+   so the year is set to sit inside it */
+function dividerFace(it){
+  const W = 384, H = Math.round(W*1.585);
+  const c = document.createElement('canvas'); c.width=W; c.height=H;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0,0,0,H);
+  gr.addColorStop(0,'#4c4234'); gr.addColorStop(.10,'#3d352a'); gr.addColorStop(1,'#2e2822');
+  g.fillStyle = gr; g.fillRect(0,0,W,H);
+  g.fillStyle = 'rgba(0,0,0,.40)'; g.fillRect(0, 47, W, 2);
+  g.fillStyle = '#e6dccb';
+  g.font = '40px Anton, sans-serif'; g.textBaseline='alphabetic';
+  const w = g.measureText(it.year).width;
+  g.fillText(it.year, (W-w)/2, 42);
+  g.fillStyle = '#e6dccb'; g.globalAlpha = .55;
+  g.fillRect(26, 14, (W-w)/2 - 44, 2); g.fillRect((W+w)/2 + 18, 14, (W-w)/2 - 44, 2);
+  // and again, board sized, for when the divider itself is the card you are on
+  g.globalAlpha = .16; g.font = '188px Anton, sans-serif';
+  const w2 = g.measureText(it.year).width;
+  g.fillText(it.year, (W-w2)/2, Math.round(H*0.62));
+  g.globalAlpha = .30;
+  g.fillRect(40, Math.round(H*0.66), W-80, 2);
+  g.fillRect(40, Math.round(H*0.30), W-80, 2);
+  g.globalAlpha = 1;
+  const pat = g.createPattern(grain(),'repeat');
+  g.fillStyle = pat; g.globalAlpha=.7; g.fillRect(0,0,W,H); g.globalAlpha=1;
+  return c;
+}
+
+function woodTex(){
+  const W=256,H=256,c=document.createElement('canvas'); c.width=W;c.height=H;
+  const g=c.getContext('2d');
+  g.fillStyle='#2a2119'; g.fillRect(0,0,W,H);
+  for(let i=0;i<420;i++){
+    const y=Math.random()*H, a=Math.random()*0.10;
+    g.fillStyle = Math.random()<.5 ? `rgba(0,0,0,${a})` : `rgba(150,120,86,${a*0.7})`;
+    g.fillRect(0, y, W, Math.random()<.8 ? 1 : 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5,1);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ============================== geometry ============================== */
+
+/* unit sleeve: x -0.5..0.5, y 0..1, z -0.5(back)..0.5(front).
+   group 0 = the sleeve itself, sampling this track's own 512x48 strip
+   group 1 = a full-face overlay, switched on only when the sleeve carries a printed face */
+const V = row => 1 - row/48;
+const BAND = 0.928;                        // the head of the face that stays visible in the stack
+function sleeveGeometry(){
+  const pos = [], nor = [], uv = [];
+  const push = (A,B,C,D,n,uvs)=>{
+    const tri = (a,b,c, ua,ub,uc)=>{
+      pos.push(...a,...b,...c); nor.push(...n,...n,...n); uv.push(...ua,...ub,...uc);
+    };
+    tri(A,B,C, uvs[0],uvs[1],uvs[2]);
+    tri(A,C,D, uvs[0],uvs[2],uvs[3]);
+  };
+  const VT = V(0), VE = V(28), FLAT = [0.5,0.22];
+  const MB = V(21), MT = V(4);              // the printed mark inside the strip
+
+  // top (+Y) : the front lip of the edge sits at v = row 0
+  push([-.5,1,.5],[.5,1,.5],[.5,1,-.5],[-.5,1,-.5],[0,1,0],
+       [[0,VT],[1,VT],[1,VE],[0,VE]]);
+  // back (-Z) : plain stock, bottom of the sleeve at row 28
+  push([.5,0,-.5],[-.5,0,-.5],[-.5,1,-.5],[.5,1,-.5],[0,0,-1],
+       [[.95,V(29)],[.05,V(29)],[.05,V(47)],[.95,V(47)]]);
+  // left (-X) / right (+X) / bottom (-Y)
+  push([-.5,0,-.5],[-.5,0,.5],[-.5,1,.5],[-.5,1,-.5],[-1,0,0],[FLAT,FLAT,FLAT,FLAT]);
+  push([.5,0,.5],[.5,0,-.5],[.5,1,-.5],[.5,1,.5],[1,0,0],[FLAT,FLAT,FLAT,FLAT]);
+  push([-.5,0,-.5],[.5,0,-.5],[.5,0,.5],[-.5,0,.5],[0,-1,0],[FLAT,FLAT,FLAT,FLAT]);
+  // front (+Z), body : plain stock
+  push([-.5,0,.5],[.5,0,.5],[.5,BAND,.5],[-.5,BAND,.5],[0,0,1],[FLAT,FLAT,FLAT,FLAT]);
+  // front (+Z), head : this track's printed mark — the sliver you read in the stack
+  push([-.5,BAND,.5],[.5,BAND,.5],[.5,1,.5],[-.5,1,.5],[0,0,1],
+       [[0,MB],[1,MB],[1,MT],[0,MT]]);
+  const restCount = pos.length/3;
+  // full-face overlay, proud of the front (local z, so it survives the thickness scale)
+  push([-.5,0,.58],[.5,0,.58],[.5,1,.58],[-.5,1,.58],[0,0,1],
+       [[0,0],[1,0],[1,1],[0,1]]);
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('normal',   new THREE.Float32BufferAttribute(nor,3));
+  g.setAttribute('uv',       new THREE.Float32BufferAttribute(uv,2));
+  g.addGroup(0, restCount, 0);
+  g.addGroup(restCount, 6, 1);
+  return g;
+}
+
+/* ============================== scene ============================== */
+
+const SLEEVE_W = 1.0;
+const VIEW = { y:6.20, z:3.85, ty:0.74, tz:-0.55, hFrac:0.545, wFrac:0.785 };
+/* the block is fanned: it leans hardest at the face you are on and settles further back,
+   which is the only way a packed crate can open at all */
+/* flipped sleeves lean on the crate's front rim, so they stay compact and show their
+   printed top edges rather than sprawling at the lens */
+const LEAN = { base:0.105, pres:0.44, decay:0.055, pile0:0.46, pileA:0.30, lift:0.13 };
+const KEY_I = 46, HERO_I = 17;
+
+let renderer, scene, camera, crate, spot, heroLight, fogCol, headBoard, ground;
+let meshes = [], dpr = 1;
+
+function fallEase(t){
+  const s = t*t*(3-2*t);
+  return s*0.58 + (1-Math.pow(1-t,2.7))*0.42;
+}
+function angleFor(d, isDiv){
+  if (d >= 0) return -(LEAN.base + (LEAN.pres-LEAN.base)*Math.exp(-LEAN.decay*d));
+  // a divider is taller than the sleeves, so once it is down it has to lie flatter
+  // or its board rides up through the pile and cuts across the sleeve you are reading
+  const extra = isDiv ? 0.19*clamp(-d - 0.35, 0, 1) : 0;
+  if (d > -1){ const e = fallEase(-d); return -LEAN.pres*(1-e) + LEAN.pile0*e + extra; }
+  const j = -d - 1;
+  return LEAN.pile0 + LEAN.pileA*(1-Math.exp(-0.30*j)) + extra;
+}
+function liftFor(d){
+  const s = d >= 0 ? 0.46 : 0.30;
+  return LEAN.lift * Math.exp(-(d*d)/(2*s*s));
+}
+
+function buildScene(){
+  const canvas = $('#gl');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, powerPreference:'high-performance' });
+  dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  renderer.setPixelRatio(dpr);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+
+  fogCol = new THREE.Color(0x0b0a09);
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(fogCol, 2.6, 6.6);
+
+  camera = new THREE.PerspectiveCamera(30, 1, 0.1, 60);
+  camera.position.set(0, VIEW.y, VIEW.z);
+  camera.lookAt(0, VIEW.ty, VIEW.tz);
+
+  scene.add(new THREE.HemisphereLight(0x3a3835, 0x1c1409, 0.46));
+
+  const rim = new THREE.DirectionalLight(0xb0b6bd, 0.12);
+  rim.position.set(-2.4, 2.2, -3.0);
+  scene.add(rim);
+
+  spot = new THREE.SpotLight(0xffd2a0, KEY_I, 20, 0.62, 0.60, 1.2);
+  spot.position.set(1.35, 6.60, 2.60);
+  spot.target.position.set(-0.05, 0.45, -0.85);
+  spot.castShadow = true;
+  spot.shadow.mapSize.set(1024,1024);
+  spot.shadow.camera.near = 1.2; spot.shadow.camera.far = 14;
+  spot.shadow.bias = -0.0011; spot.shadow.normalBias = 0.008;
+  scene.add(spot, spot.target);
+
+  heroLight = new THREE.SpotLight(0xffe0b6, 0, 14, 0.80, 0.85, 1.1);
+  heroLight.position.set(-1.9, 3.2, 3.4);
+  scene.add(heroLight, heroLight.target);
+
+  // ground
+  ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(40,40),
+    new THREE.MeshStandardMaterial({ color:0x0d0b09, roughness:1, metalness:0 })
+  );
+  ground.rotation.x = -Math.PI/2; ground.position.y = -0.062; ground.receiveShadow = true;
+  scene.add(ground);
+
+  crate = new THREE.Group();
+  scene.add(crate);
+
+  // the crate itself
+  const wood = new THREE.MeshStandardMaterial({ color:0xffffff, map:woodTex(), roughness:0.86, metalness:0.0 });
+  const len = window.__crateLen, wallH = 0.94, wallT = 0.052;
+  const inner = SLEEVE_W/2 + 0.030;
+  const box = (w,h,d,x,y,z)=>{
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wood);
+    m.position.set(x,y,z); m.castShadow = true; m.receiveShadow = true;
+    crate.add(m); return m;
+  };
+  const zc = -(len)/2 + 0.10, zl = len + 0.62;
+  box(wallT, wallH, zl,  inner+wallT/2, wallH/2-0.06, zc);
+  box(wallT, wallH, zl, -inner-wallT/2, wallH/2-0.06, zc);
+  box(inner*2+wallT*2, 0.06, zl, 0, -0.03, zc);
+  headBoard = box(inner*2+wallT*2, wallH, wallT, 0, wallH/2-0.06,  0.24);
+  box(inner*2+wallT*2, wallH, wallT, 0, wallH/2-0.06, -(len+0.10));
+  // top rails, catching the key light
+  const rail = new THREE.MeshStandardMaterial({ color:0x6a5a44, map:wood.map, roughness:0.7 });
+  for (const s of [1,-1]){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(wallT+0.012, 0.022, zl), rail);
+    m.position.set(s*(inner+wallT/2), wallH-0.06, zc); m.castShadow=true; m.receiveShadow=true;
+    crate.add(m);
+  }
+
+  // sleeves
+  const aniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  const nullFront = new THREE.MeshBasicMaterial({ visible:false });
+  for (const it of items){
+    const tex = new THREE.CanvasTexture(edgeCanvas(it));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = aniso;
+    const body = new THREE.MeshStandardMaterial({ map:tex, roughness: it.kind==='div'?0.92:0.80, metalness:0 });
+    const geo = sleeveGeometry();
+    let front = nullFront;
+    if (it.kind === 'div'){
+      const ft = new THREE.CanvasTexture(dividerFace(it));
+      ft.colorSpace = THREE.SRGBColorSpace;
+      ft.anisotropy = aniso;
+      front = new THREE.MeshStandardMaterial({ map:ft, roughness:0.93, metalness:0 });
+    } else {
+      geo.groups[1].count = 0;
+    }
+    const m = new THREE.Mesh(geo, [body, front]);
+    m.scale.set(SLEEVE_W, it.h, it.t);
+    m.castShadow = true; m.receiveShadow = true;
+    m.userData.it = it;
+    it.mesh = m; it.geo = geo; it.plainFront = nullFront;
+    crate.add(m);
+    meshes.push(m);
+  }
+}
+
+/* ---------- printed face pool (the sleeve you are looking at, and its neighbours) ---------- */
+
+const heroSlots = [];
+function buildHeroPool(){
+  for (let i=0;i<3;i++){
+    const c = document.createElement('canvas'); c.width = FACE_W; c.height = FACE_H;
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    const u = {
+      uProg:{value:0}, uPlay:{value:0},
+      uBands:{value:[0,0,0,0,0,0]},
+      uMX:{value:new THREE.Vector2(UMX[0],UMX[1])},
+      uMY:{value:new THREE.Vector2(UMY[0],UMY[1])}
+    };
+    const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.80, metalness:0 });
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vXY;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvXY = uv;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>',
+          '#include <common>\nvarying vec2 vXY;\nuniform float uProg;uniform float uPlay;uniform float uBands[6];uniform vec2 uMX;uniform vec2 uMY;')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+        {
+          float yy = vXY.y;
+          if (yy > uMY.x && yy < uMY.y) {
+            float f = (yy - uMY.x) / max(1e-4, uMY.y - uMY.x);
+            int bi = int(floor(f * 6.0));
+            float lv = 0.0;
+            for (int k=0;k<6;k++){ if (k==bi) lv = uBands[k]; }
+            diffuseColor.rgb *= mix(vec3(1.0), vec3(1.30,1.10,0.86), lv*uPlay);
+          }
+          float ph = mix(uMX.x, uMX.y, uProg);
+          float dd = abs(vXY.x - ph);
+          float line = (1.0 - smoothstep(0.0, 0.0045, dd)) * uPlay;
+          if (yy > uMY.x - 0.02 && yy < uMY.y + 0.02)
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86,0.20,0.08), line);
+        }`);
+    };
+    heroSlots.push({ idx:-1, canvas:c, ctx:c.getContext('2d'), tex, mat, u, locked:false });
+  }
+}
+
+function releaseSlot(s){
+  if (s.idx >= 0 && items[s.idx] && items[s.idx].mesh){
+    const it = items[s.idx];
+    if (it.mesh.material[1] === s.mat){ it.mesh.material[1] = it.plainFront; it.geo.groups[1].count = 0; }
+  }
+  s.idx = -1;
+}
+
+let heroBudget = 0;
+function updateHeroes(fast){
+  const base = Math.round(p);
+  const want = [];
+  for (const k of [base, base-1, base+1]){
+    if (k>=0 && k<items.length && items[k].kind==='trk') want.push(k);
+  }
+  for (const s of heroSlots){
+    if (s.locked) continue;
+    if (s.idx >= 0 && want.indexOf(s.idx) < 0) releaseSlot(s);
+  }
+  if (fast) return;
+  if (heroBudget > 0){ heroBudget--; return; }
+  for (const k of want){
+    if (heroSlots.some(s => s.idx === k)) continue;
+    const s = heroSlots.find(s => !s.locked && s.idx < 0);
+    if (!s) return;
+    const it = items[k];
+    drawFace(s.ctx, it);
+    s.tex.needsUpdate = true;
+    s.idx = k;
+    it.mesh.material[1] = s.mat;
+    it.geo.groups[1].count = 6;
+    heroBudget = 1;
+    return;                       // at most one redraw per frame
+  }
+}
+function slotOf(i){ return heroSlots.find(s => s.idx === i); }
+
+/* ============================== audio ============================== */
+
+const audio = new Audio();
+audio.crossOrigin = 'anonymous';
+audio.preload = 'none';
+let ac = null, an = null, freq = null, binEdges = null, playingIdx = -1;
+
+function initAudio(){
+  if (ac) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try{
+    ac = new AC();
+    const src = ac.createMediaElementSource(audio);
+    an = ac.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.74;
+    src.connect(an); an.connect(ac.destination);
+    freq = new Uint8Array(an.frequencyBinCount);
+    const edges = marks.bandEdges, nyq = ac.sampleRate/2;
+    binEdges = edges.map(f => clamp(Math.round(f/nyq*an.frequencyBinCount), 0, an.frequencyBinCount-1));
+  }catch(e){ ac = null; an = null; }
+}
+
+const live = [0,0,0,0,0,0];
+function readBands(){
+  if (!an || audio.paused){ for(let i=0;i<6;i++) live[i] *= 0.90; return; }
+  an.getByteFrequencyData(freq);
+  for (let b=0;b<6;b++){
+    let s=0,n=0;
+    for (let i=binEdges[b]; i<=binEdges[b+1]; i++){ s += freq[i]; n++; }
+    const v = n ? (s/n)/255 : 0;
+    live[b] = live[b]*0.55 + Math.pow(v,0.85)*0.45;
+  }
+}
+
+function playItem(it){
+  initAudio();
+  if (ac && ac.state === 'suspended') ac.resume();
+  audio.src = '/audio-mp3/' + encodeURIComponent(it.file);
+  const pr = audio.play();
+  if (pr && pr.catch) pr.catch(()=>{});
+  playingIdx = items.indexOf(it);
+  $('#bar').classList.add('on');
+  $('#nowt').textContent = it.title;
+  setPP();
+}
+function setPP(){
+  $('#ppi').innerHTML = audio.paused
+    ? '<path d="M6 3l14 9-14 9z"/>'
+    : '<rect x="4" y="3" width="6" height="18"/><rect x="14" y="3" width="6" height="18"/>';
+}
+$('#pp').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!audio.src) return;
+  if (audio.paused){ if (ac && ac.state==='suspended') ac.resume(); audio.play().catch(()=>{}); }
+  else audio.pause();
+  setPP();
+});
+audio.addEventListener('play', setPP);
+audio.addEventListener('pause', setPP);
+audio.addEventListener('ended', ()=>{ setPP(); });
+
+/* ============================== interaction & motion ============================== */
+
+let p = 0, v = 0, dragging = false, lastY = 0, lastT = 0, moved = 0, downT = 0, downXY = [0,0];
+let mode = 'crate';                 // crate | pulling | out | returning
+let pullT = 0, pullItem = null, pullFrom = null, pullTo = null, defocus = 0, defocusTarget = 0;
+const RATE = 1/86;
+
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2();
+
+function pickIndex(cx, cy){
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.x = ((cx-r.left)/r.width)*2 - 1;
+  ptr.y = -((cy-r.top)/r.height)*2 + 1;
+  ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects(meshes.filter(m=>m.visible), false);
+  if (!hits.length) return -1;
+  return items.indexOf(hits[0].object.userData.it);
+}
+
+const cv = $('#gl');
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  dragging = true; moved = 0; lastY = e.clientY; lastT = performance.now();
+  downT = lastT; downXY = [e.clientX, e.clientY]; v = 0;
+});
+cv.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const now = performance.now(), dy = e.clientY - lastY, dt = Math.max(1, now-lastT)/1000;
+  moved += Math.abs(dy);
+  lastY = e.clientY; lastT = now;
+  if (mode === 'out'){ if (moved > 26) startReturn(); return; }
+  if (mode !== 'crate') return;
+  p = clamp(p + dy*RATE, 0, items.length-1);
+  const iv = (dy*RATE)/dt;
+  v = v*0.55 + iv*0.45;
+});
+function up(e){
+  if (!dragging) return;
+  dragging = false;
+  const dt = performance.now() - downT;
+  const dx = Math.abs(e.clientX - downXY[0]), dy = Math.abs(e.clientY - downXY[1]);
+  if (dt < 420 && dx < 12 && dy < 12) tap(e.clientX, e.clientY);
+  if (performance.now() - lastT > 110) v = 0;
+}
+cv.addEventListener('pointerup', up);
+cv.addEventListener('pointercancel', ()=>{ dragging=false; });
+
+function tap(cx, cy){
+  if (mode === 'out'){
+    if (audio.src){
+      if (audio.paused){ if (ac&&ac.state==='suspended') ac.resume(); audio.play().catch(()=>{}); }
+      else audio.pause();
+      setPP();
+    }
+    return;
+  }
+  if (mode !== 'crate') return;
+  const i = pickIndex(cx, cy);
+  if (i < 0) return;
+  const d = i - p;
+  if (Math.abs(d) < 0.62){
+    if (items[i].kind === 'div'){ v = 0; glideTo(i+1); return; }
+    startPull(i);
+  } else {
+    v = 0; glideTo(i);
+  }
+}
+let glide = null;
+function glideTo(i){ glide = { from:p, to:clamp(i,0,items.length-1), t:0, dur: 0.16 + Math.min(0.5, Math.abs(i-p)*0.045) }; }
+
+cv.addEventListener('wheel', e => {
+  if (mode === 'out'){ if (Math.abs(e.deltaY) > 8) startReturn(); e.preventDefault(); return; }
+  if (mode !== 'crate') return;
+  glide = null;
+  p = clamp(p + e.deltaY*0.0055, 0, items.length-1);
+  v = e.deltaY*0.06;
+  e.preventDefault();
+}, { passive:false });
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight'){ if(mode==='crate'){ glideTo(Math.round(p)+1); } e.preventDefault(); }
+  else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft'){ if(mode==='crate'){ glideTo(Math.round(p)-1); } e.preventDefault(); }
+  else if (e.key === 'Enter' || e.key === ' '){
+    if (mode === 'crate'){ const i = Math.round(p); if (items[i] && items[i].kind==='trk') startPull(i); }
+    else if (mode === 'out'){ if (audio.paused) audio.play().catch(()=>{}); else audio.pause(); setPP(); }
+    e.preventDefault();
+  } else if (e.key === 'Escape'){ if (mode==='out') startReturn(); }
+});
+
+/* ---------- pull out / put back ---------- */
+
+const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+
+function heroTarget(it){
+  const vf = camera.fov * Math.PI/180;
+  const aspect = camera.aspect;
+  const dW = (SLEEVE_W/0.90) / (2*Math.tan(vf/2)*aspect);
+  const dH = (it.h/0.74)     / (2*Math.tan(vf/2));
+  const D  = Math.max(dW, dH);
+  const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+  const up  = new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
+  const centre = camera.position.clone().addScaledVector(fwd, D).addScaledVector(up, 0.030*D);
+  const q = camera.quaternion.clone().multiply(_q2.setFromAxisAngle(new THREE.Vector3(1,0,0), 0.105));
+  const localUp = new THREE.Vector3(0,1,0).applyQuaternion(q);
+  const pos = centre.clone().addScaledVector(localUp, -it.h*0.5);
+  return { pos, q };
+}
+
+function startPull(i){
+  const it = items[i];
+  if (!it || it.kind !== 'trk') return;
+  pullItem = it;
+  const m = it.mesh;
+  scene.attach(m);
+  const s = slotOf(i);
+  if (s){ s.locked = true; }
+  else {
+    const free = heroSlots.find(x=>!x.locked) || heroSlots[0];
+    releaseSlot(free);
+    drawFace(free.ctx, it); free.tex.needsUpdate = true; free.idx = i; free.locked = true;
+    m.material[1] = free.mat; it.geo.groups[1].count = 6;
+  }
+  pullFrom = { pos: m.position.clone(), q: m.quaternion.clone() };
+  pullTo = heroTarget(it);
+  pullT = 0; mode = 'pulling';
+  playItem(it);
+}
+
+function startReturn(){
+  if (mode !== 'out' && mode !== 'pulling') return;
+  defocusTarget = 0;
+  mode = 'returning'; pullT = 0;
+  crate.visible = true; ground.visible = true; $('#defocus').style.display = 'none';
+  renderer.setClearAlpha(0);
+  const m = pullItem.mesh;
+  pullFrom = { pos: m.position.clone(), q: m.quaternion.clone() };
+}
+
+/* the rack focus: a still of the crate, softened progressively */
+const dfc = $('#dfc');
+const dctx = dfc.getContext('2d');
+const snap = document.createElement('canvas');
+const tmp  = document.createElement('canvas');
+const tctx = tmp.getContext('2d');
+let snapReady = false;
+const canFilter = (()=>{ try{ const t=document.createElement('canvas').getContext('2d'); t.filter='blur(2px)'; return t.filter==='blur(2px)'; }catch(e){ return false; } })();
+
+function takeSnapshot(){
+  const w = renderer.domElement.width, h = renderer.domElement.height;
+  const sw = Math.max(2, Math.round(w*0.5)), sh = Math.max(2, Math.round(h*0.5));
+  snap.width = sw; snap.height = sh;
+  const g = snap.getContext('2d');
+  g.drawImage(renderer.domElement, 0, 0, sw, sh);
+  dfc.width = sw; dfc.height = sh;
+  snapReady = true;
+}
+function paintDefocus(amt){
+  if (!snapReady) return;
+  const sw = snap.width, sh = snap.height;
+  dctx.imageSmoothingEnabled = true;
+  if (amt < 0.01){ dctx.clearRect(0,0,sw,sh); dctx.drawImage(snap,0,0,sw,sh); return; }
+  dctx.clearRect(0,0,sw,sh);
+  if (canFilter){
+    dctx.filter = 'blur(' + (amt*11).toFixed(2) + 'px)';
+    dctx.drawImage(snap, 0, 0, sw, sh);
+    dctx.filter = 'none';
+  } else {                                            // downsample then blow back up
+    const k = Math.max(0.10, 1 - amt*0.90);
+    const dw = Math.max(2, Math.round(sw*k)), dh = Math.max(2, Math.round(sh*k));
+    tmp.width = dw; tmp.height = dh;
+    tctx.imageSmoothingEnabled = true;
+    tctx.drawImage(snap, 0, 0, dw, dh);
+    dctx.drawImage(tmp, 0, 0, dw, dh, 0, 0, sw, sh);
+  }
+  dctx.fillStyle = 'rgba(11,10,9,'+(0.11*amt).toFixed(3)+')';
+  dctx.fillRect(0,0,sw,sh);
+}
+
+/* ============================== layout ============================== */
+
+function fit(){
+  const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
+  const aspect = w/h;
+  camera.position.set(0, VIEW.y, VIEW.z);
+  camera.lookAt(0, VIEW.ty, VIEW.tz);
+  camera.aspect = aspect;
+  const dist = Math.hypot(VIEW.y - 0.81, VIEW.z + 0.32);
+  const hf = VIEW.hFrac + clamp((aspect - 0.72)*0.24, 0, 0.20);   // landscape sits closer
+  const worldH = Math.max(1.5/hf, (SLEEVE_W/VIEW.wFrac)/aspect);
+  camera.fov = 2*Math.atan((worldH/2)/dist) * 180/Math.PI;
+  camera.updateProjectionMatrix();
+  scene.fog.near = dist - 0.30;
+  scene.fog.far  = dist + 4.2;
+  renderer.setSize(w, h, false);
+  if (pullItem && (mode === 'out' || mode === 'pulling')) reframeHero();
+}
+
+/* the sleeve that is out sits in camera space, so a rotation has to re-place it
+   and re-take the still that stands in for the crate */
+function reframeHero(){
+  const t = heroTarget(pullItem);
+  pullTo = t;
+  if (mode !== 'out') return;
+  const m = pullItem.mesh;
+  m.position.copy(t.pos); m.quaternion.copy(t.q);
+  const wasCrate = crate.visible;
+  crate.visible = true; ground.visible = true; m.visible = false;
+  renderer.setClearAlpha(1);
+  renderer.render(scene, camera);
+  takeSnapshot();
+  m.visible = true; crate.visible = wasCrate; ground.visible = false;
+  renderer.setClearAlpha(0);
+  paintDefocus(defocus);
+}
+window.addEventListener('resize', fit);
+
+/* ============================== frame ============================== */
+
+const ordEl = $('#ord'), progEl = $('#prog'), nowcEl = $('#nowc');
+let last = performance.now();
+
+function step(now){
+  requestAnimationFrame(step);
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  frame(dt);
+}
+
+function frame(dt){
+
+  /* --- crate motion --- */
+  if (glide){
+    glide.t = Math.min(1, glide.t + dt/glide.dur);
+    const e = glide.t*glide.t*(3-2*glide.t);
+    p = lerp(glide.from, glide.to, e);
+    if (glide.t >= 1){ p = glide.to; glide = null; v = 0; }
+  } else if (!dragging && mode === 'crate'){
+    p += v*dt;
+    const near = Math.round(p), err = near - p;
+    const sp = Math.abs(v);
+    const w = clamp(1 - sp/2.6, 0, 1);
+    const k = 66*w, c = 2*Math.sqrt(66)*0.92*w;
+    v += (err*k - v*c)*dt;
+    v *= Math.exp(-2.3*dt);
+    if (sp < 0.02 && Math.abs(err) < 0.004){ p = near; v = 0; }
+    if (p < 0){ p = 0; v = 0; } if (p > items.length-1){ p = items.length-1; v = 0; }
+  }
+
+  /* --- sleeve transforms --- */
+  const cz = zAt(p);
+  crate.position.z = cz;
+  headBoard.visible = cz < 0.42;
+  for (let i=0;i<items.length;i++){
+    const it = items[i], m = it.mesh, d = i - p;
+    if (it === pullItem) continue;                 // it is out of the crate, driven elsewhere
+    const vis = d > -17 && d < 34;
+    m.visible = vis;
+    if (!vis) continue;
+    const a = angleFor(d, it.kind === 'div'), lf = liftFor(d);
+    m.rotation.x = a;
+    m.position.set(0, lf, -it.z + lf*0.10 + (d<0 ? Math.min(0.030, (-d)*0.012) : 0));
+    m.castShadow = d > -13 && d < 15;
+  }
+
+  const cur = items[Math.round(clamp(p,0,items.length-1))];
+  ordEl.textContent = cur.kind === 'trk'
+    ? String(cur.ord).padStart(2,'0') + ' / ' + tracks.length
+    : cur.year;
+
+  updateHeroes(Math.abs(v) > 5 || mode !== 'crate');
+
+  /* --- pull / return --- */
+  if (mode === 'pulling' || mode === 'returning'){
+    pullT = Math.min(1, pullT + dt/ (mode==='pulling' ? 0.62 : 0.46));
+    const e = mode==='pulling'
+      ? 1-Math.pow(1-pullT, 2.6)
+      : pullT*pullT*(3-2*pullT);
+    const m = pullItem.mesh;
+    if (mode === 'pulling'){
+      m.position.lerpVectors(pullFrom.pos, pullTo.pos, e);
+      m.position.y += Math.sin(e*Math.PI)*0.16;
+      m.quaternion.copy(pullFrom.q).slerp(pullTo.q, e);
+    } else {
+      const i = items.indexOf(pullItem), d = i - p;
+      _v.set(0, liftFor(d), -pullItem.z + liftFor(d)*0.10);
+      _v.z += crate.position.z;
+      _q.setFromAxisAngle(new THREE.Vector3(1,0,0), angleFor(d, false));
+      m.position.lerpVectors(pullFrom.pos, _v, e);
+      m.position.y += Math.sin(e*Math.PI)*0.10;
+      m.quaternion.copy(pullFrom.q).slerp(_q, e);
+    }
+    heroLight.intensity = lerp(0, HERO_I, mode==='pulling' ? e : 1-e);
+    heroLight.target.position.copy(m.position);
+    spot.intensity = lerp(KEY_I, KEY_I*0.55, mode==='pulling' ? e : 1-e);
+    if (pullT >= 1){
+      if (mode === 'pulling'){
+        mode = 'out';
+        // still of the crate alone, then rack the focus off it
+        pullItem.mesh.visible = false;
+        renderer.render(scene, camera);
+        takeSnapshot();
+        pullItem.mesh.visible = true;
+        paintDefocus(0);
+        $('#defocus').style.display = 'block';
+        crate.visible = false; ground.visible = false;
+        renderer.setClearAlpha(0);
+        defocus = 0; defocusTarget = 1;
+      } else {
+        crate.attach(pullItem.mesh);
+        const s = heroSlots.find(x=>x.locked); if (s) s.locked = false;
+        mode = 'crate'; pullItem = null;
+        heroLight.intensity = 0; spot.intensity = KEY_I;
+        snapReady = false;
+      }
+    }
+  }
+  if (mode === 'out'){
+    heroLight.target.position.copy(pullItem.mesh.position);
+    const b = live[0]*0.6 + live[1]*0.4;
+    heroLight.intensity = HERO_I + b*5;
+  }
+  if (Math.abs(defocus - defocusTarget) > 0.001){
+    defocus += (defocusTarget-defocus) * Math.min(1, dt*4.4);
+    paintDefocus(defocus);
+  }
+
+  /* --- audio readouts --- */
+  readBands();
+  const s = slotOf(playingIdx);
+  for (const sl of heroSlots){
+    const on = (sl === s && audio.src && !audio.paused) ? 1 : 0;
+    sl.u.uPlay.value += (on - sl.u.uPlay.value) * Math.min(1, dt*5);
+    if (sl === s && audio.duration) sl.u.uProg.value = clamp(audio.currentTime/audio.duration, 0, 1);
+    for (let b=0;b<6;b++) sl.u.uBands.value[b] = sl===s ? live[b] : 0;
+  }
+  if (audio.src){
+    const f = audio.duration ? audio.currentTime/audio.duration : 0;
+    progEl.style.width = (f*100).toFixed(2)+'%';
+    nowcEl.textContent = mmss(audio.currentTime||0);
+  }
+
+  renderer.render(scene, camera);
+}
+
+function zAt(x){
+  const i = clamp(Math.floor(x), 0, items.length-1);
+  const j = Math.min(i+1, items.length-1);
+  const f = clamp(x - i, 0, 1);
+  return lerp(items[i].z, items[j].z, f);
+}
+
+/* ============================== boot ============================== */
+
+(async function(){
+  try{
+    setBoot(.06);
+    await loadData();
+    setBoot(.34);
+    try{
+      await document.fonts.load('64px Anton');
+      await document.fonts.load('500 22px "IBM Plex Mono"');
+      await document.fonts.ready;
+    }catch(e){}
+    setBoot(.5);
+    buildScene();
+    setBoot(.86);
+    buildHeroPool();
+    fit();
+    p = 6; v = 0;
+    for (let i=0;i<3;i++){ updateHeroes(false); heroBudget = 0; }
+    // the crate settles into place: two sleeves drop, which is also the whole instruction
+    p = 3.6; glide = { from:3.6, to:6, t:0, dur:1.05 };
+    setBoot(1);
+    // handle for driving the crate from the console while tuning the staging
+    window.__cr = { fit, frame, VIEW, LEAN, spot, heroLight, scene, items, cam:camera,
+                    setP(x){ p = clamp(x,0,items.length-1); v = 0; glide = null; },
+                    pull(i){ startPull(i); }, back(){ startReturn(); },
+                    get mode(){ return mode; }, ren:()=>renderer };
+    requestAnimationFrame(step);
+    setTimeout(()=>{ $('#boot').classList.add('gone'); setTimeout(()=>$('#boot').remove(), 700); }, 220);
+  }catch(err){
+    $('#booterr').textContent = String(err && err.message ? err.message : err);
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>

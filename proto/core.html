@@ -1,0 +1,1193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#0f0d0b">
+<title>Core — Kani</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,200..600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:#0b0a09;-webkit-text-size-adjust:100%}
+  body{background:#0b0a09;color:#e7dfd1;font-family:'Newsreader',Georgia,serif;
+       overscroll-behavior-y:none;-webkit-font-smoothing:antialiased}
+  #stage{position:sticky;top:0;height:100vh;width:100%;z-index:1}
+  #cv{display:block;width:100%;height:100%;touch-action:pan-y;
+      transition:transform .6s cubic-bezier(.16,.84,.28,1)}
+  #spacer{height:10px}
+
+  #hud{position:fixed;left:14px;top:calc(11px + env(safe-area-inset-top));z-index:6;
+       font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.5;
+       color:#8d8474;letter-spacing:.02em;pointer-events:none;
+       text-shadow:0 1px 8px rgba(0,0,0,.9)}
+  #hud b{display:block;font-weight:500;font-size:14px;color:#cfc4ae;letter-spacing:0}
+
+  #rail{position:fixed;right:0;top:0;height:100vh;width:44px;z-index:10;touch-action:none;cursor:ns-resize}
+  #railcv{position:absolute;right:10px;top:0;height:100%;width:14px;display:block}
+
+  #bar{position:fixed;left:0;right:0;bottom:0;z-index:9;
+       display:none;align-items:center;gap:11px;
+       padding:9px 12px calc(11px + env(safe-area-inset-bottom)) 8px;
+       background:linear-gradient(to top,#0b0a09 58%,rgba(11,10,9,.88) 84%,rgba(11,10,9,0))}
+  #bar.on{display:flex}
+  #bar .ttl{flex:1;min-width:0;font-size:16px;line-height:1.15;color:#e7dfd1;cursor:pointer;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #bar .tm{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8b8272;
+           letter-spacing:.02em;padding-right:42px}
+  #barprog{position:absolute;left:0;bottom:0;height:2px;background:#c39a60;width:0}
+
+  .btn{width:44px;height:44px;flex:0 0 44px;border:0;background:none;padding:0;
+       display:grid;place-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .ic-play{width:0;height:0;border-left:13px solid #e7dfd1;border-top:8px solid transparent;
+           border-bottom:8px solid transparent;margin-left:4px}
+  .ic-pause{width:13px;height:16px;border-left:4px solid #e7dfd1;border-right:4px solid #e7dfd1}
+  .ic-close{width:17px;height:17px;position:relative}
+  .ic-close:before,.ic-close:after{content:'';position:absolute;left:0;top:8px;width:17px;height:1.5px;background:#efe6d6}
+  .ic-close:before{transform:rotate(45deg)}.ic-close:after{transform:rotate(-45deg)}
+
+  #slabwrap{position:fixed;inset:0;z-index:20;display:none;
+            perspective:1500px;perspective-origin:36% 44%;
+            background:rgba(8,7,6,0);transition:background .55s ease}
+  #slabwrap.on{display:block}
+  #slabwrap.lit{background:rgba(8,7,6,.7)}
+  #slab3d{position:absolute;inset:0;transform-style:preserve-3d;
+          transform:translate3d(-48%,3%,-460px) rotateY(32deg);opacity:0;
+          transition:transform .66s cubic-bezier(.16,.84,.28,1),opacity .3s ease;
+          will-change:transform,opacity}
+  #slabwrap.lit #slab3d{transform:translate3d(0,0,0) rotateY(0deg);opacity:1}
+  #slabface{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #edgeR{position:absolute;top:0;right:0;height:100%;width:26px;
+         transform-origin:right center;transform:rotateY(-90deg);background:#241d17}
+  #edgeT{position:absolute;top:0;left:0;width:100%;height:26px;
+         transform-origin:center top;transform:rotateX(90deg);background:#6b5945}
+  #slabtap{position:absolute;inset:0;z-index:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  #slabttl{position:absolute;left:16px;right:56px;top:calc(16px + env(safe-area-inset-top));z-index:2;
+           font-size:clamp(34px,11.5vw,74px);line-height:.94;font-weight:300;
+           letter-spacing:-.018em;color:#f6efe2;pointer-events:none;
+           text-shadow:0 3px 28px rgba(0,0,0,.8),0 1px 2px rgba(0,0,0,.55)}
+  #slabmeta{position:absolute;left:16px;right:16px;z-index:2;pointer-events:none;
+            bottom:calc(18px + env(safe-area-inset-bottom));
+            font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.9;
+            color:#d8c9ae;letter-spacing:.03em;text-shadow:0 1px 12px rgba(0,0,0,.95);
+            display:flex;flex-wrap:wrap;gap:0 13px}
+  #slabmeta s{text-decoration:none;color:#96897a}
+  #slabtime{position:absolute;left:16px;z-index:2;pointer-events:none;
+            bottom:calc(58px + env(safe-area-inset-bottom));
+            font-family:'IBM Plex Mono',monospace;font-size:11px;color:#f0dfc0;
+            letter-spacing:.04em;text-shadow:0 1px 12px rgba(0,0,0,.95)}
+  #slabclose{position:absolute;right:4px;top:calc(10px + env(safe-area-inset-top));z-index:3}
+
+  #boot{position:fixed;inset:0;z-index:40;background:#0b0a09;display:grid;place-items:center;
+        transition:opacity .5s ease .1s}
+  #boot.off{opacity:0;pointer-events:none}
+  #bootline{width:132px;height:1px;background:#241f1a;position:relative;overflow:hidden}
+  #bootline i{position:absolute;left:0;top:0;height:100%;width:0;background:#9c8158;transition:width .35s}
+  @media (min-width:760px){ #hud{left:22px;top:20px} }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="spacer"></div>
+
+<div id="hud"><b id="hudD">0.00 m</b><span id="hudDate">—</span></div>
+
+<div id="rail"><canvas id="railcv"></canvas></div>
+
+<div id="bar">
+  <div id="barprog"></div>
+  <button class="btn" id="barBtn" aria-label="play / pause"><i class="ic-pause"></i></button>
+  <div class="ttl" id="barTtl"></div>
+  <div class="tm" id="barTm">0:00</div>
+</div>
+
+<div id="slabwrap">
+  <div id="slab3d">
+    <canvas id="slabface"></canvas>
+    <div id="edgeT"></div>
+    <div id="edgeR"></div>
+  </div>
+  <div id="slabtap"></div>
+  <div id="slabttl"></div>
+  <div id="slabtime">0:00</div>
+  <div id="slabmeta"></div>
+  <button class="btn" id="slabclose" aria-label="close"><i class="ic-close"></i></button>
+</div>
+
+<div id="boot"><div id="bootline"><i id="bootfill"></i></div></div>
+
+<script>
+'use strict';
+/* ------------------------------------------------------------------
+   CORE — six years of records read as a drill core.
+   Depth = time, newest at the surface. Bed thickness = track duration.
+   Bed fabric = that track's own band energies. Barren rock = silence.
+   ------------------------------------------------------------------ */
+
+const PPS = 1.5, GK = 4.6, GE = 0.90, MINH = 44;
+const HEADER = 330, UNCONF = 76, TAIL = 280, M_PX = 300;
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d', {alpha:false});
+const railcv = document.getElementById('railcv');
+const rctx = railcv.getContext('2d');
+
+let DPR = Math.min(1.5, window.devicePixelRatio || 1);
+let VW = 0, VH = 0;
+let colX = 0, colW = 0, colCX = 0, labX = 0, labW = 0, capRY = 0;
+let railX = 0, railW = 14, railMini = null, METAFS = 10, METAFULL = true;
+
+let LAYERS = [], TRACKS = [], TOTAL = 0, HEAD_LINE = '';
+let CORE_TOP = HEADER, CORE_BOT = 0, YEARS = [], DATEMAP = [];
+let scrollY = 0, needDraw = true;
+let openIdx = -1, playIdx = -1, playT = 0, playDur = 1, playing = false, level = 0.5;
+
+/* ---------- helpers ---------- */
+const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+const lerp  = (a,b,t) => a+(b-a)*t;
+function h1(n){ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); }
+function h2(x,y){ const s=Math.sin(x*127.1+y*311.7)*43758.5453; return s-Math.floor(s); }
+function vn1(x){ const i=Math.floor(x), f=x-i, u=f*f*(3-2*f); const a=h1(i), b=h1(i+1); return a+(b-a)*u; }
+function vn2(x,y){
+  const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
+  const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+  const a=h2(ix,iy), b=h2(ix+1,iy), c=h2(ix,iy+1), d=h2(ix+1,iy+1);
+  return (a+(b-a)*ux)*(1-uy)+(c+(d-c)*ux)*uy;
+}
+function hsl2rgb(h,s,l){
+  h=((h%360)+360)%360/360;
+  if(s<=0){ const v=Math.round(l*255); return [v,v,v]; }
+  const q = l<0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+  const f=t=>{ if(t<0)t+=1; if(t>1)t-=1;
+    if(t<1/6) return p+(q-p)*6*t;
+    if(t<0.5) return q;
+    if(t<2/3) return p+(q-p)*(2/3-t)*6;
+    return p; };
+  return [Math.round(f(h+1/3)*255), Math.round(f(h)*255), Math.round(f(h-1/3)*255)];
+}
+const b64u8 = s => { const b=atob(s), a=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a; };
+const mmss = s => { s=Math.max(0,s|0); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+const dnum = s => new Date(s+'T00:00:00Z').getTime()/86400000;
+const dstr = d => new Date(Math.round(d)*86400000).toISOString().slice(0,7);
+
+/* ================================================================
+   LOAD
+   ================================================================ */
+(async function boot(){
+  const fill=document.getElementById('bootfill');
+  fill.style.width='20%';
+  const [marks,cfg] = await Promise.all([
+    fetch('/data/marks.json').then(r=>r.json()),
+    fetch('/config.json').then(r=>r.json())
+  ]);
+  fill.style.width='62%';
+  build(marks,cfg);
+  const fonts = Promise.all([
+    document.fonts.load('200 90px Newsreader'),
+    document.fonts.load('300 17px Newsreader'),
+    document.fonts.load('400 11px "IBM Plex Mono"')
+  ]).then(()=>document.fonts.ready).catch(()=>{});
+  await Promise.race([fonts, new Promise(r=>setTimeout(r,2500))]);
+  fonts.then(()=>{ _wrapCache={}; needDraw=true; });
+  fill.style.width='100%';
+  try{ resize(); }catch(e){}
+  wire();
+  // layout can still be settling on the first frame (font swap, iOS toolbar) — re-measure once
+  requestAnimationFrame(()=>{
+    const sh=document.getElementById('stage').clientHeight||0;
+    if(Math.abs(sh-VH)>2 || Math.abs(window.innerWidth-VW)>2){ try{ resize(); }catch(e){} }
+    requestAnimationFrame(loop);
+  });
+  setTimeout(()=>document.getElementById('boot').classList.add('off'),140);
+})();
+
+/* ================================================================
+   STRATIGRAPHY
+   ================================================================ */
+function build(marks,cfg){
+  TRACKS = cfg.tracks.map(t=>{
+    const m = marks.tracks[t.file];
+    if(!m) return null;
+    const b=m.balance;
+    return {
+      file:t.file, title:t.title||m.title, date:t.date||m.date||'',
+      dur:m.duration, bpm:m.bpm, rms:m.rmsDb, crest:m.crest, onset:m.onsetRate,
+      bands:m.bands.map(b64u8), cent:b64u8(m.cent), peaks:b64u8(m.peaks),
+      // raw character measures, ranked against the rest of the catalogue below
+      _tilt: Math.log((b[3]+b[4]+b[5]+1)/(b[0]+b[1]+b[2]+1)),
+      _loud: m.rmsDb, _dyn: m.crest, _busy: m.onsetRate,
+      y0:null, h:0, idx:0
+    };
+  }).filter(Boolean);
+
+  // rank-normalise each axis: 72 records spread over the full material range
+  for(const key of ['_tilt','_loud','_dyn','_busy']){
+    const order=TRACKS.slice().sort((a,b)=>a[key]-b[key]);
+    const n=order.length-1;
+    order.forEach((t,i)=>{ t[key.slice(1)] = n? i/n : 0.5; });
+  }
+
+  for(const o of TRACKS){
+    o.hue = 13 + o.tilt*59;                                  // iron rust -> pale olive
+    o.sat = clamp((0.34-o.tilt*0.27)*(0.6+0.6*o.dyn),0.025,0.36);
+    o.L0  = clamp(0.30+(1-o.loud)*0.34+o.tilt*0.085,0.22,0.72);
+    o.contrast = 0.13+o.dyn*0.20;
+    o.grainScale = 2.4-o.busy*1.55;
+    o.grainAmt = 0.10+o.busy*0.30;
+    o.varve = Math.max(3.4,(60/Math.max(60,o.bpm))*8*PPS);
+    o.lut = buildLUT(o);
+    o.avg = lutAvg(o.lut);
+  }
+  TRACKS.forEach((t,i)=>t.idx=i);
+
+  const dated   = TRACKS.filter(t=>t.date).sort((a,b)=>b.date.localeCompare(a.date));
+  const undated = TRACKS.filter(t=>!t.date).sort((a,b)=>a.dur-b.dur);
+
+  let y = HEADER; CORE_TOP = y;
+  const L=[]; DATEMAP=[];
+  for(let i=0;i<dated.length;i++){
+    const t=dated[i], h=Math.max(MINH, t.dur*PPS);
+    t.y0=y; t.h=h;
+    L.push({kind:'bed', t, y0:y, y1:y+h, h});
+    DATEMAP.push([y,dnum(t.date)],[y+h,dnum(t.date)]);
+    y+=h;
+    if(i<dated.length-1){
+      const days=Math.max(0, dnum(t.date)-dnum(dated[i+1].date));
+      const g=GK*Math.pow(Math.max(0,days-1),GE);
+      if(g>1){
+        L.push({kind:'gap', y0:y, y1:y+g, days:Math.round(days),
+                from:dated[i+1].date.slice(0,7), to:t.date.slice(0,7), seed:i*7.13});
+        DATEMAP.push([y,dnum(t.date)],[y+g,dnum(dated[i+1].date)]);
+        y+=g;
+      }
+    }
+  }
+  if(undated.length){
+    L.push({kind:'unconf', y0:y, y1:y+UNCONF});
+    y+=UNCONF;
+    for(const t of undated){
+      const h=Math.max(MINH,t.dur*PPS);
+      t.y0=y; t.h=h;
+      L.push({kind:'bed', t, y0:y, y1:y+h, h});
+      y+=h;
+    }
+  }
+  CORE_BOT=y; LAYERS=L; TOTAL=CORE_BOT+TAIL;
+
+  const mins=TRACKS.reduce((s,t)=>s+t.dur,0)/60;
+  HEAD_LINE = TRACKS.length+' beds    '+mins.toFixed(1)+' min    '
+            + dated[dated.length-1].date.slice(0,4)+'—'+dated[0].date.slice(0,4);
+
+  const oldest=dnum(dated[dated.length-1].date), newest=dnum(dated[0].date);
+  for(let Y=2020;Y<=2027;Y++){
+    const j=dnum(Y+'-01-01');
+    if(j<oldest||j>newest) continue;
+    YEARS.push({year:Y, y:depthForDate(j)});
+  }
+  document.getElementById('spacer').style.height=TOTAL+'px';
+}
+
+function depthForDate(d){
+  for(let i=0;i<DATEMAP.length-1;i++){
+    const a=DATEMAP[i], b=DATEMAP[i+1];
+    if(d<=a[1] && d>=b[1]){
+      const s=(a[1]-b[1])<1e-9?0:(a[1]-d)/(a[1]-b[1]);
+      return lerp(a[0],b[0],s);
+    }
+  }
+  return CORE_TOP;
+}
+function dateAtDepth(y){
+  if(y<=DATEMAP[0][0]) return DATEMAP[0][1];
+  for(let i=0;i<DATEMAP.length-1;i++){
+    const a=DATEMAP[i], b=DATEMAP[i+1];
+    if(y>=a[0]&&y<=b[0]){
+      const s=(b[0]-a[0])<1e-9?0:(y-a[0])/(b[0]-a[0]);
+      return lerp(a[1],b[1],s);
+    }
+  }
+  return DATEMAP[DATEMAP.length-1][1];
+}
+
+/* ---------- material ---------- */
+function buildLUT(o){
+  const lut=new Uint8ClampedArray(768), B=o.bands, C=o.cent;
+  const tilt=new Float32Array(256), mid=new Float32Array(256), en=new Float32Array(256);
+  for(let i=0;i<256;i++){
+    const lo=(B[0][i]+B[1][i]+B[2][i])/765;
+    const hi=(B[3][i]+B[4][i]+B[5][i])/765;
+    tilt[i]=hi-lo; mid[i]=(B[2][i]-B[4][i])/255; en[i]=(lo+hi)*0.5;
+  }
+  // stretch each structural signal to its own full range: every bed shows its fabric
+  const stretch=a=>{
+    let mn=1e9,mx=-1e9;
+    for(let i=0;i<256;i++){ if(a[i]<mn)mn=a[i]; if(a[i]>mx)mx=a[i]; }
+    const r=Math.max(1e-6,mx-mn);
+    return i=>((a[i]-mn)/r)*2-1;
+  };
+  const sT=stretch(tilt), sM=stretch(mid), sE=stretch(en);
+  const amp=Math.min(o.contrast, Math.min(o.L0-0.055, 0.90-o.L0));
+  for(let i=0;i<256;i++){
+    const L = clamp(o.L0 + sT(i)*amp + sM(i)*amp*0.34 - sE(i)*0.05, 0.045, 0.92);
+    const hue = o.hue + ((C[i]-128)/128)*11;
+    const sat = clamp(o.sat*(0.72+0.5*(1-en[i]))*(0.35+0.9*L),0.02,0.36);
+    const c = hsl2rgb(hue,sat,L);
+    lut[i*3]=c[0]; lut[i*3+1]=c[1]; lut[i*3+2]=c[2];
+  }
+  return lut;
+}
+function lutAvg(l){
+  let r=0,g=0,b=0;
+  for(let i=0;i<256;i++){ r+=l[i*3]; g+=l[i*3+1]; b+=l[i*3+2]; }
+  return [r/256|0,g/256|0,b/256|0];
+}
+function lutAt(o,t,h,out){
+  const span = clamp(256/Math.max(8,h),0.5,9);
+  const c = clamp(t,0,1)*255;
+  const a = Math.max(0,Math.floor(c-span*0.5)), b = Math.min(255,Math.ceil(c+span*0.5));
+  let r=0,g=0,bl=0,n=0;
+  for(let i=a;i<=b;i++){ r+=o.lut[i*3]; g+=o.lut[i*3+1]; bl+=o.lut[i*3+2]; n++; }
+  out[0]=r/n; out[1]=g/n; out[2]=bl/n;
+}
+function barrenRGB(wy,seed,t,out){
+  const n = vn1(wy*0.031+seed)*0.55 + vn1(wy*0.14+seed*3.1)*0.30 + vn1(wy*0.77+seed)*0.15;
+  const sp = 0.15 + vn1(wy*0.006+seed)*0.11;                       // partings, spacing wanders
+  const part = Math.pow(Math.abs(Math.sin(wy*sp+seed*2)),18)*0.085;
+  const nod = Math.pow(vn1(wy*0.017+seed*5.7),9)*0.11;             // sparse pale concretions
+  const L = 0.175 + n*0.085 + (0.5-t)*0.035 + nod - part;
+  const c = hsl2rgb(30+n*14, 0.045+n*0.03, clamp(L,0.04,0.5));
+  out[0]=c[0]; out[1]=c[1]; out[2]=c[2];
+}
+
+/* ---------- prebaked textures + cylinder shading ---------- */
+let grainA=null, grainB=null, shadeImg=null, specImg=null;
+function makeGrain(size,freq,speckle,pw){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const g=c.getContext('2d'), im=g.createImageData(size,size), d=im.data;
+  for(let y=0;y<size;y++) for(let x=0;x<size;x++){
+    let v = vn2(x/size*freq,y/size*freq)*0.55
+          + vn2(x/size*freq*2.7+13,y/size*freq*2.7+7)*0.28
+          + vn2(x/size*freq*6.1+31,y/size*freq*6.1+3)*0.17;
+    v = Math.pow(clamp(v,0,1),pw);
+    const s = h2(x*1.7,y*2.3);
+    v = v*(1-speckle) + (s>0.978?1:(s<0.022?0:0.5))*speckle;
+    const k = clamp(128+(v-0.5)*236,0,255)|0;
+    const i=(y*size+x)*4; d[i]=d[i+1]=d[i+2]=k; d[i+3]=255;
+  }
+  g.putImageData(im,0,0);
+  return g.createPattern(c,'repeat');
+}
+function shadeAt(u){
+  const nz=Math.sqrt(Math.max(0,1-u*u));
+  const d=Math.max(0, u*-0.52+nz*0.855);
+  const s = (0.19+0.23*nz) + 0.80*Math.pow(d,0.92)
+          + 0.34*Math.pow(Math.max(0,(u+0.34)/1.34),6)*nz;
+  return s*(0.22+0.78*Math.pow(nz,0.42));
+}
+function buildStrips(){
+  const w=Math.max(2,Math.round(colW*DPR));
+  const v=new Float32Array(w); let mx=0;
+  for(let x=0;x<w;x++){ const u=((x+0.5)/w)*2-1; v[x]=shadeAt(u); if(v[x]>mx)mx=v[x]; }
+  const c1=document.createElement('canvas'); c1.width=w; c1.height=1;
+  const g1=c1.getContext('2d'), i1=g1.createImageData(w,1);
+  for(let x=0;x<w;x++){
+    const k=Math.round(clamp(v[x]/mx,0,1)*255);
+    i1.data[x*4]=k; i1.data[x*4+1]=Math.round(k*0.985); i1.data[x*4+2]=Math.round(k*0.945); i1.data[x*4+3]=255;
+  }
+  g1.putImageData(i1,0,0); shadeImg=c1;
+
+  const c2=document.createElement('canvas'); c2.width=w; c2.height=1;
+  const g2=c2.getContext('2d'), i2=g2.createImageData(w,1);
+  for(let x=0;x<w;x++){
+    const u=((x+0.5)/w)*2-1, nz=Math.sqrt(Math.max(0,1-u*u));
+    const d=Math.max(0,u*-0.52+nz*0.855);
+    const k=Math.round(clamp(Math.pow(d,16)*0.30*nz,0,1)*255);
+    i2.data[x*4]=k; i2.data[x*4+1]=Math.round(k*0.93); i2.data[x*4+2]=Math.round(k*0.78); i2.data[x*4+3]=255;
+  }
+  g2.putImageData(i2,0,0); specImg=c2;
+}
+
+const erode = wy => (vn1(wy*0.055)-0.5)*2.4 + (vn1(wy*0.28+91)-0.5)*1.0 + (vn1(wy*1.3+7)-0.5)*0.45;
+
+function layerAt(wy){
+  let lo=0, hi=LAYERS.length-1;
+  while(lo<=hi){ const m=(lo+hi)>>1, L=LAYERS[m];
+    if(wy<L.y0) hi=m-1; else if(wy>=L.y1) lo=m+1; else return L; }
+  return null;
+}
+
+/* ================================================================
+   LAYOUT
+   ================================================================ */
+function resize(){
+  DPR = Math.min(1.5, window.devicePixelRatio || 1);
+  VW = Math.max(280, window.innerWidth || document.documentElement.clientWidth || 390);
+  VH = Math.max(360, document.getElementById('stage').clientHeight
+                   || window.innerHeight || document.documentElement.clientHeight || 844);
+  cv.width=Math.round(VW*DPR); cv.height=Math.round(VH*DPR);
+  cv.style.width=VW+'px'; cv.style.height=VH+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  const RAILHIT = 44;                                   // rail must not eat the labels
+  const asm  = Math.min(VW-RAILHIT-10, 470);
+  const left = Math.max(12, (VW-asm-RAILHIT)/2);
+  colW = Math.round(Math.min(220, asm*0.43));
+  colX = Math.round(left);
+  colCX = colX+colW/2;
+  labX = colX+colW+28;
+  labW = Math.max(92, Math.round(Math.min(VW-RAILHIT-6-labX, left+asm-labX)));
+  capRY = colW*0.175;
+  railX = VW-10-railW;
+  METAFS = labW>=150 ? 10 : labW>=132 ? 9 : 8.5;
+  METAFULL = labW>=118;
+
+  grainA = makeGrain(180, 9,   0.34, 1.00);
+  grainB = makeGrain(220, 3.2, 0.05, 1.35);
+  buildStrips();
+  buildRail();
+  _wrapCache = {};
+  if(openIdx>=0) drawSlabFace(TRACKS[openIdx]);
+  needDraw=true;
+}
+
+function buildRail(){
+  const W=Math.max(2,Math.round(railW*DPR)), H=Math.max(2,Math.round(VH*DPR));
+  railcv.width=W; railcv.height=H;
+  railcv.style.height=VH+'px';
+  railMini=document.createElement('canvas'); railMini.width=W; railMini.height=H;
+  const g=railMini.getContext('2d'), im=g.createImageData(W,H), d=im.data, out=[0,0,0];
+  const sh=new Float32Array(W); let mx=0;
+  for(let x=0;x<W;x++){ const u=((x+0.5)/W)*2-1; sh[x]=shadeAt(u); if(sh[x]>mx)mx=sh[x]; }
+  for(let y=0;y<H;y++){
+    const wy = CORE_TOP + (y/H)*(CORE_BOT-CORE_TOP);
+    const L = layerAt(wy);
+    if(L && L.kind==='bed') lutAt(L.t,(wy-L.y0)/L.h,L.h,out);
+    else if(L && L.kind==='gap') barrenRGB(wy,L.seed,(wy-L.y0)/(L.y1-L.y0),out);
+    else if(L && L.kind==='unconf'){ out[0]=26; out[1]=22; out[2]=18; }
+    else { out[0]=14; out[1]=12; out[2]=11; }
+    for(let x=0;x<W;x++){
+      const s=sh[x]/mx, i=(y*W+x)*4;
+      d[i]=out[0]*s; d[i+1]=out[1]*s; d[i+2]=out[2]*s; d[i+3]=255;
+    }
+  }
+  g.putImageData(im,0,0);
+}
+
+/* ================================================================
+   RENDER — the column
+   ================================================================ */
+const rgb=[0,0,0];
+let _strip=null, _stripRows=0, _tmp=null;
+function tmpCanvas(w,h){
+  if(!_tmp){ _tmp={cv:document.createElement('canvas')}; _tmp.ctx=_tmp.cv.getContext('2d'); }
+  if(_tmp.cv.width!==w||_tmp.cv.height!==h){ _tmp.cv.width=w; _tmp.cv.height=h; }
+  return _tmp;
+}
+
+function draw(){
+  const sy=scrollY, W=VW, H=VH;
+
+  const wall=ctx.createLinearGradient(0,0,W*0.9,H);
+  wall.addColorStop(0,'#161311'); wall.addColorStop(0.55,'#100e0c'); wall.addColorStop(1,'#0a0908');
+  ctx.fillStyle=wall; ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.globalAlpha=0.05; ctx.globalCompositeOperation='overlay';
+  const wo=-sy*0.55;
+  ctx.translate(0,wo);
+  ctx.fillStyle=grainB; ctx.fillRect(0,-wo-20,W,H+40);
+  ctx.restore();
+
+  drawYears(sy,H,W);
+  drawHeader(sy,W);
+
+  const topY=CORE_TOP-sy, botY=CORE_BOT-sy;
+  if(botY<-80 || topY>H+80){ drawRail(); readout(); return; }
+
+  /* cast shadow on the wall */
+  const sTop=Math.max(-8,topY-capRY*0.3)+12, sBot=Math.min(H+8,botY)+8;
+  if(sBot>sTop){
+    const g1=ctx.createLinearGradient(colX+colW*0.25,0,colX+colW+66,0);
+    g1.addColorStop(0,'rgba(0,0,0,0.62)'); g1.addColorStop(0.4,'rgba(0,0,0,0.32)'); g1.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g1; ctx.fillRect(colX+colW*0.25,sTop,colW*0.75+66,sBot-sTop);
+    const g2=ctx.createLinearGradient(colX-36,0,colX+6,0);
+    g2.addColorStop(0,'rgba(0,0,0,0)'); g2.addColorStop(1,'rgba(0,0,0,0.44)');
+    ctx.fillStyle=g2; ctx.fillRect(colX-36,Math.max(-8,topY),42,Math.min(H+8,botY)-Math.max(-8,topY));
+  }
+
+  const yA=Math.max(-30,topY), yB=Math.min(H+30,botY);
+
+  /* silhouette clip: eroded cylinder with a broken base */
+  ctx.save();
+  ctx.beginPath();
+  if(topY>-capRY-40){
+    ctx.moveTo(colX,topY);
+    ctx.ellipse(colCX,topY,colW/2,capRY,0,Math.PI,Math.PI*2,false);
+  } else {
+    ctx.moveTo(colX+erode(sy+yA),yA);
+    ctx.lineTo(colX+colW+erode(sy+yA),yA);
+  }
+  const step=5;
+  let yy=Math.max(yA,topY);
+  ctx.lineTo(colX+colW+erode(sy+yy),yy);
+  for(;yy<yB;yy+=step) ctx.lineTo(colX+colW+erode(sy+yy),yy);
+  const yEnd=Math.min(yB,botY);
+  if(botY<H+30){
+    for(let x=colX+colW;x>colX;x-=Math.max(7,colW/9))
+      ctx.lineTo(x, botY-18*vn1(x*0.21+3)-2);
+  }
+  ctx.lineTo(colX+erode(sy+yEnd),yEnd);
+  for(yy=yEnd;yy>Math.max(yA,topY);yy-=step) ctx.lineTo(colX+erode(sy+yy),yy);
+  ctx.closePath();
+  ctx.clip();
+
+  /* albedo: one device-pixel-tall row at a time, stretched across the width */
+  const drawY = Math.round(Math.max(yA,0)*DPR)/DPR;
+  const rows = Math.max(1,Math.ceil((Math.min(H,yB)-drawY)*DPR));
+  if(rows!==_stripRows){ _strip=ctx.createImageData(1,rows); _stripRows=rows; }
+  const sd=_strip.data;
+  const y0w=sy+drawY;
+  for(let r=0;r<rows;r++){
+    const wy=y0w+r/DPR;
+    const L=layerAt(wy);
+    if(L && L.kind==='bed'){
+      const T=L.t;
+      lutAt(T,(wy-L.y0)/L.h,L.h,rgb);
+      const k = 1 + Math.sin(wy/T.varve*6.28318)*0.030*T.dyn + (h1(wy*3.7)-0.5)*0.035;
+      rgb[0]*=k; rgb[1]*=k; rgb[2]*=k;
+      const dt=wy-L.y0, db=L.y1-wy;
+      if(dt<3.2){ const f=1-dt/3.2, m=1-f*f*0.62; rgb[0]*=m; rgb[1]*=m; rgb[2]*=m; }
+      else if(dt<6.4){ const f=1-(dt-3.2)/3.2, m=1+f*0.15; rgb[0]*=m; rgb[1]*=m; rgb[2]*=m; }
+      if(db<1.6){ rgb[0]*=0.72; rgb[1]*=0.72; rgb[2]*=0.72; }
+    } else if(L && L.kind==='gap'){
+      barrenRGB(wy,L.seed,(wy-L.y0)/(L.y1-L.y0),rgb);
+      const dt=wy-L.y0, db=L.y1-wy;
+      if(dt<2.5){ const m=0.6+0.4*(dt/2.5); rgb[0]*=m; rgb[1]*=m; rgb[2]*=m; }
+      if(db<2.5){ const m=0.6+0.4*(db/2.5); rgb[0]*=m; rgb[1]*=m; rgb[2]*=m; }
+    } else if(L && L.kind==='unconf'){
+      const t=(wy-L.y0)/(L.y1-L.y0), n=vn1(wy*0.12+5);
+      const c=hsl2rgb(28,0.09,0.095+n*0.05+t*t*0.10);
+      rgb[0]=c[0]; rgb[1]=c[1]; rgb[2]=c[2];
+    } else { rgb[0]=18; rgb[1]=16; rgb[2]=14; }
+    const i=r*4;
+    sd[i]=rgb[0]; sd[i+1]=rgb[1]; sd[i+2]=rgb[2]; sd[i+3]=255;
+  }
+  const tc=tmpCanvas(1,rows);
+  tc.ctx.putImageData(_strip,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tc.cv,0,0,1,rows, colX-3, drawY, colW+6, rows/DPR);
+  ctx.imageSmoothingEnabled=true;
+
+  /* per-bed clastic grain */
+  ctx.save();
+  ctx.globalCompositeOperation='overlay';
+  for(const L of LAYERS){
+    const a=L.y0-sy, b=L.y1-sy;
+    if(b<yA-6||a>yB+6) continue;
+    const t0=Math.max(a,yA), t1=Math.min(b,yB);
+    if(t1<=t0) continue;
+    let s,al,pat,phase;
+    if(L.kind==='bed'){ s=L.t.grainScale; al=L.t.grainAmt; pat=grainA; phase=(L.t.idx*53)%180; }
+    else if(L.kind==='gap'){ s=1.35; al=0.085; pat=grainB; phase=L.seed*17; }
+    else { s=1.9; al=0.17; pat=grainA; phase=41; }
+    ctx.save();
+    ctx.beginPath(); ctx.rect(colX-3,t0,colW+6,t1-t0); ctx.clip();
+    ctx.globalAlpha=al;
+    const oy=-sy+phase;
+    ctx.translate(0,oy);
+    ctx.scale(s,s);
+    ctx.fillStyle=pat;
+    ctx.fillRect((colX-3)/s,(t0-oy)/s,(colW+6)/s,(t1-t0)/s);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  /* broad mottling across the whole core */
+  ctx.save();
+  ctx.globalCompositeOperation='overlay'; ctx.globalAlpha=0.10;
+  ctx.translate(0,-sy); ctx.fillStyle=grainB;
+  ctx.fillRect(colX-3, sy+yA, colW+6, yB-yA);
+  ctx.restore();
+
+  /* vertical fractures */
+  ctx.save();
+  ctx.globalAlpha=0.26; ctx.strokeStyle='#000'; ctx.lineWidth=1;
+  for(let k=0;k<3;k++){
+    const seed=k*13.7;
+    ctx.beginPath();
+    for(let y=yA;y<yB;y+=14){
+      const wy=sy+y;
+      const x=colX+colW*(0.20+0.60*vn1(wy*0.004+seed))+Math.sin(wy*0.03+seed)*2;
+      if(y===yA) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  /* playing bed: cut face freshly exposed, drill line descending */
+  if(playIdx>=0 && TRACKS[playIdx].y0!==null){
+    const T=TRACKS[playIdx];
+    const a=T.y0-sy, b=T.y0+T.h-sy;
+    if(b>yA-4 && a<yB+4){
+      const py=a+clamp(playT/Math.max(0.001,playDur),0,1)*T.h;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(colX-3,Math.max(a,yA),colW+6,Math.min(b,yB)-Math.max(a,yA)); ctx.clip();
+      const gg=ctx.createLinearGradient(0,a,0,Math.max(a+1,py));
+      gg.addColorStop(0,'rgba(198,158,102,0.04)'); gg.addColorStop(1,'rgba(228,192,134,0.15)');
+      ctx.fillStyle=gg; ctx.fillRect(colX-3,a,colW+6,Math.max(0,py-a));
+      ctx.globalCompositeOperation='lighter';
+      const gl=ctx.createLinearGradient(0,py-18,0,py+3);
+      gl.addColorStop(0,'rgba(0,0,0,0)');
+      gl.addColorStop(1,'rgba(214,166,96,'+(0.15+level*0.25).toFixed(3)+')');
+      ctx.fillStyle=gl; ctx.fillRect(colX-3,py-18,colW+6,21);
+      ctx.fillStyle='rgba(255,228,182,'+(0.5+level*0.45).toFixed(3)+')';
+      ctx.fillRect(colX-3,py-1,colW+6,1.6);
+      ctx.restore();
+    }
+  }
+
+  /* the bed that is currently out of the column reads as an empty recess */
+  if(openIdx>=0 && TRACKS[openIdx].y0!==null){
+    const T=TRACKS[openIdx], a=T.y0-sy, b=T.y0+T.h-sy;
+    if(b>yA&&a<yB){
+      const rg=ctx.createLinearGradient(colX,0,colX+colW,0);
+      rg.addColorStop(0,'rgba(6,5,4,0.94)'); rg.addColorStop(0.55,'rgba(11,9,8,0.9)'); rg.addColorStop(1,'rgba(2,2,2,0.97)');
+      ctx.fillStyle=rg; ctx.fillRect(colX-3,a,colW+6,b-a);
+      ctx.fillStyle='rgba(198,174,134,0.20)'; ctx.fillRect(colX-3,a,colW+6,1.4);
+    }
+  }
+
+  /* cylindrical light */
+  ctx.globalCompositeOperation='multiply';
+  ctx.drawImage(shadeImg,0,0,shadeImg.width,1, colX,yA,colW,yB-yA);
+  ctx.globalCompositeOperation='lighter';
+  ctx.globalAlpha=0.72;
+  ctx.drawImage(specImg,0,0,specImg.width,1, colX,yA,colW,yB-yA);
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='source-over';
+
+  /* geological contacts, inside the silhouette so they never spill onto the wall */
+  for(const L of LAYERS){
+    const a=L.y0-sy;
+    if(a<yA-4||a>yB+4) continue;
+    contactLine(a, L.kind==='unconf'?2:(L.kind==='bed'?1:0.7));
+  }
+  ctx.restore();
+
+  if(topY>-capRY*2-8 && topY<H+capRY) drawCap(topY);
+
+  drawLabels(sy,H);
+  drawRail();
+  readout();
+}
+
+function contactLine(y,strength){
+  const big = strength>1;
+  const amp = big?5.2:1.5, off = big?2.6:1.3, dx=Math.max(4,colW/16);
+  ctx.beginPath();
+  for(let x=colX-2;x<=colX+colW+2;x+=dx){
+    const j=(vn1(x*0.11+y*0.02)-0.5)*amp;
+    if(x===colX-2) ctx.moveTo(x,y+j); else ctx.lineTo(x,y+j);
+  }
+  ctx.strokeStyle='rgba(0,0,0,'+(0.35+strength*0.16).toFixed(3)+')';
+  ctx.lineWidth=big?2.2:1; ctx.stroke();
+  ctx.beginPath();
+  for(let x=colX-2;x<=colX+colW+2;x+=dx){
+    const j=(vn1(x*0.11+y*0.02)-0.5)*amp;
+    if(x===colX-2) ctx.moveTo(x,y+j+off); else ctx.lineTo(x,y+j+off);
+  }
+  ctx.strokeStyle='rgba(234,216,184,'+(0.055+strength*0.03).toFixed(3)+')';
+  ctx.lineWidth=1; ctx.stroke();
+}
+
+function drawCap(topY){
+  const rx=colW/2, ry=capRY;
+  const T = LAYERS[0] && LAYERS[0].kind==='bed' ? LAYERS[0].t : null;
+  const base = T?T.avg:[110,92,72];
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(colCX,topY,rx,ry,0,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle='rgb('+base[0]+','+base[1]+','+base[2]+')';
+  ctx.fillRect(colX-2,topY-ry-2,colW+4,ry*2+4);
+  const g=ctx.createRadialGradient(colCX-rx*0.42,topY-ry*0.5,rx*0.04,colCX,topY,rx*1.25);
+  g.addColorStop(0,'rgba(255,242,218,0.44)');
+  g.addColorStop(0.42,'rgba(255,236,206,0.10)');
+  g.addColorStop(1,'rgba(0,0,0,0.64)');
+  ctx.fillStyle=g; ctx.fillRect(colX-2,topY-ry-2,colW+4,ry*2+4);
+  ctx.strokeStyle='rgba(0,0,0,0.22)';
+  for(let i=1;i<=7;i++){
+    ctx.lineWidth=i%2?0.8:0.5;
+    ctx.beginPath(); ctx.ellipse(colCX,topY,rx*(i/7.4),ry*(i/7.4),0,0,Math.PI*2); ctx.stroke();
+  }
+  ctx.globalCompositeOperation='overlay'; ctx.globalAlpha=0.22;
+  ctx.fillStyle=grainA; ctx.fillRect(colX-2,topY-ry-2,colW+4,ry*2+4);
+  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(colCX,topY,rx,ry,0,Math.PI*1.02,Math.PI*1.98);
+  ctx.strokeStyle='rgba(255,242,218,0.32)'; ctx.lineWidth=1.2; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(colCX,topY,rx,ry,0,0,Math.PI);
+  ctx.strokeStyle='rgba(0,0,0,0.45)'; ctx.lineWidth=1.4; ctx.stroke();
+}
+
+/* ---------- wall: year numerals, parallaxed behind the core ---------- */
+function drawYears(sy,H,W){
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  const fs=clamp(W*0.34,80,152);
+  const x0=Math.max(6, colX-fs*0.62);
+  ctx.font='200 '+fs.toFixed(0)+'px Newsreader, serif';
+  for(const ym of YEARS){
+    const s=ym.y-sy;
+    const y=s+(s-H*0.5)*0.11;               // the wall sits behind the core
+    if(y<-fs||y>H+fs) continue;
+    ctx.fillStyle='rgba(226,213,188,0.055)';
+    ctx.fillText(ym.year, x0, y);
+    ctx.strokeStyle='rgba(226,213,188,0.05)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x0,y+fs*0.40); ctx.lineTo(Math.max(x0, railX-14),y+fs*0.40); ctx.stroke();
+  }
+  ctx.textBaseline='alphabetic';
+}
+
+function drawHeader(sy,W){
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  if(sy<HEADER+120){
+    const ty=152-sy;
+    const fs=Math.min(100,W*0.245);
+    ctx.font='200 '+fs.toFixed(0)+'px Newsreader, serif';
+    ctx.fillStyle='#f1e8d8';
+    ctx.fillText('Kani', colX-3, ty);
+    ctx.font='400 10.5px "IBM Plex Mono", monospace';
+    ctx.fillStyle='#8a8170';
+    ctx.fillText(HEAD_LINE, colX-2, ty+30);
+    ctx.fillText(((CORE_BOT-CORE_TOP)/M_PX).toFixed(2)+' m recovered', colX-2, ty+48);
+  }
+  if(sy>CORE_BOT-VH){
+    const by=CORE_BOT-sy+62;
+    ctx.font='400 10.5px "IBM Plex Mono", monospace';
+    ctx.fillStyle='#7d7566';
+    ctx.fillText(((CORE_BOT-CORE_TOP)/M_PX).toFixed(2)+' m', colX-2, by);
+  }
+}
+
+/* ---------- labels ---------- */
+let labelHits=[], _wrapCache={};
+function drawLabels(sy,H){
+  labelHits.length=0;
+  let lastBottom=-1e9;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  for(const L of LAYERS){
+    const a=L.y0-sy, b=L.y1-sy;
+    if(b<-30||a>H+40) continue;
+
+    if(L.kind==='bed'){
+      const T=L.t;
+      let ly=a+2;
+      if(ly<6 && b>72) ly=6;                       // thick bed: label stays with you
+      ly=Math.max(ly,lastBottom+7);
+      if(ly>b-12 && (b-a)>30) ly=Math.min(ly,Math.max(a+2,b-12));
+      if(ly>H+16) continue;
+      const dim = (openIdx>=0 && openIdx!==T.idx) ? 0.34 : 1;
+      ctx.font='300 17px Newsreader, serif';
+      const lines=wrap(T.title,labW,2);
+
+      if(a>-12 && a<H+12){
+        ctx.strokeStyle='rgba(190,175,148,'+(0.20*dim).toFixed(3)+')';
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(colX+colW+4,a+0.5); ctx.lineTo(labX-10,a+0.5);
+        if(Math.abs(ly-a)>4){ ctx.lineTo(labX-10,ly+8.5); ctx.lineTo(labX-4,ly+8.5); }
+        ctx.stroke();
+      }
+      ctx.fillStyle = playIdx===T.idx
+        ? 'rgba(238,203,144,'+dim+')'
+        : 'rgba(231,223,207,'+(0.94*dim).toFixed(3)+')';
+      for(let i=0;i<lines.length;i++) ctx.fillText(lines[i],labX,ly+i*19);
+      const my=ly+lines.length*19+1;
+      ctx.font='400 '+METAFS+'px "IBM Plex Mono", monospace';
+      ctx.fillStyle='rgba(150,140,124,'+(0.95*dim).toFixed(3)+')';
+      ctx.fillText((T.date||'undated')+'  '+mmss(T.dur)+(METAFULL?'  '+T.bpm+' bpm':''), labX, my);
+      lastBottom=my+11;
+      labelHits.push({y0:ly-5,y1:my+14,idx:T.idx});
+
+    } else if(L.kind==='gap' && (b-a)>150){
+      const mid=(a+b)/2;
+      if(mid<-30||mid>H+30) continue;
+      ctx.font='400 10px "IBM Plex Mono", monospace';
+      ctx.fillStyle='rgba(136,126,110,0.9)';
+      ctx.fillText(L.days+' days',labX,mid-15);
+      ctx.fillStyle='rgba(112,103,90,0.72)';
+      ctx.fillText(L.from+' → '+L.to,labX,mid+1);
+      ctx.strokeStyle='rgba(150,138,118,0.16)'; ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(labX,a+0.5); ctx.lineTo(labX+42,a+0.5);
+      ctx.moveTo(labX+0.5,a); ctx.lineTo(labX+0.5,mid-21);
+      ctx.moveTo(labX+0.5,mid+17); ctx.lineTo(labX+0.5,b);
+      ctx.moveTo(labX,b-0.5); ctx.lineTo(labX+42,b-0.5);
+      ctx.stroke();
+      lastBottom=Math.max(lastBottom,mid+14);
+    }
+  }
+  ctx.textBaseline='alphabetic';
+}
+function wrap(text,maxw,maxlines){
+  const key=text+'|'+maxw;
+  if(_wrapCache[key]) return _wrapCache[key];
+  const words=text.split(/\s+/), out=[]; let cur='';
+  for(let i=0;i<words.length;i++){
+    const t=cur?cur+' '+words[i]:words[i];
+    if(!cur || ctx.measureText(t).width<=maxw) cur=t;
+    else{
+      out.push(cur); cur=words[i];
+      if(out.length===maxlines-1){
+        cur=words.slice(i).join(' ');
+        break;
+      }
+    }
+  }
+  if(cur) out.push(cur);
+  const last=out.length-1;
+  if(ctx.measureText(out[last]).width>maxw){
+    let s=out[last];
+    while(s.length>2 && ctx.measureText(s+'…').width>maxw) s=s.slice(0,-1);
+    out[last]=s.replace(/\s+$/,'')+'…';
+  }
+  _wrapCache[key]=out;
+  return out;
+}
+
+/* ---------- rail + readout ---------- */
+function drawRail(){
+  if(!railMini) return;
+  const W=railcv.width, H=railcv.height;
+  rctx.setTransform(1,0,0,1,0,0);
+  rctx.clearRect(0,0,W,H);
+  rctx.drawImage(railMini,0,0);
+  const span=Math.max(1,CORE_BOT-CORE_TOP);
+  const f0=clamp((scrollY-CORE_TOP)/span,0,1), f1=clamp((scrollY+VH-CORE_TOP)/span,0,1);
+  const y0=f0*H, y1=Math.max(f0*H+5*DPR,f1*H);
+  rctx.fillStyle='rgba(246,238,222,0.18)';
+  rctx.fillRect(0,y0,W,y1-y0);
+  rctx.strokeStyle='rgba(246,238,222,0.9)';
+  rctx.lineWidth=1*DPR;
+  rctx.strokeRect(0.5*DPR,y0+0.5*DPR,W-DPR,Math.max(2,y1-y0-DPR));
+  if(playIdx>=0 && TRACKS[playIdx].y0!==null){
+    const T=TRACKS[playIdx];
+    const py=((T.y0+T.h*0.5-CORE_TOP)/span)*H;
+    rctx.fillStyle='#e3b878';
+    rctx.fillRect(0,py-1*DPR,W,2*DPR);
+  }
+}
+const hudD=document.getElementById('hudD'), hudDate=document.getElementById('hudDate');
+let _lastD='';
+function readout(){
+  const wy=scrollY+VH*0.42;
+  const d=clamp((wy-CORE_TOP)/M_PX,0,(CORE_BOT-CORE_TOP)/M_PX).toFixed(2)+' m';
+  if(d!==_lastD){ hudD.textContent=d; _lastD=d; }
+  hudDate.textContent = (wy>=CORE_TOP && wy<=DATEMAP[DATEMAP.length-1][0]) ? dstr(dateAtDepth(wy)) : '—';
+}
+
+/* ================================================================
+   SLAB — the bed pulled out and cut open
+   ================================================================ */
+const slabwrap=document.getElementById('slabwrap');
+const slabface=document.getElementById('slabface');
+const sctx=slabface.getContext('2d');
+let slabStatic=null, groovePath=null;
+
+function drawSlabFace(T){
+  const w=Math.max(2,Math.round(VW*DPR)), h=Math.max(2,Math.round(VH*DPR));
+  slabface.width=w; slabface.height=h;
+  slabface.style.width=VW+'px'; slabface.style.height=VH+'px';
+  const g=sctx;
+
+  g.setTransform(1,0,0,1,0,0);
+  const im=g.createImageData(1,h), d=im.data, c=[0,0,0];
+  const bedPx=Math.max(MINH,T.dur*PPS);
+  const cycles=bedPx/T.varve;
+  for(let y=0;y<h;y++){
+    const t=y/h;
+    lutAt(T,t,VH,c);
+    const k=1+Math.sin(t*cycles*6.28318)*0.026*T.dyn+(h1(y*2.3)-0.5)*0.032;
+    d[y*4]=c[0]*k; d[y*4+1]=c[1]*k; d[y*4+2]=c[2]*k; d[y*4+3]=255;
+  }
+  const tc=tmpCanvas(1,h);
+  tc.ctx.putImageData(im,0,0);
+  g.imageSmoothingEnabled=false;
+  g.drawImage(tc.cv,0,0,1,h,0,0,w,h);
+  g.imageSmoothingEnabled=true;
+
+  g.setTransform(DPR,0,0,DPR,0,0);
+
+  const gs=T.grainScale*2.1;
+  g.save();
+  g.globalCompositeOperation='overlay';
+  g.globalAlpha=clamp(T.grainAmt*1.3,0.12,0.46);
+  g.scale(gs,gs); g.fillStyle=grainA; g.fillRect(0,0,VW/gs,VH/gs);
+  g.restore();
+  g.save();
+  g.globalCompositeOperation='overlay'; g.globalAlpha=0.15;
+  g.scale(2.6,2.6); g.fillStyle=grainB; g.fillRect(0,0,VW/2.6,VH/2.6);
+  g.restore();
+
+  const lg=g.createLinearGradient(0,0,VW*0.95,VH);
+  lg.addColorStop(0,'rgba(255,244,222,0.20)');
+  lg.addColorStop(0.34,'rgba(255,238,214,0.04)');
+  lg.addColorStop(1,'rgba(0,0,0,0.48)');
+  g.fillStyle=lg; g.fillRect(0,0,VW,VH);
+  const vg=g.createRadialGradient(VW*0.4,VH*0.42,VH*0.18,VW*0.5,VH*0.5,VH*0.88);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.46)');
+  g.fillStyle=vg; g.fillRect(0,0,VW,VH);
+
+  /* the kerf: the track's own envelope cut into the face */
+  const cx=VW*0.5, maxK=VW*0.40, P=T.peaks, N=P.length;
+  const Lp=[], Rp=[];
+  for(let i=0;i<=N;i++){
+    const y=(i/N)*VH, p=P[Math.min(N-1,i)]/255, wd=6+p*maxK;
+    Lp.push([cx-wd/2,y]); Rp.push([cx+wd/2,y]);
+  }
+  const path=new Path2D();
+  path.moveTo(Lp[0][0],Lp[0][1]);
+  for(let i=1;i<Lp.length;i++) path.lineTo(Lp[i][0],Lp[i][1]);
+  for(let i=Rp.length-1;i>=0;i--) path.lineTo(Rp[i][0],Rp[i][1]);
+  path.closePath();
+  groovePath=path;
+
+  g.save();
+  g.fillStyle='rgba(0,0,0,0.58)'; g.fill(path);
+  const kg=g.createLinearGradient(cx-maxK/2,0,cx+maxK/2,0);
+  kg.addColorStop(0,'rgba(0,0,0,0.5)'); kg.addColorStop(0.5,'rgba(0,0,0,0.2)'); kg.addColorStop(1,'rgba(0,0,0,0.58)');
+  g.fillStyle=kg; g.fill(path);
+  g.beginPath(); g.moveTo(Rp[0][0],Rp[0][1]);
+  for(let i=1;i<Rp.length;i++) g.lineTo(Rp[i][0],Rp[i][1]);
+  g.strokeStyle='rgba(255,240,212,0.20)'; g.lineWidth=1.6; g.stroke();
+  g.beginPath(); g.moveTo(Lp[0][0],Lp[0][1]);
+  for(let i=1;i<Lp.length;i++) g.lineTo(Lp[i][0],Lp[i][1]);
+  g.strokeStyle='rgba(0,0,0,0.55)'; g.lineWidth=2.4; g.stroke();
+  g.restore();
+
+  // the rock above the slab overhangs it — a deep shadow at the head of the cut
+  const og=g.createLinearGradient(0,0,0,Math.min(320,VH*0.40));
+  og.addColorStop(0,'rgba(0,0,0,0.70)'); og.addColorStop(0.5,'rgba(0,0,0,0.30)'); og.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=og; g.fillRect(0,0,VW,Math.min(320,VH*0.40));
+  const bgd=g.createLinearGradient(0,VH-170,0,VH);
+  bgd.addColorStop(0,'rgba(0,0,0,0)'); bgd.addColorStop(1,'rgba(0,0,0,0.62)');
+  g.fillStyle=bgd; g.fillRect(0,VH-170,VW,170);
+
+  g.strokeStyle='rgba(255,240,214,0.13)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(0,1); g.lineTo(VW,1); g.moveTo(1,0); g.lineTo(1,VH); g.stroke();
+
+  if(!slabStatic || slabStatic.width!==w || slabStatic.height!==h){
+    slabStatic=document.createElement('canvas'); slabStatic.width=w; slabStatic.height=h;
+  }
+  const bc=slabStatic.getContext('2d');
+  bc.setTransform(1,0,0,1,0,0);
+  bc.clearRect(0,0,w,h);
+  bc.drawImage(slabface,0,0);
+
+  const a=T.avg;
+  document.getElementById('edgeR').style.background=
+    'linear-gradient(to right, rgb('+(a[0]*0.44|0)+','+(a[1]*0.44|0)+','+(a[2]*0.44|0)+'), #0a0806)';
+  document.getElementById('edgeT').style.background=
+    'linear-gradient(to bottom, rgb('+(Math.min(255,a[0]*1.5)|0)+','+(Math.min(255,a[1]*1.44)|0)+','+(Math.min(255,a[2]*1.34)|0)+'),'+
+    ' rgb('+(a[0]*0.5|0)+','+(a[1]*0.5|0)+','+(a[2]*0.5|0)+'))';
+}
+
+function drawSlabProgress(){
+  if(openIdx<0||!slabStatic||!groovePath) return;
+  const g=sctx;
+  g.setTransform(1,0,0,1,0,0);
+  g.clearRect(0,0,slabface.width,slabface.height);
+  g.drawImage(slabStatic,0,0);
+  g.setTransform(DPR,0,0,DPR,0,0);
+  if(playIdx!==openIdx) return;
+  const py=clamp(playT/Math.max(0.001,playDur),0,1)*VH;
+  g.save();
+  g.beginPath(); g.rect(0,0,VW,py); g.clip();
+  const fg=g.createLinearGradient(0,0,0,Math.max(1,py));
+  fg.addColorStop(0,'rgba(206,170,116,0.15)');
+  fg.addColorStop(1,'rgba(242,206,150,0.44)');
+  g.fillStyle=fg; g.fill(groovePath);
+  g.restore();
+  g.save();
+  g.globalCompositeOperation='lighter';
+  const bg=g.createLinearGradient(0,py-70,0,py+8);
+  bg.addColorStop(0,'rgba(0,0,0,0)');
+  bg.addColorStop(1,'rgba(196,146,80,'+(0.09+level*0.20).toFixed(3)+')');
+  g.fillStyle=bg; g.fillRect(0,py-70,VW,78);
+  g.restore();
+  g.fillStyle='rgba(255,235,196,'+(0.6+level*0.35).toFixed(3)+')';
+  g.fillRect(0,py-1,VW,1.6+level*1.4);
+}
+
+function openSlab(idx){
+  const T=TRACKS[idx];
+  openIdx=idx;
+  drawSlabFace(T);
+  drawSlabProgress();
+  const ttlEl=document.getElementById('slabttl');
+  ttlEl.textContent=T.title;
+  const n=T.title.length;
+  const vw = n<=8 ? 19 : n<=14 ? 15 : n<=22 ? 12.5 : n<=32 ? 10.5 : 9;
+  ttlEl.style.fontSize='clamp(28px,'+vw+'vw,'+Math.round(vw*5.2)+'px)';
+  const depth = T.y0!==null ? ((T.y0-CORE_TOP)/M_PX).toFixed(2)+' m' : '—';
+  const parts=[T.date||'undated', mmss(T.dur), T.bpm+' BPM', T.rms.toFixed(1)+' dB',
+               'crest '+T.crest.toFixed(1), T.onset.toFixed(2)+' ev/s', depth];
+  document.getElementById('slabmeta').innerHTML =
+    parts.map((m,i)=> i===0 ? '<span>'+m+'</span>' : '<s>'+m+'</s>').join('');
+  document.getElementById('slabtime').textContent = playIdx===idx ? mmss(playT) : '0:00';
+  slabwrap.classList.add('on');
+  cv.style.transform='scale(.955) translateX(-3%)';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>slabwrap.classList.add('lit')));
+  needDraw=true;
+  if(history.state!=='slab') history.pushState('slab','');
+}
+function closeSlab(fromPop){
+  if(openIdx<0) return;
+  openIdx=-1;
+  slabwrap.classList.remove('lit');
+  cv.style.transform='';
+  setTimeout(()=>{ if(openIdx<0) slabwrap.classList.remove('on'); },500);
+  needDraw=true;
+  if(!fromPop && history.state==='slab') history.back();
+}
+
+/* ================================================================
+   AUDIO
+   ================================================================ */
+const audio=new Audio();
+audio.crossOrigin='anonymous';
+audio.preload='none';
+let actx=null, ana=null, freq=null;
+function hookAnalyser(){
+  if(actx) return;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    actx=new AC();
+    const src=actx.createMediaElementSource(audio);
+    ana=actx.createAnalyser(); ana.fftSize=256; ana.smoothingTimeConstant=0.75;
+    src.connect(ana); ana.connect(actx.destination);
+    freq=new Uint8Array(ana.frequencyBinCount);
+  }catch(e){ actx=null; ana=null; }
+}
+const bar=document.getElementById('bar'), barTtl=document.getElementById('barTtl'),
+      barTm=document.getElementById('barTm'), barBtn=document.getElementById('barBtn'),
+      barProg=document.getElementById('barprog');
+
+function playTrack(idx){
+  const T=TRACKS[idx];
+  hookAnalyser();
+  if(actx && actx.state==='suspended') actx.resume();
+  if(playIdx!==idx){
+    audio.src='/audio-mp3/'+encodeURIComponent(T.file);
+    playIdx=idx; playT=0; playDur=T.dur;
+  }
+  audio.play().catch(()=>{});
+  bar.classList.add('on');
+  barTtl.textContent=T.title;
+}
+function toggle(){
+  if(playIdx<0) return;
+  if(audio.paused){ if(actx&&actx.state==='suspended') actx.resume(); audio.play().catch(()=>{}); }
+  else audio.pause();
+}
+audio.addEventListener('play', ()=>{ playing=true; barBtn.firstElementChild.className='ic-pause'; needDraw=true; });
+audio.addEventListener('pause',()=>{ playing=false; barBtn.firstElementChild.className='ic-play'; needDraw=true; });
+audio.addEventListener('ended',()=>{ playing=false; barBtn.firstElementChild.className='ic-play'; needDraw=true; });
+audio.addEventListener('loadedmetadata',()=>{ if(isFinite(audio.duration)&&audio.duration>0) playDur=audio.duration; });
+
+/* ================================================================
+   INPUT
+   ================================================================ */
+function wire(){
+  window.addEventListener('scroll',()=>{ needDraw=true; },{passive:true});
+  window.addEventListener('resize',()=>{
+    const sh=document.getElementById('stage').clientHeight||window.innerHeight;
+    if(Math.abs(window.innerWidth-VW)>2||Math.abs(sh-VH)>130) resize();
+  },{passive:true});
+  window.addEventListener('orientationchange',()=>setTimeout(resize,260));
+
+  let sxp=0,syp=0,mx=0,my=0,t0=0;
+  cv.addEventListener('pointerdown',e=>{ sxp=e.clientX; syp=e.clientY; mx=my=0; t0=performance.now(); });
+  cv.addEventListener('pointermove',e=>{
+    mx=Math.max(mx,Math.abs(e.clientX-sxp)); my=Math.max(my,Math.abs(e.clientY-syp));
+  });
+  cv.addEventListener('pointerup',e=>{
+    if(mx>10||my>10||performance.now()-t0>520) return;
+    hit(e.clientX,e.clientY);
+  });
+
+  const rail=document.getElementById('rail');
+  let scrub=false;
+  const railTo=cy=>{
+    const f=clamp(cy/VH,0,1);
+    window.scrollTo(0, clamp(CORE_TOP+f*(CORE_BOT-CORE_TOP)-VH*0.42,0,TOTAL));
+    needDraw=true;
+  };
+  rail.addEventListener('pointerdown',e=>{ scrub=true; try{rail.setPointerCapture(e.pointerId);}catch(_){} railTo(e.clientY); e.preventDefault(); });
+  rail.addEventListener('pointermove',e=>{ if(scrub){ railTo(e.clientY); e.preventDefault(); } });
+  rail.addEventListener('pointerup',()=>{ scrub=false; });
+  rail.addEventListener('pointercancel',()=>{ scrub=false; });
+
+  document.getElementById('slabclose').addEventListener('click',e=>{ e.stopPropagation(); closeSlab(); });
+  barBtn.addEventListener('click',toggle);
+  barTtl.addEventListener('click',()=>{
+    if(playIdx<0) return;
+    const T=TRACKS[playIdx];
+    if(T.y0!==null) window.scrollTo({top:clamp(T.y0-VH*0.34,0,TOTAL),behavior:'smooth'});
+    openSlab(playIdx);
+  });
+
+  // slab: tap toggles playback, swipe down puts the bed back
+  const st=document.getElementById('slabtap');
+  let sy0=0,sx0=0,stt=0;
+  st.addEventListener('pointerdown',e=>{ sy0=e.clientY; sx0=e.clientX; stt=performance.now(); });
+  st.addEventListener('pointerup',e=>{
+    const dy=e.clientY-sy0, dx=Math.abs(e.clientX-sx0);
+    if(dy>85 && dy>dx){ closeSlab(); return; }
+    if(Math.abs(dy)<12 && dx<12 && performance.now()-stt<520) toggle();
+  });
+
+  window.addEventListener('popstate',()=>{ if(openIdx>=0) closeSlab(true); });
+  window.addEventListener('keydown',e=>{
+    if(e.key==='Escape') closeSlab();
+    if(e.key===' '){ e.preventDefault(); toggle(); }
+  });
+}
+
+function hit(cx,cy){
+  if(cx>=labX-16){
+    for(const h of labelHits) if(cy>=h.y0&&cy<=h.y1){ pick(h.idx); return; }
+  }
+  if(cx>=colX-16&&cx<=colX+colW+18){
+    const L=layerAt(scrollY+cy);
+    if(L&&L.kind==='bed'){ pick(L.t.idx); return; }
+  }
+}
+function pick(idx){ playTrack(idx); openSlab(idx); }
+
+/* ================================================================
+   LOOP
+   ================================================================ */
+function loop(){
+  requestAnimationFrame(loop);
+  const sy=window.scrollY||window.pageYOffset||0;
+  if(sy!==scrollY){ scrollY=sy; needDraw=true; }
+
+  if(playing){
+    playT=audio.currentTime;
+    if(ana){
+      ana.getByteFrequencyData(freq);
+      let s=0; for(let i=0;i<28;i++) s+=freq[i];
+      level=level*0.72+clamp(s/28/205,0,1)*0.28;
+    } else level=0.5;
+    needDraw=true;
+    barTm.textContent=mmss(playT)+' / '+mmss(playDur);
+    barProg.style.width=(clamp(playT/Math.max(0.001,playDur),0,1)*100)+'%';
+    if(openIdx>=0) document.getElementById('slabtime').textContent=mmss(playT);
+  }
+  if(openIdx>=0 && (playing||needDraw)) drawSlabProgress();
+  if(needDraw){ needDraw=false; draw(); }
+}
+</script>
+</body>
+</html>

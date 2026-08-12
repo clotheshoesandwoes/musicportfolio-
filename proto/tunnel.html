@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#07080a">
+<title>TUNNEL — Kani</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:#06070a;color:#fff;
+    font-family:'Chakra Petch',system-ui,sans-serif;overscroll-behavior:none}
+  #gl{position:fixed;inset:0;display:block;touch-action:none}
+  #hud{position:fixed;inset:0;pointer-events:none;
+    padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 14px)}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+
+  #mark{position:absolute;top:calc(env(safe-area-inset-top) + 14px);left:16px;
+    font-weight:700;font-size:13px;letter-spacing:.06em;color:rgba(255,255,255,.62)}
+  #mark b{color:#fff}
+
+  /* ---- bottom block ---- */
+  #bot{position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 14px)}
+  #title{font-weight:700;font-size:clamp(29px,8.8vw,56px);line-height:.9;letter-spacing:-.018em;
+    text-transform:uppercase;max-width:calc(100% - 78px);
+    text-shadow:0 2px 26px rgba(0,0,0,.85),0 0 2px rgba(0,0,0,.9);
+    transition:opacity .18s}
+  #nums{margin-top:11px;display:flex;align-items:center;gap:10px;font-size:11px;
+    color:rgba(255,255,255,.5);letter-spacing:.02em;height:14px}
+  #nums span{white-space:nowrap}
+  #nums i{width:1px;height:10px;background:rgba(255,255,255,.22);display:block}
+
+  /* ---- controls ---- */
+  #ctl{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom) + 14px);
+    display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+  .btn{width:52px;height:52px;border:0;display:grid;place-items:center;cursor:pointer;
+    background:#0d0f13;color:#fff;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(0,0,0,.9),
+               0 1px 0 rgba(255,255,255,.05),0 6px 18px rgba(0,0,0,.55);
+    transition:background .12s,transform .06s}
+  .btn:active{transform:translateY(1px);background:#15181e}
+  .btn svg{display:block}
+  .btn.on{background:#1b1f26}
+
+  /* ---- vertical rail (right edge) ---- */
+  #rail{position:absolute;right:0;top:19%;bottom:23%;width:52px;pointer-events:auto;
+    touch-action:none;cursor:ns-resize}
+  #railcv{position:absolute;right:16px;top:0;height:100%;width:26px;display:block}
+  #thumb{position:absolute;right:8px;width:42px;height:2px;background:#fff;
+    box-shadow:0 0 0 1px rgba(0,0,0,.7),0 0 14px rgba(255,255,255,.35);
+    transform:translateY(-1px)}
+  #thumb::after{content:'';position:absolute;right:0;top:-4px;width:3px;height:10px;background:#fff}
+  #tnow{position:absolute;right:48px;font-size:10px;color:rgba(255,255,255,.72);
+    transform:translateY(-50%);white-space:nowrap;text-align:right}
+
+  /* ---- junction overlay bits ---- */
+  #jhint{position:absolute;left:16px;top:calc(env(safe-area-inset-top) + 44px);
+    font-size:11px;color:rgba(255,255,255,.42);letter-spacing:.03em}
+  .hide{opacity:0!important;pointer-events:none!important}
+  #boot{position:fixed;inset:0;background:#06070a;display:grid;place-items:center;
+    z-index:9;transition:opacity .5s;font-size:12px;color:rgba(255,255,255,.4)}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div id="mark"><b>KANI</b></div>
+  <div id="jhint" class="hide">72 passages</div>
+
+  <div id="rail">
+    <canvas id="railcv"></canvas>
+    <div id="thumb"></div>
+    <div id="tnow" class="mono">0:00</div>
+  </div>
+
+  <div id="bot">
+    <div id="title">&nbsp;</div>
+    <div id="nums" class="mono"></div>
+  </div>
+
+  <div id="ctl">
+    <button class="btn" id="bJunc" aria-label="junction">
+      <svg width="20" height="22" viewBox="0 0 20 22" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M10 1.2 18.5 6v10L10 20.8 1.5 16V6z"/><path d="M10 7.4 14.6 10v4L10 16.6 5.4 14v-4z"/>
+      </svg>
+    </button>
+    <button class="btn" id="bPlay" aria-label="play">
+      <svg id="icoPlay" width="18" height="20" viewBox="0 0 18 20" fill="currentColor"><path d="M2 1.5 17 10 2 18.5z"/></svg>
+      <svg id="icoPause" width="18" height="20" viewBox="0 0 18 20" fill="currentColor" style="display:none"><rect x="2" y="1.5" width="5" height="17"/><rect x="11" y="1.5" width="5" height="17"/></svg>
+    </button>
+  </div>
+</div>
+<div id="boot" class="mono">loading masters</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================== DATA ============================== */
+const b64 = s => { const bin = atob(s); const a = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; };
+
+const [marks, cfg] = await Promise.all([
+  fetch('/data/marks.json').then(r=>r.json()),
+  fetch('/config.json').then(r=>r.json())
+]);
+
+const COLS = marks.cols;            // 256
+const ROWS_PER = 8;                 // 6 bands + cent + peaks
+
+// join config -> marks, keep only tracks with data, order newest first
+const TRACKS = cfg.tracks
+  .filter(t => marks.tracks[t.file])
+  .map(t => {
+    const m = marks.tracks[t.file];
+    return { file:t.file, title:(t.title||m.title||t.file).trim(), date:(t.date||m.date||''),
+             dur:m.duration, bpm:m.bpm, rms:m.rmsDb, crest:m.crest, onset:m.onsetRate,
+             bal:m.balance, bands:m.bands.map(b64), cent:b64(m.cent), peaks:b64(m.peaks) };
+  })
+  .sort((a,b)=> (b.date||'0').localeCompare(a.date||'0'));
+
+const N = TRACKS.length;
+
+// per-track character -----------------------------------------------------
+const stat = arr => { const s=arr.slice().sort((a,b)=>a-b); return [s[0], s[s.length-1]]; };
+const bright = TRACKS.map(t => (t.bal[3]+t.bal[4]+t.bal[5])/(t.bal[0]+t.bal[1]+t.bal[2]));
+const [bMin,bMax] = stat(bright);
+const [cMin,cMax] = stat(TRACKS.map(t=>t.crest));
+const [rMin,rMax] = stat(TRACKS.map(t=>t.rms));
+const inv = (x,a,b)=> b>a ? (x-a)/(b-a) : .5;
+
+TRACKS.forEach((t,i)=>{
+  t.i = i;
+  const w = inv(bright[i], bMin, bMax);          // 0 = bass heavy, 1 = bright
+  // tinted light: warm tungsten (bass) -> cold mercury vapour (bright)
+  const h = 0.055 + w*0.055, s = 0.66 - w*0.30;  // tungsten (bass) -> pale halide (bright)
+  t.tint = new THREE.Color().setHSL(h, s, 0.56);
+  t.lamp = new THREE.Color().setHSL(0.58 - w*0.06, 0.30 + w*0.10, 0.70);
+  t.shine = 26 + inv(t.crest,cMin,cMax)*110;     // punchy = harder specular
+  t.amp   = 2.2 + inv(t.rms,rMin,rMax)*1.7;      // loud = deeper relief
+  t.speed = 9.0 * t.bpm / 60;                    // one rib per beat, RIB = 9 units
+});
+
+/* ---------- atlas: 256 x (N*8), R channel, linear in time ---------- */
+const AH = N*ROWS_PER;
+const atlasData = new Uint8Array(COLS*AH*4);
+for (let i=0;i<N;i++){
+  const t = TRACKS[i], base = i*ROWS_PER;
+  for (let b=0;b<6;b++){ const src=t.bands[b], row=(base+b)*COLS*4;
+    for (let x=0;x<COLS;x++) atlasData[row+x*4] = src[x]; }
+  const cr=(base+6)*COLS*4;
+  for (let x=0;x<COLS;x++) atlasData[cr+x*4] = t.cent[x];
+  const pr=(base+7)*COLS*4;
+  for (let x=0;x<COLS;x++){ const j=x*2; atlasData[pr+x*4] = Math.max(t.peaks[j],t.peaks[j+1]); }
+}
+const atlas = new THREE.DataTexture(atlasData, COLS, AH, THREE.RGBAFormat);
+atlas.needsUpdate = true;
+atlas.magFilter = THREE.LinearFilter;
+atlas.minFilter = THREE.LinearFilter;
+atlas.generateMipmaps = false;
+atlas.wrapS = THREE.ClampToEdgeWrapping;
+atlas.wrapT = THREE.ClampToEdgeWrapping;
+
+// CPU-side sampler for the light pulse (works with sound off)
+function bandAt(t, band, v){
+  const x = Math.min(COLS-1, Math.max(0, Math.floor(v*(COLS-1))));
+  return t.bands[band][x]/255;
+}
+
+/* ============================== SCENE ============================== */
+const RIB  = 9.0;        // world units per beat — one wall slat each
+const BAR  = RIB*4.0;    // the ceiling light burns on every bar line
+const RAD  = 12.0;       // apothem of the six-plate bore
+const ZB   = 18.0;       // geometry starts behind the camera (whole number of beats)
+const PER  = 18;         // beats of tube built
+
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.4));
+renderer.setClearColor(0x06070a, 1);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(68, 1, 0.4, 420);
+scene.add(camera);
+
+/* ---------- the bore: six plates, one per band; one slat per beat ---------- */
+function buildTube(){
+  // six plates, one per frequency band; one slat per beat along the length
+  const RF = [0, .022, .05, .20, .358, .400, .600, .642, .80, .95, .978];
+  const ZF = [0, .135, .205, .5, .795, .865];
+  const ts = [];
+  for (let s=0;s<6;s++) for (const f of RF) ts.push((s-0.5+f)/6);
+  ts.push(5.5/6);
+  const zs = [];
+  for (let k=0;k<PER;k++) for (const f of ZF) zs.push(ZB - (k+f)*RIB);
+  zs.push(ZB - PER*RIB);
+
+  const CW = ts.length, CH = zs.length;
+  const pos = new Float32Array(CW*CH*3);
+  let p = 0;
+  for (let j=0;j<CH;j++) for (let i=0;i<CW;i++){ pos[p++]=ts[i]; pos[p++]=zs[j]; pos[p++]=0; }
+  const idx = new Uint32Array((CW-1)*(CH-1)*6);
+  let q = 0;
+  for (let j=0;j<CH-1;j++) for (let i=0;i<CW-1;i++){
+    const a=j*CW+i, b=a+1, c=a+CW, d=c+1;
+    idx[q++]=a; idx[q++]=c; idx[q++]=b; idx[q++]=b; idx[q++]=c; idx[q++]=d;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setIndex(new THREE.BufferAttribute(idx,1));
+  return g;
+}
+
+const COMMON = `
+uniform sampler2D uAtlas; uniform float uAH, uRow;
+float samp(float v, float band){
+  return texture2D(uAtlas, vec2(clamp(v,0.0,1.0), (uRow+band+0.5)/uAH)).r;
+}
+float liveAt(float v){
+  return step(0.0,v) * (1.0 - smoothstep(0.984,1.0,v));
+}
+`;
+
+const tubeVert = COMMON + `
+uniform float uVHead, uK, uPosZ, uAmp;
+varying vec3 vP; varying float vFace, vGrv, vZL, vE, vBand, vF, vChan, vLive;
+void main(){
+  float t = position.x, zl = position.y;
+  float tt = t*6.0 + 0.5;
+  float s = floor(tt + 1e-4);
+  float f = tt - s;
+  float band = mod(s, 6.0);
+
+  // one slat per beat: quantise so each block holds a single reading and stays rigid
+  float zc = (floor(zl/${RIB.toFixed(1)}) + 0.5)*${RIB.toFixed(1)};
+  float vs = uVHead - (zc + uPosZ)*uK;
+  float live = liveAt(vs);
+  float e = mix(0.34, samp(vs, band), live);
+
+  float zr = fract(zl/${RIB.toFixed(1)});
+  float face = smoothstep(0.135,0.205,zr) - smoothstep(0.795,0.865,zr);
+  float grv  = 1.0 - smoothstep(0.018, 0.050, min(f, 1.0-f));
+  float chan = (1.0 - step(0.5, abs(band-3.0)))
+             * (1.0 - smoothstep(0.100, 0.142, abs(f-0.5)));
+
+  float d = mix(-1.75, 0.45 + e*uAmp, face) - grv*0.55;
+  d = mix(d, -1.30, chan);
+
+  float ang = (f-0.5)*1.0471976;
+  float r = (${RAD.toFixed(1)} - d)/cos(ang);
+  float a = t*6.2831853 - 1.5707963;
+  vec3 pw = vec3(r*cos(a), r*sin(a), zl + uPosZ);
+  vP=pw; vFace=face; vGrv=grv; vZL=zl; vE=e; vBand=band; vF=f; vChan=chan; vLive=live;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pw,1.0);
+}`;
+
+const tubeFrag = COMMON + `
+uniform vec3 uTint, uLampC, uCam, uFogC;
+uniform float uShine, uPulse, uHi, uFog, uFade;
+varying vec3 vP; varying float vFace, vGrv, vZL, vE, vBand, vF, vChan, vLive;
+
+void main(){
+  vec3 N = normalize(cross(dFdx(vP), dFdy(vP)));
+  vec3 Vd = uCam - vP; float dist = length(Vd); Vd /= dist;
+  if (dot(N,Vd) < 0.0) N = -N;
+
+  float n0 = floor(vZL/${BAR.toFixed(1)} + 0.5);
+  float node = 1.0 - smoothstep(1.2, 3.2, abs(vZL - n0*${BAR.toFixed(1)}));
+
+  float alb = mix(0.022, 0.115 + 0.17*vE, vFace);
+  alb *= 0.92 + 0.08*step(0.5, fract(vF*5.0));   // formwork boards in the cast plate
+  alb *= 1.0 - 0.90*vGrv;
+  alb *= 1.0 - 0.55*vChan;
+  alb *= 0.40 + 0.60*vLive;                      // past the last bar the wall goes blank
+  alb *= 1.0 - 0.34*(1.0 - step(0.5, vBand));    // the floor slab takes the dirt
+  float spec = (0.09 + 0.46*vFace)*(1.0 - vGrv)*(1.0 - vChan);
+  // the deeper a slat stands proud, the darker the trench beside it
+  float ao = mix(0.09*(1.0 - 0.6*vE), 1.0, vFace) * (1.0 - 0.80*vGrv);
+
+  vec3 dif = vec3(0.0), spc = vec3(0.0);
+
+  // headlight travelling with the camera — hard falloff, so surfaces arrive and die
+  vec3 L = uCam + vec3(0.0,3.4,3.0) - vP; float dl = length(L); L /= dl;
+  float att = 1.0/(1.0 + dl*dl*0.0075);
+  float nl = max(dot(N,L),0.0);
+  dif += uTint * nl*att*(0.55 + 1.5*uPulse);
+  spc += uTint * pow(max(dot(N, normalize(L+Vd)),0.0), uShine)*spec*att*3.2;
+
+  // the channel burns brightest on every bar line
+  float shift = vP.z - vZL;
+  for (int k=-1;k<=1;k++){
+    float lz = (n0+float(k))*${BAR.toFixed(1)};
+    vec3 lp = vec3(clamp(vP.x,-4.0,4.0), ${(RAD-1.1).toFixed(2)}, lz + shift);
+    vec3 Ll = lp - vP; float d2 = length(Ll); Ll /= d2;
+    float a2 = 1.0/(1.0 + d2*d2*0.0115);
+    dif += uLampC * max(dot(N,Ll),0.0)*a2*(5.2 + 4.0*uHi);
+    spc += uLampC * pow(max(dot(N, normalize(Ll+Vd)),0.0), uShine)*spec*a2*3.0;
+  }
+
+  vec3 col = dif*alb*ao*1.35 + spc + uTint*alb*ao*0.35;
+
+  col += uLampC * vChan * (0.62 + node*(3.8 + 3.6*uHi)) * (0.25 + 0.75*vLive);
+
+  float fg = 1.0 - exp(-uFog*uFog*dist*dist);
+  col = mix(col, uFogC, clamp(fg,0.0,1.0));
+  col *= uFade;
+  col = col/(col+0.88);
+  col = pow(col, vec3(0.86));
+  col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453) - 0.5)/255.0;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+const U = {
+  uAtlas:{value:atlas}, uAH:{value:AH}, uRow:{value:0},
+  uVHead:{value:0}, uK:{value:0.001}, uPosZ:{value:0},
+  uAmp:{value:3.0},
+  uTint:{value:new THREE.Color(0xffffff)}, uLampC:{value:new THREE.Color(0xffffff)},
+  uCam:{value:new THREE.Vector3()}, uFogC:{value:new THREE.Color(0x06070a)},
+  uShine:{value:40}, uPulse:{value:0}, uHi:{value:0}, uFog:{value:0.0165}, uFade:{value:1}
+};
+
+const tubeMat = new THREE.ShaderMaterial({
+  uniforms:U, vertexShader:tubeVert, fragmentShader:tubeFrag,
+  side:THREE.DoubleSide, extensions:{ derivatives:true }
+});
+const tube = new THREE.Mesh(buildTube(), tubeMat);
+tube.frustumCulled = false;
+scene.add(tube);
+
+/* ---------- junction: 72 hexagonal passages bored into a bulkhead ---------- */
+const HR = 1.85, CP = 1.5*HR, RP = Math.sqrt(3)*HR, DEPTH = 30, DSEG = 9, ZJ = -62;
+const NCOL = 4, NROW = Math.ceil(N/NCOL);
+const CELLS = [];
+
+function buildBulkhead(){
+  const P=[],IN=[],PU=[],TI=[],CE=[],IDX=[];
+  let vi = 0;
+  const put=(x,y,z, ti,band,d01,kind, px,py, c, cx,cy)=>{
+    P.push(x,y,z); IN.push(ti,band,d01,kind); PU.push(px,py,0);
+    TI.push(c.r,c.g,c.b); CE.push(cx,cy,0); return vi++;
+  };
+  const quad=(a,b,c,d)=>{ IDX.push(a,b,c, a,c,d); };
+  const LIP = 0.62, RIN = HR*0.845;
+
+  for (let r=0;r<NROW;r++) for (let c=0;c<NCOL;c++){
+    const idx = r*NCOL+c;
+    const t = TRACKS[idx]; if (!t) continue;
+    const cx = (c-(NCOL-1)/2)*CP;
+    const cy = ((NROW-1)/2-r)*RP + (c%2 ? RP*0.5 : 0);
+    CELLS.push({ x:cx, y:cy, t });
+    const col = t.tint;
+
+    // mouth rim: outer hex face plate + recessed lip
+    const o=[], ii=[];
+    for (let k=0;k<6;k++){
+      const a = k*Math.PI/3;
+      o.push(put(cx+HR*Math.cos(a), cy+HR*Math.sin(a), 0, idx,0,0,1, 0,0, col, cx,cy));
+    }
+    for (let k=0;k<6;k++){
+      const a = k*Math.PI/3;
+      ii.push(put(cx+RIN*Math.cos(a), cy+RIN*Math.sin(a), -LIP, idx,0,0,1, 0,0, col, cx,cy));
+    }
+    for (let k=0;k<6;k++) quad(o[k], o[(k+1)%6], ii[(k+1)%6], ii[k]);
+
+    // six inner walls = six bands, running back into the dark
+    for (let k=0;k<6;k++){
+      const band = (k+2)%6;
+      const a0 = k*Math.PI/3, a1 = (k+1)*Math.PI/3;
+      const nx = -Math.cos(a0+Math.PI/6), ny = -Math.sin(a0+Math.PI/6);
+      let prevA=-1, prevB=-1;
+      for (let s=0;s<=DSEG;s++){
+        const d = s/DSEG, z = -LIP - d*(DEPTH-LIP);
+        const A = put(cx+RIN*Math.cos(a0), cy+RIN*Math.sin(a0), z, idx,band,d,0, nx,ny, col, cx,cy);
+        const B = put(cx+RIN*Math.cos(a1), cy+RIN*Math.sin(a1), z, idx,band,d,0, nx,ny, col, cx,cy);
+        if (s>0) quad(prevA, prevB, B, A);
+        prevA=A; prevB=B;
+      }
+    }
+    // dead end
+    const cen = put(cx, cy, -DEPTH, idx,0,1,2, 0,0, col, cx,cy);
+    const ring=[];
+    for (let k=0;k<6;k++){ const a=k*Math.PI/3;
+      ring.push(put(cx+RIN*Math.cos(a), cy+RIN*Math.sin(a), -DEPTH, idx,0,1,2, 0,0, col, cx,cy)); }
+    for (let k=0;k<6;k++) IDX.push(cen, ring[k], ring[(k+1)%6]);
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P,3));
+  g.setAttribute('aInfo',    new THREE.Float32BufferAttribute(IN,4));
+  g.setAttribute('aPush',    new THREE.Float32BufferAttribute(PU,3));
+  g.setAttribute('aTint',    new THREE.Float32BufferAttribute(TI,3));
+  g.setAttribute('aCen',     new THREE.Float32BufferAttribute(CE,3));
+  g.setIndex(IDX);
+  return g;
+}
+
+const bulkVert = `
+uniform sampler2D uAtlas; uniform float uAH, uPush, uSel;
+attribute vec4 aInfo; attribute vec3 aPush, aTint, aCen;
+varying vec3 vP, vTint, vCen; varying float vKind, vD, vSel;
+void main(){
+  float row = aInfo.x*8.0 + aInfo.y;
+  float e = texture2D(uAtlas, vec2(aInfo.z, (row+0.5)/uAH)).r;
+  float ramp = smoothstep(0.0,0.15,aInfo.z) * (1.0 - step(0.5, aInfo.w));
+  vec3 p = position + aPush*(e*uPush*ramp);
+  vec4 wp = modelMatrix*vec4(p,1.0);
+  vP = wp.xyz; vTint = aTint; vKind = aInfo.w; vD = aInfo.z;
+  vSel = 1.0 - step(0.5, abs(aInfo.x - uSel));
+  vCen = (modelMatrix*vec4(aCen,1.0)).xyz;
+  gl_Position = projectionMatrix*viewMatrix*wp;
+}`;
+
+const bulkFrag = `
+uniform vec3 uCam, uFogC; uniform float uFog, uFade;
+varying vec3 vP, vTint, vCen; varying float vKind, vD, vSel;
+void main(){
+  vec3 N = normalize(cross(dFdx(vP), dFdy(vP)));
+  vec3 Vd = uCam - vP; float dist = length(Vd); Vd /= dist;
+  if (dot(N,Vd) < 0.0) N = -N;
+
+  float isRim = step(0.5,vKind)*(1.0-step(1.5,vKind));
+  float isCap = step(1.5,vKind);
+  float alb = mix(0.115, 0.305, isRim) * (1.0 - 0.94*isCap);
+
+  vec3 col = vec3(0.0);
+  vec3 L = uCam - vP; float dl = length(L); L /= dl;
+  float att = 1.0/(1.0 + dl*dl*0.00060);
+  col += vec3(0.86,0.88,0.95) * max(dot(N,L),0.0)*att*2.7*alb;
+  col += vec3(0.86,0.88,0.95) * pow(max(dot(N, normalize(L+Vd)),0.0), 46.0)*att*0.30*isRim;
+
+  // each passage carries its own light deep inside; the read head burns brighter
+  vec3 lp = vCen + vec3(0.0, 0.0, mix(-11.0, -6.0, vSel));
+  vec3 L2 = lp - vP; float d2 = length(L2); L2 /= d2;
+  float a2 = 1.0/(1.0 + d2*d2*0.030);
+  col += vTint * max(dot(N,L2),0.0)*a2*(0.80 + 8.0*vSel) * (alb+0.05) * (1.0-isRim*0.75);
+
+  float fg = 1.0 - exp(-uFog*uFog*dist*dist);
+  col = mix(col, uFogC, clamp(fg,0.0,1.0));
+  col *= uFade;
+  col = col/(col+0.88);
+  col = pow(col, vec3(0.86));
+  col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453) - 0.5)/255.0;
+  gl_FragColor = vec4(col,1.0);
+}`;
+
+const BU = {
+  uAtlas:{value:atlas}, uAH:{value:AH}, uPush:{value:0.62}, uSel:{value:0},
+  uCam:U.uCam, uFogC:U.uFogC, uFog:{value:0.0112}, uFade:{value:0}
+};
+const bulk = new THREE.Mesh(buildBulkhead(), new THREE.ShaderMaterial({
+  uniforms:BU, vertexShader:bulkVert, fragmentShader:bulkFrag,
+  side:THREE.DoubleSide, extensions:{ derivatives:true }
+}));
+bulk.position.z = ZJ;
+bulk.frustumCulled = false;
+bulk.visible = false;
+scene.add(bulk);
+
+/* ============================== STATE ============================== */
+const audio = new Audio();
+audio.crossOrigin = 'anonymous';
+audio.preload = 'auto';
+
+let cur = TRACKS[0], posSec = 0, playing = false, attract = true;
+let mode = 'tunnel';            // tunnel | junction | dive
+let scrollY = 0, scrollV = 0, sel = 0;
+let pulse = 0, hi = 0, camZ = 0, camZTarget = 0, fade = 1, bfade = 0;
+let dive = null;
+const tintNow = new THREE.Color(), lampNow = new THREE.Color(), grey = new THREE.Color(0x8d949e);
+
+const el = id => document.getElementById(id);
+const $title = el('title'), $nums = el('nums'), $thumb = el('thumb'), $tnow = el('tnow');
+const $rail = el('rail'), $railcv = el('railcv'), $play = el('bPlay'), $junc = el('bJunc');
+const $icoP = el('icoPlay'), $icoS = el('icoPause'), $jhint = el('jhint');
+const rctx = $railcv.getContext('2d');
+
+const fmt = s => { s=Math.max(0,Math.round(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+
+function setTrack(t, play){
+  cur = t; posSec = 0;
+  U.uRow.value = t.i*ROWS_PER;
+  U.uAmp.value = t.amp;
+  U.uShine.value = t.shine;
+  audio.src = '/audio-mp3/' + encodeURIComponent(t.file);
+  drawRail();
+  writeInfo(t);
+  if (play){ attract = false; audio.currentTime = 0; audio.play().then(()=>{ playing=true; icons(); }).catch(()=>{ playing=false; icons(); }); }
+  icons();
+}
+function writeInfo(t){
+  $title.textContent = t.title;
+  $nums.innerHTML = '<span>'+Math.round(t.bpm)+' BPM</span><i></i><span>'+fmt(t.dur)+'</span>'
+    + (t.date ? '<i></i><span>'+t.date+'</span>' : '');
+}
+function icons(){
+  $icoP.style.display = playing ? 'none' : 'block';
+  $icoS.style.display = playing ? 'block' : 'none';
+  $play.classList.toggle('on', playing);
+}
+function toggle(){
+  if (playing){ audio.pause(); playing=false; }
+  else {
+    attract = false;
+    if (Math.abs(audio.currentTime - posSec) > 0.05) { try{ audio.currentTime = posSec; }catch(e){} }
+    audio.play().then(()=>{ playing=true; icons(); }).catch(()=>{});
+  }
+  icons();
+}
+audio.addEventListener('ended', ()=>{
+  const n = TRACKS[(cur.i+1) % N];
+  setTrack(n, true);
+});
+
+/* ---------- vertical rail ---------- */
+function drawRail(){
+  const w = $railcv.clientWidth, h = $railcv.clientHeight, dpr = Math.min(devicePixelRatio||1, 2);
+  const cw = Math.round(w*dpr), ch = Math.round(h*dpr);
+  if (!w || !h) return;
+  if ($railcv.width !== cw || $railcv.height !== ch){ $railcv.width = cw; $railcv.height = ch; }
+  rctx.setTransform(dpr,0,0,dpr,0,0);
+  rctx.clearRect(0,0,w,h);
+  const p = cur.peaks, cx = w*0.5, prog = posSec/cur.dur;
+  for (let y=0;y<h;y++){
+    const f = y/h;
+    const a = p[Math.min(p.length-1, Math.floor(f*p.length))]/255;
+    const hw = 1 + a*(w*0.5-1);
+    rctx.fillStyle = f <= prog ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.20)';
+    rctx.fillRect(cx-hw, y, hw*2, 1);
+  }
+}
+let railProg = -1;
+function railUpdate(){
+  const h = $rail.clientHeight, prog = Math.min(1, posSec/cur.dur);
+  $thumb.style.top = (prog*h)+'px';
+  $tnow.style.top  = Math.max(6, Math.min(h-6, prog*h))+'px';
+  $tnow.textContent = fmt(posSec);
+  if (Math.abs(prog-railProg) > 0.002){ railProg = prog; drawRail(); }
+}
+
+/* ============================== INPUT ============================== */
+let ptr = null, dragging = false, seekAt = 0;
+const AIM = 6.4;   // read head sits high, so the stack reads downward into the title
+const SCROLL_MIN = AIM - Math.max(...CELLS.map(c=>c.y)) - 2.0;
+const SCROLL_MAX = AIM - Math.min(...CELLS.map(c=>c.y)) + 2.0;
+
+function unitsPerPx(){
+  const dz = Math.abs(ZJ - camera.position.z);
+  return (2*dz*Math.tan(camera.fov*Math.PI/360))/innerHeight;
+}
+function rayToBulkhead(px, py){
+  const v = new THREE.Vector3((px/innerWidth)*2-1, -(py/innerHeight)*2+1, 0.5).unproject(camera);
+  v.sub(camera.position).normalize();
+  const t = (ZJ - camera.position.z)/v.z;
+  return { x: camera.position.x + v.x*t, y: camera.position.y + v.y*t };
+}
+function cellAt(x, y){
+  let best=-1, bd=1e9;
+  for (let i=0;i<CELLS.length;i++){
+    const d = Math.hypot(CELLS[i].x-x, CELLS[i].y+scrollY-y);
+    if (d<bd){ bd=d; best=i; }
+  }
+  return bd < HR*1.05 ? best : -1;
+}
+
+canvas.addEventListener('pointerdown', e=>{
+  if (mode==='dive') return;
+  canvas.setPointerCapture(e.pointerId);
+  ptr = { x:e.clientX, y:e.clientY, y0:e.clientY, sec:posSec, scroll:scrollY, moved:0, t:performance.now() };
+  dragging = false; scrollV = 0;
+});
+canvas.addEventListener('pointermove', e=>{
+  if (!ptr) return;
+  const dy = e.clientY - ptr.y0;
+  ptr.moved = Math.max(ptr.moved, Math.abs(dy) + Math.abs(e.clientX-ptr.x));
+  if (ptr.moved > 9) dragging = true;
+  if (!dragging) return;
+  if (mode==='junction'){
+    const nv = ptr.scroll - dy*unitsPerPx();
+    scrollV = (nv - scrollY);
+    scrollY = Math.max(SCROLL_MIN, Math.min(SCROLL_MAX, nv));
+  } else {
+    posSec = Math.max(0, Math.min(cur.dur-0.05, ptr.sec - (dy/innerHeight)*cur.dur*0.35));
+    const now = performance.now();
+    if (now - seekAt > 55){ seekAt = now; try{ audio.currentTime = posSec; }catch(err){} }
+  }
+  e.preventDefault();
+}, { passive:false });
+canvas.addEventListener('pointerup', e=>{
+  if (!ptr) return;
+  const wasDrag = dragging, quick = performance.now()-ptr.t < 550;
+  if (!wasDrag && quick){
+    if (mode==='junction'){
+      const h = rayToBulkhead(e.clientX, e.clientY);
+      const c = cellAt(h.x, h.y);
+      if (c>=0) startDive(c);
+    } else toggle();
+  } else if (wasDrag && mode==='tunnel'){
+    try{ audio.currentTime = posSec; }catch(err){}
+  }
+  ptr = null; dragging = false;
+});
+canvas.addEventListener('pointercancel', ()=>{ ptr=null; dragging=false; });
+
+// rail: direct scrub
+let railDrag = false;
+function railSeek(cy){
+  const r = $rail.getBoundingClientRect();
+  const f = Math.max(0, Math.min(1, (cy - r.top)/r.height));
+  posSec = f*cur.dur;
+  const now = performance.now();
+  if (now - seekAt > 55){ seekAt = now; try{ audio.currentTime = posSec; }catch(e){} }
+}
+$rail.addEventListener('pointerdown', e=>{ if (mode!=='tunnel') return;
+  railDrag = true; $rail.setPointerCapture(e.pointerId); railSeek(e.clientY); e.preventDefault(); });
+$rail.addEventListener('pointermove', e=>{ if (railDrag){ railSeek(e.clientY); e.preventDefault(); } }, { passive:false });
+$rail.addEventListener('pointerup', e=>{ if (railDrag){ railDrag=false; try{ audio.currentTime=posSec; }catch(err){} } });
+
+$play.addEventListener('click', toggle);
+$junc.addEventListener('click', ()=> mode==='junction' ? leaveJunction() : enterJunction());
+addEventListener('keydown', e=>{
+  if (e.code==='Space'){ e.preventDefault(); mode==='junction' ? leaveJunction() : toggle(); }
+  if (e.code==='ArrowUp'||e.code==='ArrowDown'){
+    const d = e.code==='ArrowUp' ? 1 : -1;
+    if (mode==='junction'){ scrollY = Math.max(SCROLL_MIN, Math.min(SCROLL_MAX, scrollY + d*RP)); }
+    else { posSec = Math.max(0, Math.min(cur.dur-0.05, posSec + d*5)); try{ audio.currentTime=posSec; }catch(err){} }
+  }
+  if (e.code==='Enter' && mode==='junction' && sel>=0) startDive(sel);
+});
+
+/* ============================== MODES ============================== */
+function enterJunction(){
+  mode = 'junction';
+  bulk.visible = true;
+  scrollY = Math.max(SCROLL_MIN, Math.min(SCROLL_MAX, AIM - CELLS[cur.i].y));
+  camZTarget = ZJ + 24;
+  sel = -1;
+  $junc.classList.add('on');
+  $rail.classList.add('hide');
+  $jhint.classList.remove('hide');
+}
+function leaveJunction(){
+  mode = 'tunnel';
+  camZTarget = 0;
+  $junc.classList.remove('on');
+  $rail.classList.remove('hide');
+  $jhint.classList.add('hide');
+  writeInfo(cur);
+}
+function startDive(ci){
+  const c = CELLS[ci];
+  mode = 'dive';
+  dive = { t:0, cx:c.x, cy:c.y + scrollY, from:camera.position.clone() };
+  $junc.classList.remove('on');
+  $jhint.classList.add('hide');
+  setTrack(c.t, true);          // begins inside the tap, so iOS lets it sound
+}
+
+/* ============================== LOOP ============================== */
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.fov = h >= w ? 68 : 50;
+  camera.updateProjectionMatrix();
+  drawRail();
+}
+addEventListener('resize', resize);
+addEventListener('orientationchange', ()=> setTimeout(resize, 250));
+
+const ease = x => x<0.5 ? 4*x*x*x : 1-Math.pow(-2*x+2,3)/2;
+let last = performance.now(), booted = false, power = 1;
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  const T = now/1000;
+
+  /* position in the song = position in the tunnel */
+  if (mode !== 'dive'){
+    if (playing && !audio.paused && !dragging && !railDrag) posSec = audio.currentTime;
+    else if (attract && !dragging) posSec = (posSec + dt*0.35) % cur.dur;
+  }
+  const v = Math.max(0, Math.min(1, posSec/cur.dur));
+  const travel = posSec * cur.speed;
+  U.uVHead.value = v;
+  U.uK.value = 1/(cur.speed*cur.dur);
+  U.uPosZ.value = ((travel % BAR) + BAR) % BAR;
+
+  /* light driven by the track itself, no analyser required */
+  const lo = (bandAt(cur,0,v) + bandAt(cur,1,v))*0.5;
+  const th = (bandAt(cur,4,v) + bandAt(cur,5,v))*0.5;
+  pulse += (lo - pulse) * Math.min(1, dt*11);
+  hi    += (th - hi)    * Math.min(1, dt*8);
+
+  const lit = (playing || attract) ? 1 : 0;
+  power += (lit - power) * Math.min(1, dt*4.5);
+  tintNow.copy(cur.tint).lerp(grey, 0.6*(1-power));
+  lampNow.copy(cur.lamp).lerp(grey, 0.75*(1-power));
+  U.uTint.value.copy(tintNow);
+  U.uLampC.value.copy(lampNow);
+  U.uPulse.value = pulse*power;
+  U.uHi.value = hi*power;
+
+  /* camera */
+  if (mode === 'dive'){
+    dive.t += dt;
+    const k = Math.min(1, dive.t/0.95), e = ease(k);
+    camera.position.set(dive.cx*e, dive.cy*e, THREE.MathUtils.lerp(dive.from.z, ZJ-DEPTH*0.55, e));
+    camera.lookAt(dive.cx, dive.cy, ZJ-DEPTH-14);
+    fade  += ((k>0.55?0:1) - fade) * Math.min(1, dt*7);
+    bfade += ((k>0.80?0:1) - bfade) * Math.min(1, dt*8);
+    if (k >= 1){
+      mode = 'tunnel'; bulk.visible = false;
+      camera.position.set(0,0,0); camera.rotation.set(0,0,0);
+      camZ = camZTarget = 0; fade = 0;
+      $rail.classList.remove('hide');
+      dive = null;
+    }
+  } else {
+    camZ += (camZTarget - camZ) * Math.min(1, dt*2.6);
+    const sway = Math.sin(T*1.31)*0.22 + pulse*power*0.30;
+    camera.position.set(Math.sin(T*0.83)*0.16, sway, camZ);
+    camera.rotation.set(0,0, Math.sin(T*0.61)*0.007 + pulse*power*0.004);
+    fade  += (1 - fade) * Math.min(1, dt*3.2);
+    bfade += ((mode==='junction'?1:0) - bfade) * Math.min(1, dt*4.5);
+    if (mode==='tunnel' && bfade < 0.02) bulk.visible = false;
+  }
+  U.uCam.value.copy(camera.position);
+  U.uFade.value = fade * (0.80 + 0.20*power) * (mode==='tunnel' ? 1 : 0.62 + 0.38*(1-bfade));
+  BU.uFade.value = bfade;
+
+  /* junction: scroll, read head, labels */
+  if (mode === 'junction' || mode === 'dive'){
+    bulk.position.y = scrollY;
+    if (mode === 'junction'){
+      if (!dragging && Math.abs(scrollV) > 0.002){
+        scrollY = Math.max(SCROLL_MIN, Math.min(SCROLL_MAX, scrollY + scrollV));
+        scrollV *= 0.90;
+      }
+      let best=0, bd=1e9;
+      for (let i=0;i<CELLS.length;i++){
+        const d = Math.hypot(CELLS[i].x*0.55, CELLS[i].y + scrollY - AIM);
+        if (d<bd){ bd=d; best=i; }
+      }
+      if (best !== sel){ sel = best; BU.uSel.value = sel; writeInfo(CELLS[sel].t); }
+    }
+  }
+
+  if (mode === 'tunnel') railUpdate();
+  renderer.render(scene, camera);
+
+  if (!booted){ booted = true; const b=el('boot'); b.style.opacity='0'; setTimeout(()=>b.remove(), 600); }
+}
+
+/* ============================== GO ============================== */
+resize();
+setTrack(TRACKS[0], false);
+posSec = cur.dur*0.18;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

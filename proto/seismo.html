@@ -1,0 +1,1142 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>KANI — Seismograph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F1EDE4;
+  --bar:#E6E0D4;
+  --rule:#CDC3B1;
+  --ink:#16130F;
+  --ink2:#665D50;
+  --ink3:#A2988A;
+  --red:#BE2E14;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Mono",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--paper);color:var(--ink);
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--mono);font-size:12px;overscroll-behavior:none}
+
+#app{display:grid;grid-template-rows:auto 1fr auto;height:100dvh;height:100vh;
+     width:100%;max-width:100vw;overflow:hidden}
+
+/* ---- header : instrument nameplate ---- */
+#hd{display:flex;align-items:baseline;gap:14px;padding:9px 14px 8px;
+    background:var(--bar);border-bottom:1px solid var(--rule);flex-wrap:wrap}
+#hd .brand{font-family:var(--cond);font-weight:700;font-size:24px;line-height:.9;letter-spacing:-.015em}
+#hd .chart{font-size:11px;font-weight:500;letter-spacing:.09em;color:var(--ink2);
+    padding-left:14px;border-left:1px solid var(--rule);align-self:center}
+#hd .sp{flex:1 1 20px}
+#plate{display:flex;gap:20px;align-items:baseline}
+#plate div{display:flex;flex-direction:column;gap:1px}
+#plate dt{font-size:8.5px;letter-spacing:.1em;color:var(--ink3)}
+#plate dd{font-size:11.5px;font-weight:500;font-variant-numeric:tabular-nums}
+#plate dd b{font-weight:600;color:var(--red)}
+
+/* ---- stage ---- */
+#body{position:relative;display:grid;grid-template-rows:1fr 38px;min-height:0}
+#stage{position:relative;min-height:0;min-width:0;touch-action:none;cursor:crosshair}
+#cv{display:block;width:100%;height:100%}
+#mini{position:relative;border-top:1px solid var(--rule);background:var(--bar);touch-action:none;cursor:pointer}
+#mc{display:block;width:100%;height:100%}
+
+/* ---- footer transport ---- */
+#ft{display:flex;align-items:center;gap:0;background:var(--bar);border-top:1px solid var(--rule);
+    padding:0;height:46px;overflow:hidden}
+#pp{width:46px;height:45px;flex:0 0 46px;border:0;border-right:1px solid var(--rule);
+    background:var(--ink);color:var(--paper);display:grid;place-items:center;cursor:pointer}
+#pp:active{background:var(--red)}
+#pp svg{display:block}
+#meta{display:flex;align-items:baseline;gap:10px;padding:0 12px;min-width:0;flex:1 1 auto}
+#ftitle{font-family:var(--cond);font-weight:600;font-size:16px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;letter-spacing:-.005em}
+#fdate{font-size:10px;color:var(--ink3);white-space:nowrap;font-variant-numeric:tabular-nums}
+#ftime{font-size:11.5px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink2)}
+#ftime b{color:var(--red);font-weight:500}
+#stats{display:flex;gap:0;align-items:center;height:45px;flex:0 0 auto}
+#stats span{padding:0 11px;font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink2);
+    border-left:1px solid var(--rule);height:100%;display:flex;align-items:center;gap:5px;white-space:nowrap}
+#stats i{font-style:normal;color:var(--ink3);font-size:8.5px;letter-spacing:.08em}
+#bal{display:block;width:78px;height:16px}
+#hint{padding:0 12px;height:45px;display:flex;align-items:center;gap:12px;
+    border-left:1px solid var(--rule);font-size:8.5px;letter-spacing:.09em;color:var(--ink3);white-space:nowrap}
+
+#boot{position:fixed;inset:0;background:var(--paper);display:grid;place-items:center;
+    font-size:10px;letter-spacing:.14em;color:var(--ink3);z-index:9}
+
+@media (max-width:1060px){ #stats span:nth-child(6){display:none} }
+@media (max-width:940px){  #stats span:nth-child(5){display:none} }
+@media (max-width:860px){
+  #hint{display:none}
+  #plate div:nth-child(3){display:none}
+  #stats span:nth-child(4){display:none}
+}
+@media (max-width:759px){
+  #hd{padding:7px 10px 6px;gap:10px}
+  #hd .brand{font-size:19px}
+  #hd .chart{font-size:9.5px;padding-left:10px}
+  #plate{gap:12px;flex-wrap:wrap}
+  #plate dd{font-size:10px}
+  #plate div:nth-child(2){display:none}
+  #plate div:nth-child(3){display:none}
+  #body{grid-template-rows:none;grid-template-columns:1fr 30px}
+  #mini{border-top:0;border-left:1px solid var(--rule)}
+  #ft{height:42px}
+  #pp{width:42px;flex:0 0 42px;height:41px}
+  #stats span:nth-child(n+3){display:none}
+  #ftitle{font-size:14px}
+  #meta{padding:0 9px;gap:7px}
+  #fdate{display:none}
+}
+</style>
+
+<div id="app">
+  <header id="hd">
+    <div class="brand">KANI</div>
+    <div class="chart">SEISMOGRAPH</div>
+    <div class="sp"></div>
+    <dl id="plate">
+      <div><dt>SPAN</dt><dd id="pSpan">—</dd></div>
+      <div><dt>EVENTS</dt><dd id="pN">—</dd></div>
+      <div><dt>RUNTIME</dt><dd id="pRun">—</dd></div>
+      <div><dt>LONGEST SILENCE</dt><dd id="pGap">—</dd></div>
+    </dl>
+  </header>
+
+  <div id="body">
+    <div id="stage"><canvas id="cv"></canvas></div>
+    <div id="mini"><canvas id="mc"></canvas></div>
+  </div>
+
+  <footer id="ft">
+    <button id="pp" aria-label="play or pause">
+      <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true"><path id="ppIcon" fill="currentColor" d="M2.5 1 L12 7 L2.5 13 Z"/></svg>
+    </button>
+    <div id="meta">
+      <div id="ftitle">—</div>
+      <div id="fdate"></div>
+    </div>
+    <div id="stats">
+      <span id="sTime"><b id="ftime">0:00 / 0:00</b></span>
+      <span><i>BPM</i><b id="sBpm">—</b></span>
+      <span><i>RMS</i><b id="sRms">—</b></span>
+      <span><i>CREST</i><b id="sCrest">—</b></span>
+      <span><i>ONSETS</i><b id="sOns">—</b></span>
+      <span><i>BALANCE</i><canvas id="bal" width="156" height="32"></canvas></span>
+    </div>
+    <div id="hint"><span>WHEEL ZOOM</span><span>DRAG PAN</span><span>CLICK TO PLAY</span></div>
+  </footer>
+</div>
+<div id="boot">READING CHART DATA</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============================ constants ============================ */
+const PAPER='#F1EDE4', INK='#16130F', INK2='#665D50', INK3='#A2988A', RED='#BE2E14', RULE='#CDC3B1';
+const GRIDA='150,86,58';
+const MONO='"IBM Plex Mono",monospace', COND='"IBM Plex Sans Condensed","IBM Plex Mono",sans-serif';
+const DAYMS=86400000;
+const GAP_PER_DAY=2.3;   // roll units per day of silence
+const GAP_MIN=9;         // pen-lift separation between same-day recordings
+const LEAD=36;
+const BREAK_LEN=150;
+const NB=6;              // frequency bands
+const LANES=7;           // centroid + 6 bands
+const BAND_LABEL=['4k','1.5k','600','250','100','40'];
+
+const cl=(v,a,b)=>v<a?a:v>b?b:v;
+const dec=s=>{const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;};
+const mmss=s=>{s=Math.max(0,s|0);return (s/60|0)+':'+String(s%60).padStart(2,'0');};
+const dayOf=d=>Math.round(Date.parse(d+'T00:00:00Z')/DAYMS);
+const MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+/* ============================ state ============================ */
+let TR=[], SEG=[], DATED=[], TOTAL=0, OVER=null, CENTMIN=0, CENTSPAN=1;
+let view={u:0,z:1}, zFit=1, zMax=26;
+let anim=null, introT=0, introRun=false, introStart=0;
+let sel=null, playing=null, follow=true, lastUser=0;
+let HORZ=true, W=0, H=0, DPR=1, dirty=true;
+let audio=null, actx=null, ana=null, anaData=null, srcNode=null;
+const pointers=new Map();
+
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const mcv=document.getElementById('mc'), mctx=mcv.getContext('2d');
+const stage=document.getElementById('stage');
+
+/* ============================ build ============================ */
+Promise.all([
+  fetch('/config.json').then(r=>r.json()),
+  fetch('/data/marks.json').then(r=>r.json())
+]).then(([cfg,mk])=>{ build(cfg,mk); start(); })
+ .catch(e=>{ document.getElementById('boot').textContent='CHART DATA UNAVAILABLE'; console.error(e); });
+
+function build(cfg,mk){
+  let cmin=1e9,cmax=-1e9;
+  for(const t of cfg.tracks){
+    const m=mk.tracks[t.file]; if(!m) continue;
+    const peaks=dec(m.peaks), cent=dec(m.cent);
+    for(let i=0;i<cent.length;i++){ if(cent[i]<cmin)cmin=cent[i]; if(cent[i]>cmax)cmax=cent[i]; }
+    // deflection: peak envelope on a dB scale whose window is the track's own crest factor,
+    // scaled by absolute loudness so a quiet recording really does draw a smaller trace.
+    const win=12+cl((m.crest-7.2)/12.1,0,1)*16;
+    const loud=0.16+0.84*Math.pow(cl((m.rmsDb+20.4)/16.2,0,1),1.7);
+    const env=new Float32Array(peaks.length);
+    for(let i=0;i<peaks.length;i++){
+      const e=peaks[i]/255;
+      env[i]= e>0 ? cl(1+20*Math.log10(e)/win,0,1)*loud : 0;
+    }
+    TR.push({
+      title:m.title||t.title, file:t.file, date:m.date||t.date||'',
+      dur:m.duration, bpm:m.bpm, rms:m.rmsDb, crest:m.crest,
+      onset:m.onsetRate, balance:m.balance,
+      env, bands:m.bands.map(dec), cent, seg:null
+    });
+  }
+  CENTMIN=cmin; CENTSPAN=Math.max(1,cmax-cmin);
+
+  const dated=TR.filter(t=>t.date).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  const undated=TR.filter(t=>!t.date);
+  dated.forEach(t=>t.day=dayOf(t.date));
+
+  let u=LEAD, prev=null;
+  for(const t of dated){
+    if(prev){
+      const dd=t.day-prev.day;
+      const len=dd<=0?GAP_MIN:Math.max(GAP_MIN,dd*GAP_PER_DAY);
+      const g={t:'gap',u0:u,u1:u+len,days:dd,from:prev.date,to:t.date}; SEG.push(g); u+=len;
+      t.gapBefore=g;
+    }
+    const s={t:'track',tr:t,u0:u,u1:u+t.dur}; t.seg=s; SEG.push(s); u+=t.dur; prev=t;
+  }
+  DATED=dated;
+
+  if(undated.length){
+    SEG.push({t:'break',u0:u,u1:u+BREAK_LEN,n:undated.length}); u+=BREAK_LEN;
+    undated.forEach((t,i)=>{
+      if(i){ SEG.push({t:'gap',u0:u,u1:u+GAP_MIN,days:0}); u+=GAP_MIN; }
+      const s={t:'track',tr:t,u0:u,u1:u+t.dur}; t.seg=s; SEG.push(s); u+=t.dur;
+    });
+  }
+  TOTAL=u+LEAD;
+
+  // overview buffer for the index strip
+  const N=1600; OVER=new Float32Array(N);
+  for(const s of SEG){
+    if(s.t!=='track') continue;
+    const e=s.tr.env, k0=Math.floor(s.u0/TOTAL*N), k1=Math.ceil(s.u1/TOTAL*N);
+    for(let k=Math.max(0,k0);k<Math.min(N,k1);k++){
+      const f0=cl((k/N*TOTAL-s.u0)/(s.u1-s.u0),0,1), f1=cl(((k+1)/N*TOTAL-s.u0)/(s.u1-s.u0),0,1);
+      let i0=Math.floor(f0*(e.length-1)), i1=Math.max(i0+1,Math.ceil(f1*(e.length-1)));
+      let mx=0; for(let i=i0;i<Math.min(e.length,i1);i++) if(e[i]>mx) mx=e[i];
+      if(mx>OVER[k]) OVER[k]=mx;
+    }
+  }
+
+  // nameplate
+  let run=0; TR.forEach(t=>run+=t.dur);
+  let longest=0, lf='', lt='';
+  for(const s of SEG) if(s.t==='gap'&&s.days>longest){longest=s.days;lf=s.from;lt=s.to;}
+  document.getElementById('pSpan').textContent=dated[0].date+' / '+dated[dated.length-1].date;
+  document.getElementById('pN').textContent=TR.length;
+  document.getElementById('pRun').textContent=(run/60|0)+':'+String(Math.round(run%60)).padStart(2,'0');
+  document.getElementById('pGap').innerHTML='<b>'+longest+' d</b>';
+  document.getElementById('pGap').title=lf+' → '+lt;
+}
+
+/* ============================ calendar mapping ============================ */
+function dateToU(day){
+  if(!DATED.length) return 0;
+  if(day<=DATED[0].day) return DATED[0].seg.u0;
+  for(let i=1;i<DATED.length;i++){
+    const b=DATED[i];
+    if(day===b.day) return b.seg.u0;
+    if(day<b.day){
+      const a=DATED[i-1], g=b.gapBefore;
+      if(!g||b.day===a.day) return b.seg.u0;
+      return g.u0+(day-a.day)/(b.day-a.day)*(g.u1-g.u0);
+    }
+  }
+  return DATED[DATED.length-1].seg.u1;
+}
+
+/* ============================ geometry ============================ */
+const geo={};
+function layout(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const r=stage.getBoundingClientRect();
+  W=Math.max(1,Math.round(r.width)); H=Math.max(1,Math.round(r.height));
+  HORZ=W>=760;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  const mr=mcv.parentElement.getBoundingClientRect();
+  mcv.width=Math.max(1,Math.round(mr.width*DPR)); mcv.height=Math.max(1,Math.round(mr.height*DPR));
+  mctx.setTransform(DPR,0,0,DPR,0,0);
+  geo.mw=Math.max(1,Math.round(mr.width)); geo.mh=Math.max(1,Math.round(mr.height));
+
+  geo.L = HORZ?W:H;          // travel axis length
+  geo.C = HORZ?H:W;          // cross axis length
+  geo.legend = HORZ?54:34;   // pinned channel legend, sits at the start of the travel axis
+  zFit = Math.max(1e-6,(geo.L-geo.legend-28)) / TOTAL;
+  zMax = HORZ?24:18;
+  crossLayout();
+}
+
+// Channel heights are fixed at every zoom — the sub-channels are always ruled,
+// they simply have no pen trace in them until the tracks are wide enough to resolve.
+function crossLayout(){
+  // the annotation margin only needs to be wide enough for what currently fits in it
+  geo.cal = HORZ ? 30 : Math.round(46+52*cl((view.z-0.25)/1.2,0,1));
+  const c0=geo.cal+(HORZ?4:2), c1=geo.C-(HORZ?5:4);
+  const avail=Math.max(60,c1-c0);
+  const d=detail();
+  const grow = 1 + (HORZ?0.95:0.5)*d;
+  const lh = (HORZ ? cl(avail*0.048,10,16) : cl(avail*0.040,8,12)) * grow;
+  const lanesH = LANES*lh;
+  const bpmH = cl(avail*0.085, HORZ?22:18, 38);
+  const nameH = HORZ?30:0;
+  const traceH = Math.max(46, avail-lanesH-bpmH-nameH-14);
+  geo.c0=c0;
+  geo.traceMid=c0+traceH/2;
+  geo.traceHalf=traceH/2-1;
+  geo.nameC=c0+traceH+(HORZ?12:0);
+  geo.lane0=c1-lanesH;
+  geo.laneH=lh;
+  geo.bpm0=geo.lane0-8-bpmH;
+  geo.bpmH=bpmH;
+  geo.cEnd=c1;
+  geo.detail=d;
+}
+function detail(){ return cl((view.z-0.5)/1.8,0,1); }
+
+const u2p = u => (u-view.u)*view.z + geo.legend;
+const p2u = p => view.u + (p-geo.legend)/view.z;
+const XY  = (p,c) => HORZ?[p,c]:[c,p];
+function crossLine(p,a,b){ const q=Math.round(p)+.5; if(HORZ){ctx.moveTo(q,a);ctx.lineTo(q,b);} else {ctx.moveTo(a,q);ctx.lineTo(b,q);} }
+function crossLineF(p,a,b){ if(HORZ){ctx.moveTo(p,a);ctx.lineTo(p,b);} else {ctx.moveTo(a,p);ctx.lineTo(b,p);} }
+function travelLine(c,a,b){ const q=Math.round(c)+.5; if(HORZ){ctx.moveTo(a,q);ctx.lineTo(b,q);} else {ctx.moveTo(q,a);ctx.lineTo(q,b);} }
+function viewSpan(){ return (geo.L-geo.legend)/view.z; }
+function clampView(){
+  view.z=cl(view.z,zFit,zMax);
+  const span=viewSpan(), pad=14/view.z;
+  const lo=-pad, hi=Math.max(lo,TOTAL-span+pad);
+  view.u=cl(view.u,lo,hi);
+}
+
+/* ============================ render ============================ */
+const P=new Float32Array(5000), HM=new Float32Array(5000), HA=new Float32Array(5000);
+
+function draw(){
+  crossLayout();
+  if(introRun){
+    const t=cl((performance.now()-introStart)/1500,0,1);
+    introT=1-Math.pow(1-t,1.7);
+    if(t>=1) introRun=false;
+  }
+  const p0=geo.legend, p1=geo.L;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle=PAPER; ctx.fillRect(0,0,W,H);
+  ctx.lineCap='butt'; ctx.lineJoin='miter';
+
+  drawGrid(p0,p1);
+  drawLaneRules(p0,p1);
+  drawCalendar(p0,p1);
+
+  // baseline of the trace channel
+  ctx.beginPath(); ctx.strokeStyle=RULE; ctx.lineWidth=1;
+  travelLine(geo.traceMid,p0,p1); ctx.stroke();
+
+  const clipIntro = introRun ? u2p(introT*TOTAL) : Infinity;
+
+  ctx.save();
+  if(introRun){
+    ctx.beginPath();
+    if(HORZ) ctx.rect(0,0,Math.min(W,clipIntro),H); else ctx.rect(0,0,W,Math.min(H,clipIntro));
+    ctx.clip();
+  }
+  drawFlatline(p0,p1);
+  drawBpmLane(p0,p1);
+  for(const s of SEG){
+    if(s.t!=='track') continue;
+    const a=u2p(s.u0), b=u2p(s.u1);
+    if(b<p0-2||a>p1+2) continue;
+    drawTrace(s,p0,p1);
+    if(b-a>=14) drawLanes(s,p0,p1);
+  }
+  drawAnnotations(p0,p1);
+  ctx.restore();
+
+  if(introRun) drawPen(clipIntro,RED);
+  drawPlayhead(p0,p1);
+  drawLegend();
+  drawScaleBar();
+  drawMini();
+}
+
+/* ---- paper ruling ---- */
+function niceStep(minPx){
+  const mul=[1,2,5];
+  for(let e=-3;e<7;e++) for(let m=0;m<3;m++){
+    const s=mul[m]*Math.pow(10,e);
+    if(s*view.z>=minPx) return s;
+  }
+  return 1e6;
+}
+function drawGrid(p0,p1){
+  const step=niceStep(9);
+  const gp=step*view.z;
+  const cTop=geo.c0-2, cBot=geo.cEnd;
+
+  const u0=p2u(p0), u1=p2u(p1);
+  ctx.lineWidth=1;
+  // minor + major travel-axis ruling
+  for(let pass=0;pass<2;pass++){
+    const st=pass?step*5:step;
+    ctx.beginPath();
+    ctx.strokeStyle='rgba('+GRIDA+','+(pass?0.20:0.085)+')';
+    let k=Math.ceil(u0/st);
+    const kEnd=Math.floor(u1/st);
+    for(; k<=kEnd; k++){
+      if(!pass && k%5===0) continue;
+      crossLine(u2p(k*st),cTop,cBot);
+    }
+    ctx.stroke();
+  }
+  // cross-axis ruling at the same pitch — ECG paper
+  for(let pass=0;pass<2;pass++){
+    const sp=pass?gp*5:gp;
+    ctx.beginPath();
+    ctx.strokeStyle='rgba('+GRIDA+','+(pass?0.20:0.085)+')';
+    for(let d=0;;d++){
+      const a=geo.traceMid-d*sp, b=geo.traceMid+d*sp;
+      if(a<cTop&&b>cBot) break;
+      if(!pass && d%5===0) continue;
+      if(a>=cTop) travelLine(a,p0,p1);
+      if(d&&b<=cBot) travelLine(b,p0,p1);
+      if(d>400) break;
+    }
+    ctx.stroke();
+  }
+}
+
+/* ---- calendar band ---- */
+function drawCalendar(p0,p1){
+  const u0=p2u(p0), u1=p2u(p1);
+  ctx.save();
+  // year rules
+  const y0=2020, y1=2027;
+  for(let y=y0;y<=y1;y++){
+    const d=dayOf(y+'-01-01');
+    if(!DATED.length) break;
+    if(d<DATED[0].day||d>DATED[DATED.length-1].day) continue;
+    const uu=dateToU(d); if(uu<u0-200||uu>u1+200) continue;
+    const p=u2p(uu);
+    ctx.beginPath(); ctx.strokeStyle='rgba('+GRIDA+',0.34)'; ctx.lineWidth=1;
+    crossLine(p,geo.cal-8,geo.cEnd); ctx.stroke();
+    ctx.fillStyle=INK3;
+    if(HORZ){
+      ctx.font='700 '+(view.z>0.5?26:21)+'px '+COND;
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      ctx.fillText(String(y),p+5,geo.cal-9);
+    }else{
+      ctx.font='700 17px '+COND;
+      ctx.textAlign='left'; ctx.textBaseline='top';
+      ctx.fillText(String(y),4,p+3);
+    }
+  }
+  // month ticks
+  if(view.z>0.55 && DATED.length){
+    ctx.font='500 8.5px '+MONO; ctx.fillStyle=INK3;
+    let lastP=-1e9;
+    for(let y=2020;y<=2026;y++) for(let m=0;m<12;m++){
+      const d=dayOf(y+'-'+String(m+1).padStart(2,'0')+'-01');
+      if(d<DATED[0].day||d>DATED[DATED.length-1].day) continue;
+      const uu=dateToU(d); if(uu<u0||uu>u1) continue;
+      const p=u2p(uu); if(p-lastP<30) continue; lastP=p;
+      ctx.beginPath(); ctx.strokeStyle='rgba('+GRIDA+',0.26)'; ctx.lineWidth=1;
+      if(HORZ){ crossLine(p,geo.cal-6,geo.cal); } else { crossLine(p,geo.cal-9,geo.cal); }
+      ctx.stroke();
+      if(HORZ){ ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText(MON[m],p+3,geo.cal-8); }
+      else { ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(MON[m],5,p+4); }
+    }
+  }
+  // band under the calendar
+  ctx.beginPath(); ctx.strokeStyle=RULE; ctx.lineWidth=1;
+  travelLine(geo.cal-1,p0,p1); ctx.stroke();
+  ctx.restore();
+}
+
+/* ---- silence ---- */
+function drawFlatline(p0,p1){
+  ctx.beginPath(); ctx.strokeStyle=INK3; ctx.lineWidth=1;
+  for(const s of SEG){
+    if(s.t==='track') continue;
+    const a=Math.max(p0,u2p(s.u0)), b=Math.min(p1,u2p(s.u1));
+    if(b<a) continue;
+    travelLine(geo.traceMid,a,b);
+  }
+  ctx.stroke();
+}
+
+/* ---- the trace ---- */
+// Two honest statistics per screen column:
+//   HM = peak deflection over everything that column covers  (the excursion envelope)
+//   HA = the single value the pen was on at that instant     (what a plotter actually inks)
+// At overview speed the second one aliases, and that aliasing is the trace's texture.
+function collect(s,p0,p1){
+  const e=s.tr.env, N=e.length, half=geo.traceHalf;
+  const a=u2p(s.u0), b=u2p(s.u1), span=b-a;
+  let k0=Math.max(Math.floor(p0),Math.floor(a)), k1=Math.min(Math.ceil(p1),Math.ceil(b));
+  if(k1<=k0) k1=k0+1;
+  let n=0;
+  for(let p=k0;p<=k1&&n<4998;p++){
+    const tc=cl((p+0.5-a)/span,0,1)*(N-1), j=Math.floor(tc), fr=tc-j;
+    const pt=e[j]*(1-fr)+e[Math.min(N-1,j+1)]*fr;
+    const f0=cl((p-a)/span,0,1), f1=cl((p+1-a)/span,0,1);
+    let i0=Math.floor(f0*(N-1)), i1=Math.min(N,Math.max(Math.floor(f0*(N-1))+1,Math.ceil(f1*(N-1))));
+    let mx=pt;
+    for(let i=i0;i<i1;i++) if(e[i]>mx) mx=e[i];
+    P[n]=p; HM[n]=mx*half; HA[n]=pt*half; n++;
+  }
+  if(n===1){ P[1]=P[0]+1; HM[1]=HM[0]; HA[1]=HA[0]; n=2; }
+  return n;
+}
+function envPath(n,Hs,mid){
+  ctx.beginPath();
+  for(let k=0;k<n;k++){ const c=XY(P[k],mid-Hs[k]); k?ctx.lineTo(c[0],c[1]):ctx.moveTo(c[0],c[1]); }
+  for(let k=n-1;k>=0;k--){ const c=XY(P[k],mid+Hs[k]); ctx.lineTo(c[0],c[1]); }
+  ctx.closePath();
+}
+function contour(n,Hs,mid,sign){
+  ctx.beginPath();
+  for(let k=0;k<n;k++){ const c=XY(P[k],mid+sign*Hs[k]); k?ctx.lineTo(c[0],c[1]):ctx.moveTo(c[0],c[1]); }
+  ctx.stroke();
+}
+// Ink density follows paper speed: a compressed overview is a solid burst,
+// a slow run resolves into the pen's own line with the page showing through.
+function paintTrace(n,color,mul){
+  const m=mul===undefined?1:mul, mid=geo.traceMid;
+  const dens=cl(1-(view.z-0.4)/2.6,0.10,1);
+  ctx.fillStyle=color; ctx.strokeStyle=color;
+  envPath(n,HM,mid); ctx.globalAlpha=(0.025+0.10*dens)*m; ctx.fill();
+  envPath(n,HA,mid); ctx.globalAlpha=(0.05+0.27*dens)*m; ctx.fill();
+  if(view.z>4){ // individual pen strokes resolve
+    ctx.beginPath(); ctx.globalAlpha=0.16*m; ctx.lineWidth=1;
+    for(let k=0;k<n;k+=3){ if(HA[k]<2) continue; crossLine(P[k],mid-HA[k]+1,mid+HA[k]-1); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1*m; ctx.lineWidth=1;
+  contour(n,HA,mid,-1); contour(n,HA,mid,1);
+  ctx.globalAlpha=1;
+}
+function clipRange(a,b,fn){
+  if(b<=a) return;
+  ctx.save(); ctx.beginPath();
+  if(HORZ) ctx.rect(a,0,b-a,H); else ctx.rect(0,a,W,b-a);
+  ctx.clip(); fn(); ctx.restore();
+}
+function drawTrace(s,p0,p1){
+  const n=collect(s,p0,p1);
+  if(playing===s.tr && audio){
+    const ph=u2p(s.u0+audio.currentTime);
+    clipRange(-9999,ph,()=>paintTrace(n,RED,1));
+    clipRange(ph,99999,()=>paintTrace(n,INK,0.32));
+  }else{
+    paintTrace(n,INK,1);
+  }
+}
+
+/* ---- second pen: tempo ---- */
+function drawBpmLane(p0,p1){
+  const top=geo.bpm0, h=geo.bpmH-6, bot=top+h;
+  ctx.beginPath(); ctx.strokeStyle='rgba('+GRIDA+',0.30)'; ctx.lineWidth=1;
+  travelLine(bot+3,p0,p1); travelLine(top,p0,p1); ctx.stroke();
+  const map=b=>bot-cl((b-55)/117,0,1)*h;
+  let prev=null;
+  ctx.lineWidth=1.15; ctx.strokeStyle=INK2;
+  ctx.beginPath();
+  for(const s of SEG){
+    if(s.t!=='track') continue;
+    const a=u2p(s.u0), b=u2p(s.u1), y=map(s.tr.bpm);
+    if(prev!==null && a>=p0-400 && a<=p1+400){ crossLine(a,Math.min(prev,y),Math.max(prev,y)); }
+    if(b>=p0-2 && a<=p1+2) travelLine(y,Math.max(p0,a),Math.min(p1,b));
+    prev=y;
+  }
+  ctx.stroke();
+}
+
+/* ---- channel lanes ---- */
+function drawLaneRules(p0,p1){
+  ctx.beginPath(); ctx.strokeStyle='rgba('+GRIDA+',0.30)'; ctx.lineWidth=1;
+  for(let li=0;li<=LANES;li++) travelLine(geo.lane0+li*geo.laneH-2.5,p0,p1);
+  ctx.stroke();
+}
+function drawLanes(s,p0,p1){
+  const tr=s.tr, a=u2p(s.u0), b=u2p(s.u1), span=b-a, lh=geo.laneH;
+  const alpha=0.30+0.70*geo.detail;
+  let k0=Math.max(Math.floor(p0),Math.floor(a)), k1=Math.min(Math.ceil(p1),Math.ceil(b));
+  if(k1-k0<1) return;
+  const ph = (playing===tr&&audio)?u2p(s.u0+audio.currentTime):-1e9;
+
+  for(let li=0;li<LANES;li++){
+    const isC = li===0;
+    const arr = isC ? tr.cent : tr.bands[NB-li];
+    const N=arr.length;
+    const top=geo.lane0+li*lh, bot=top+lh-2.5;
+    if(bot>geo.cEnd+2) break;
+    ctx.beginPath();
+    for(let p=k0;p<=k1;p++){
+      const f=cl((p-a)/span,0,1);
+      const t=f*(N-1), j=Math.floor(t), fr=t-j;
+      const raw=arr[j]*(1-fr)+arr[Math.min(N-1,j+1)]*fr;
+      const v = isC ? cl((raw-CENTMIN)/CENTSPAN,0,1) : raw/255;
+      const c=XY(p, bot-v*(lh-3.2));
+      p===k0?ctx.moveTo(c[0],c[1]):ctx.lineTo(c[0],c[1]);
+    }
+    ctx.lineWidth=1;
+    ctx.globalAlpha=alpha*(isC?0.55:(0.88-li*0.055));
+    ctx.strokeStyle=INK; ctx.stroke();
+    if(ph>k0){
+      ctx.save(); ctx.beginPath();
+      if(HORZ) ctx.rect(-9999,0,ph+9999,H); else ctx.rect(0,-9999,W,ph+9999);
+      ctx.clip(); ctx.strokeStyle=RED; ctx.globalAlpha=alpha; ctx.stroke(); ctx.restore();
+    }
+    ctx.globalAlpha=1;
+  }
+}
+
+/* ---- annotations ---- */
+function backing(p,c,w,h){
+  ctx.globalAlpha=0.88; ctx.fillStyle=PAPER;
+  const xy=XY(p,c); ctx.fillRect(xy[0]-(HORZ?w:h)/2, xy[1]-(HORZ?h:w)/2, HORZ?w:h, HORZ?h:w);
+  ctx.globalAlpha=1;
+}
+function drawAnnotations(p0,p1){
+  ctx.textBaseline='alphabetic';
+  // gaps
+  for(const s of SEG){
+    const a=u2p(s.u0), b=u2p(s.u1);
+    if(b<p0||a>p1) continue;
+    if(s.t==='gap'&&s.days>0){
+      const len=b-a; if(len<(HORZ?62:44)) continue;
+      const mid=(Math.max(a,p0)+Math.min(b,p1))/2;
+      const big=s.days>=180;
+      if(HORZ) backing(mid,geo.traceMid,Math.min(len-2,big?170:120),40);
+      else backing(mid,geo.cal+(geo.C-geo.cal)/2,Math.min(len-2,34),Math.min(geo.C-geo.cal-6,190));
+      ctx.fillStyle=big?INK2:INK3;
+      const c1=geo.traceMid-(HORZ?14:0), c2=geo.traceMid+(HORZ?15:0);
+      if(HORZ){
+        ctx.textAlign='center';
+        ctx.font='700 '+(big?17:13)+'px '+COND;
+        ctx.fillText(s.days+' DAYS',mid,c1);
+        ctx.font='400 8.5px '+MONO; ctx.fillStyle=INK3;
+        if(len>140) ctx.fillText(s.from+'  →  '+s.to,mid,c2+4);
+        ctx.beginPath(); ctx.strokeStyle=INK3; ctx.lineWidth=1;
+        crossLine(a,geo.traceMid-8,geo.traceMid+8); crossLine(b,geo.traceMid-8,geo.traceMid+8); ctx.stroke();
+      }else{
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.font='700 '+(big?16:12)+'px '+COND;
+        ctx.fillText(s.days+' DAYS',geo.cal+ (geo.C-geo.cal)/2, mid-6);
+        ctx.font='400 8.5px '+MONO; ctx.fillStyle=INK3;
+        if(len>120) ctx.fillText(s.from+' → '+s.to,geo.cal+(geo.C-geo.cal)/2,mid+8);
+        ctx.textBaseline='alphabetic';
+      }
+    }
+    if(s.t==='break'){
+      const mid=(a+b)/2;
+      ctx.beginPath(); ctx.strokeStyle=INK3; ctx.lineWidth=1;
+      ctx.setLineDash([2,3]);
+      crossLine(a+4,geo.c0,geo.cEnd); crossLine(b-4,geo.c0,geo.cEnd);
+      ctx.stroke(); ctx.setLineDash([]);
+      if(b-a<(HORZ?70:46)) continue;
+      if(HORZ) backing(mid,geo.traceMid,b-a-10,40);
+      else backing(mid,geo.cal+(geo.C-geo.cal)/2,Math.min(b-a-6,34),Math.min(geo.C-geo.cal-6,190));
+      ctx.fillStyle=INK2; ctx.textAlign='center';
+      if(HORZ){
+        ctx.font='700 13px '+COND; ctx.fillText('NO DATE ON FILE',mid,geo.traceMid-6);
+        ctx.font='400 8.5px '+MONO; ctx.fillStyle=INK3;
+        ctx.fillText(s.n+' TRACKS',mid,geo.traceMid+12);
+      }else{
+        ctx.textBaseline='middle';
+        ctx.font='700 12px '+COND; ctx.fillText('NO DATE ON FILE',geo.cal+(geo.C-geo.cal)/2,mid-5);
+        ctx.font='400 8.5px '+MONO; ctx.fillStyle=INK3;
+        ctx.fillText(s.n+' TRACKS',geo.cal+(geo.C-geo.cal)/2,mid+8);
+        ctx.textBaseline='alphabetic';
+      }
+    }
+  }
+  // track names + start ticks
+  let lastLabel=-1e9;
+  for(const s of SEG){
+    if(s.t!=='track') continue;
+    const a=u2p(s.u0), b=u2p(s.u1);
+    if(b<p0-4||a>p1+4) continue;
+    const on=playing===s.tr, isSel=sel===s.tr;
+    ctx.beginPath(); ctx.strokeStyle=on?RED:INK3; ctx.lineWidth=1;
+    crossLine(a,geo.cal,geo.cal+6); ctx.stroke();
+
+    const name=s.tr.title.toUpperCase();
+    if(HORZ){
+      const x=Math.max(a+4,p0+4);
+      if(b-a>340){
+        // enough paper for the operator to write the event up properly
+        const t=s.tr;
+        ctx.textAlign='left'; ctx.fillStyle=on?RED:INK;
+        ctx.font='600 21px '+COND;
+        ctx.fillText(t.title,x,geo.nameC+4);
+        ctx.font='400 9px '+MONO; ctx.fillStyle=INK3;
+        ctx.fillText([t.date||'no date', mmss(t.dur), t.bpm+' BPM',
+          t.rms.toFixed(1)+' dB RMS', 'CREST '+t.crest.toFixed(1),
+          t.onset.toFixed(2)+' onsets/s'].join('    '), x, geo.nameC+19);
+      }else{
+        ctx.font=(on||isSel?'600 ':'500 ')+'10px '+MONO;
+        const w=ctx.measureText(name).width;
+        if(b-a>w+9){
+          ctx.textAlign='left'; ctx.fillStyle=on?RED:(isSel?INK:INK2);
+          ctx.fillText(name,x,geo.nameC);
+          if(s.tr.date){ ctx.font='400 8.5px '+MONO; ctx.fillStyle=INK3;
+            const dw=ctx.measureText(s.tr.date).width;
+            if(b-a>w+dw+22) ctx.fillText(s.tr.date,x+w+10,geo.nameC); }
+        }
+      }
+    }else{
+      if(b-a>16 && a-lastLabel>13){
+        lastLabel=a;
+        ctx.textAlign='right'; ctx.textBaseline='top';
+        ctx.font=(on||isSel?'600 ':'500 ')+'9.5px '+MONO;
+        ctx.fillStyle=on?RED:(isSel?INK:INK2);
+        const lim=geo.cal-32;
+        let nm=name;
+        if(ctx.measureText(nm).width>lim){
+          while(nm.length>2&&ctx.measureText(nm+'…').width>lim) nm=nm.slice(0,-1);
+          nm+='…';
+        }
+        ctx.fillText(nm,geo.cal-6,a+1);
+        if(s.tr.date&&b-a>28){ ctx.font='400 8px '+MONO; ctx.fillStyle=INK3; ctx.fillText(s.tr.date,geo.cal-6,a+12); }
+        ctx.textBaseline='alphabetic';
+      }
+    }
+  }
+  // elapsed-time ruling inside the focused track
+  if(view.z>3){
+    const step=view.z>12?5:view.z>6?10:30;
+    ctx.font='400 8px '+MONO; ctx.fillStyle=INK3;
+    for(const s of SEG){
+      if(s.t!=='track') continue;
+      const a=u2p(s.u0), b=u2p(s.u1);
+      if(b<p0||a>p1) continue;
+      for(let t=step;t<s.tr.dur;t+=step){
+        const p=u2p(s.u0+t); if(p<p0||p>p1) continue;
+        ctx.beginPath(); ctx.strokeStyle='rgba('+GRIDA+',0.4)'; ctx.lineWidth=1;
+        crossLine(p,geo.cEnd-5,geo.cEnd); ctx.stroke();
+        if(t%(step*(view.z>12?6:3))===0){
+          if(HORZ){ ctx.textAlign='center'; ctx.fillText(mmss(t),p,geo.cEnd-8); }
+          else { ctx.textAlign='left'; ctx.fillText(mmss(t),geo.cEnd-30,p-3); }
+        }
+      }
+    }
+  }
+}
+
+/* ---- playhead ---- */
+function drawPen(p,color){
+  ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=1.3;
+  crossLineF(p,geo.cal,geo.cEnd); ctx.stroke();
+  const nib=XY(p,geo.cal);
+  ctx.beginPath(); ctx.fillStyle=color;
+  if(HORZ){ ctx.moveTo(nib[0]-4,nib[1]-6); ctx.lineTo(nib[0]+4,nib[1]-6); ctx.lineTo(nib[0],nib[1]); }
+  else    { ctx.moveTo(nib[0]-6,nib[1]-4); ctx.lineTo(nib[0]-6,nib[1]+4); ctx.lineTo(nib[0],nib[1]); }
+  ctx.closePath(); ctx.fill();
+}
+function drawPlayhead(p0,p1){
+  if(!playing||!audio) return;
+  const s=playing.seg, p=u2p(s.u0+audio.currentTime);
+  if(p<p0-40||p>p1+40) return;
+  // wet ink: live spectrum jitter just behind the pen
+  if(ana&&anaData&&!audio.paused){
+    ana.getByteTimeDomainData(anaData);
+    ctx.beginPath(); ctx.strokeStyle=RED; ctx.globalAlpha=0.5; ctx.lineWidth=1;
+    for(let k=0;k<20;k++){
+      const q=p-k*1.4; if(q<p0) break;
+      const v=Math.abs(anaData[k*7]-128)/128;
+      const h=v*geo.traceHalf*1.06;
+      crossLineF(q,geo.traceMid-h,geo.traceMid+h);
+    }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+  drawPen(p,RED);
+}
+
+/* ---- pinned channel legend ---- */
+function drawLegend(){
+  const lab=[];
+  lab.push({c:geo.traceMid,t:'PEAK dB',s:1});
+  lab.push({c:geo.bpm0-1,t:'172',s:2});
+  lab.push({c:geo.bpm0+geo.bpmH/2-3,t:'BPM',s:0});
+  lab.push({c:geo.bpm0+geo.bpmH-7,t:'55',s:2});
+  lab.push({c:geo.lane0+geo.laneH/2-2,t:'CENT',s:0});
+  for(let i=0;i<NB;i++) lab.push({c:geo.lane0+(i+1)*geo.laneH+geo.laneH/2-2,t:BAND_LABEL[i],s:0});
+  if(HORZ){
+    ctx.fillStyle=PAPER; ctx.fillRect(0,0,geo.legend,H);
+    ctx.beginPath(); ctx.strokeStyle=RULE; ctx.lineWidth=1;
+    ctx.moveTo(geo.legend+.5,0); ctx.lineTo(geo.legend+.5,H); ctx.stroke();
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    for(const l of lab){
+      if(l.c>geo.cEnd+2) continue;
+      ctx.font=(l.s===2?'400 7.5px ':'500 8.5px ')+MONO; ctx.fillStyle=l.s===1?INK2:INK3;
+      ctx.globalAlpha=l.s===1?1:(l.t==='BPM'?1:Math.max(0.35,geo.detail));
+      ctx.fillText(l.t,geo.legend-7,l.c);
+      ctx.globalAlpha=1;
+      if(l.s!==2){
+        ctx.beginPath(); ctx.strokeStyle=RULE; ctx.lineWidth=1;
+        ctx.moveTo(geo.legend-4,Math.round(l.c)+.5); ctx.lineTo(geo.legend,Math.round(l.c)+.5); ctx.stroke();
+      }
+    }
+    ctx.font='400 8px '+MONO; ctx.fillStyle=INK3; ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+    ctx.fillText('Hz',geo.legend-7,geo.lane0-4);
+  }else{
+    ctx.fillStyle=PAPER; ctx.fillRect(0,0,W,geo.legend);
+    ctx.beginPath(); ctx.strokeStyle=RULE; ctx.lineWidth=1;
+    ctx.moveTo(0,geo.legend+.5); ctx.lineTo(W,geo.legend+.5); ctx.stroke();
+    for(const l of lab){
+      if(l.c>geo.cEnd+2||l.s===2) continue;
+      ctx.save(); ctx.translate(l.c,geo.legend-5); ctx.rotate(-Math.PI/2);
+      ctx.font='500 8px '+MONO; ctx.fillStyle=l.s?INK2:INK3;
+      ctx.globalAlpha=l.s?1:(l.t==='BPM'?1:Math.max(0.35,geo.detail));
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(l.t,0,0); ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+}
+
+/* ---- scale bar : states which of the two axis scales you are currently reading ---- */
+function drawScaleBar(){
+  if(!HORZ) return;   // no room for it beside a phone-width roll
+  const target=70;
+  const secs=[1,2,5,10,15,30,60,120,300];
+  let lenU=0,label='';
+  for(const s of secs){ if(s*view.z>=target){ lenU=s; label=(s<60?s+' s':(s/60)+' min')+'  AUDIO'; break; } }
+  if(!lenU){
+    const days=[7,30,90,180,365];
+    for(const d of days){
+      if(d*GAP_PER_DAY*view.z>=target){
+        lenU=d*GAP_PER_DAY;
+        label=(d===7?'1 week':d===30?'1 month':d===365?'1 year':(d/30)+' months')+'  ELAPSED';
+        break;
+      }
+    }
+    if(!lenU){ lenU=365*GAP_PER_DAY; label='1 year  ELAPSED'; }
+  }
+  const px=lenU*view.z;
+  const pA=geo.legend+16, cB=HORZ?(H-13):(geo.cal-10);
+  ctx.save();
+  ctx.font='500 8.5px '+MONO;
+  const tw=ctx.measureText(label).width;
+  ctx.fillStyle=PAPER;
+  if(HORZ) ctx.fillRect(pA-7,cB-11,px+tw+22,20);
+  else     ctx.fillRect(cB-13,pA-9,26,px+22);
+  ctx.strokeStyle=INK2; ctx.lineWidth=1; ctx.beginPath();
+  if(HORZ){
+    ctx.moveTo(pA+.5,cB-5); ctx.lineTo(pA+.5,cB+.5); ctx.lineTo(pA+px+.5,cB+.5); ctx.lineTo(pA+px+.5,cB-5);
+  }else{
+    ctx.moveTo(cB-5,pA+.5); ctx.lineTo(cB+.5,pA+.5); ctx.lineTo(cB+.5,pA+px+.5); ctx.lineTo(cB-5,pA+px+.5);
+  }
+  ctx.stroke();
+  ctx.fillStyle=INK2; ctx.textBaseline='middle';
+  if(HORZ){ ctx.textAlign='left'; ctx.fillText(label,pA+px+7,cB-2); }
+  else {
+    ctx.save(); ctx.translate(cB-3,pA+px+8); ctx.rotate(Math.PI/2);
+    ctx.textAlign='left'; ctx.fillText(label,0,0); ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ---- index strip ---- */
+function drawMini(){
+  const w=geo.mw,h=geo.mh, horiz=w>h;
+  mctx.setTransform(DPR,0,0,DPR,0,0);
+  mctx.fillStyle='#E6E0D4'; mctx.fillRect(0,0,w,h);
+  const len=horiz?w:h, cross=horiz?h:w, mid=cross/2, half=cross/2-4;
+  const N=OVER.length;
+  mctx.beginPath(); mctx.strokeStyle=INK; mctx.globalAlpha=0.5; mctx.lineWidth=1;
+  for(let p=0;p<len;p++){
+    const k0=Math.floor(p/len*N), k1=Math.max(k0+1,Math.floor((p+1)/len*N));
+    let mx=0; for(let k=k0;k<Math.min(N,k1);k++) if(OVER[k]>mx) mx=OVER[k];
+    const hh=mx*half;
+    if(hh<=0){ continue; }
+    if(horiz){ mctx.moveTo(p+.5,mid-hh); mctx.lineTo(p+.5,mid+hh); }
+    else { mctx.moveTo(mid-hh,p+.5); mctx.lineTo(mid+hh,p+.5); }
+  }
+  mctx.stroke(); mctx.globalAlpha=1;
+  mctx.beginPath(); mctx.strokeStyle=INK3; mctx.lineWidth=1;
+  if(horiz){ mctx.moveTo(0,Math.round(mid)+.5); mctx.lineTo(w,Math.round(mid)+.5); }
+  else { mctx.moveTo(Math.round(mid)+.5,0); mctx.lineTo(Math.round(mid)+.5,h); }
+  mctx.stroke();
+  // viewport window
+  const span=viewSpan();
+  const a=cl(view.u/TOTAL*len,0,len), b=cl((view.u+span)/TOTAL*len,0,len);
+  mctx.fillStyle='rgba(22,19,15,0.10)';
+  if(horiz){ mctx.fillRect(0,0,a,h); mctx.fillRect(b,0,len-b,h); }
+  else { mctx.fillRect(0,0,w,a); mctx.fillRect(0,b,w,len-b); }
+  mctx.strokeStyle=INK; mctx.lineWidth=1;
+  mctx.strokeRect(horiz?a+.5:.5, horiz?.5:a+.5, horiz?Math.max(2,b-a):w-1, horiz?h-1:Math.max(2,b-a));
+  if(playing&&audio){
+    const p=(playing.seg.u0+audio.currentTime)/TOTAL*len;
+    mctx.beginPath(); mctx.strokeStyle=RED; mctx.lineWidth=1.4;
+    if(horiz){ mctx.moveTo(p,0); mctx.lineTo(p,h); } else { mctx.moveTo(0,p); mctx.lineTo(w,p); }
+    mctx.stroke();
+  }
+}
+
+/* ============================ interaction ============================ */
+function hitTrack(p){
+  const u=p2u(p);
+  let best=null,bd=1e9;
+  for(const s of SEG){
+    if(s.t!=='track') continue;
+    if(u>=s.u0&&u<=s.u1) return {seg:s,off:u-s.u0};
+    const d=u<s.u0?s.u0-u:u-s.u1;
+    if(d<bd){bd=d;best=s;}
+  }
+  return best&&bd<22/view.z?{seg:best,off:0}:null;
+}
+function zoomAt(p,f){
+  const u=p2u(p);
+  view.z=cl(view.z*f,zFit,zMax);
+  view.u=u-(p-geo.legend)/view.z;
+  clampView(); anim=null; dirty=true;
+}
+function flyTo(u,z){
+  anim={u0:view.u,z0:view.z,u1:u,z1:cl(z,zFit,zMax),t0:performance.now(),d:520};
+  dirty=true;
+}
+function frameTrack(s){
+  const z=cl((geo.L-geo.legend)*0.74/s.tr.dur, zFit, zMax);
+  const span=(geo.L-geo.legend)/z;
+  flyTo((s.u0+s.u1)/2-span/2, z);
+}
+
+let drag=null, moved=false, pinch=null;
+function localP(ev){
+  const r=stage.getBoundingClientRect();
+  return HORZ?(ev.clientX-r.left):(ev.clientY-r.top);
+}
+stage.addEventListener('wheel',e=>{
+  e.preventDefault(); lastUser=performance.now();
+  const p=localP(e);
+  if(e.ctrlKey){ zoomAt(p,Math.exp(-e.deltaY*0.01)); return; }
+  const ax=Math.abs(e.deltaX), ay=Math.abs(e.deltaY);
+  if(ax>ay*1.2){ view.u+=e.deltaX/view.z; clampView(); anim=null; dirty=true; }
+  else zoomAt(p,Math.exp(-e.deltaY*0.0022));
+},{passive:false});
+
+stage.addEventListener('pointerdown',e=>{
+  try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+  pointers.set(e.pointerId,localP(e));
+  lastUser=performance.now();
+  if(pointers.size===1){ drag={p:localP(e),u:view.u}; moved=false; anim=null; }
+  else if(pointers.size===2){
+    const v=[...pointers.values()];
+    pinch={d:Math.abs(v[0]-v[1])||1, z:view.z, c:(v[0]+v[1])/2, u:p2u((v[0]+v[1])/2)};
+    drag=null; moved=true;
+  }
+});
+stage.addEventListener('pointermove',e=>{
+  if(!pointers.has(e.pointerId)) {
+    if(HORZ){ const p=localP(e); const h=hitTrack(p); if(h&&h.seg.tr!==sel&&!playing){ sel=h.seg.tr; readout(); dirty=true; } }
+    return;
+  }
+  pointers.set(e.pointerId,localP(e));
+  lastUser=performance.now();
+  if(pinch&&pointers.size>=2){
+    const v=[...pointers.values()];
+    const d=Math.abs(v[0]-v[1])||1;
+    view.z=cl(pinch.z*(d/pinch.d),zFit,zMax);
+    const c=(v[0]+v[1])/2;
+    view.u=pinch.u-(c-geo.legend)/view.z;
+    clampView(); dirty=true; return;
+  }
+  if(drag){
+    const p=localP(e);
+    if(Math.abs(p-drag.p)>3) moved=true;
+    view.u=drag.u-(p-drag.p)/view.z;
+    clampView(); dirty=true;
+  }
+});
+function endPointer(e){
+  const had=pointers.has(e.pointerId);
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) pinch=null;
+  if(pointers.size===0){
+    if(had&&drag&&!moved){
+      const h=hitTrack(drag.p);
+      if(h){ sel=h.seg.tr; if(playing===h.seg.tr) seek(h.off); else play(h.seg.tr,h.off,true); }
+    }
+    drag=null;
+  }
+}
+stage.addEventListener('pointerup',endPointer);
+stage.addEventListener('pointercancel',endPointer);
+
+// index strip
+const mini=document.getElementById('mini');
+let mdrag=false;
+function miniTo(e){
+  const r=mini.getBoundingClientRect();
+  const horiz=r.width>r.height;
+  const p=horiz?(e.clientX-r.left)/r.width:(e.clientY-r.top)/r.height;
+  const span=viewSpan();
+  view.u=cl(p,0,1)*TOTAL-span/2; clampView(); anim=null; lastUser=performance.now(); dirty=true;
+}
+mini.addEventListener('pointerdown',e=>{mdrag=true;try{mini.setPointerCapture(e.pointerId);}catch(err){}miniTo(e);});
+mini.addEventListener('pointermove',e=>{if(mdrag)miniTo(e);});
+mini.addEventListener('pointerup',e=>{mdrag=false;});
+mini.addEventListener('pointercancel',()=>{mdrag=false;});
+
+addEventListener('keydown',e=>{
+  if(e.key===' '){ e.preventDefault(); toggle(); }
+  else if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
+    e.preventDefault(); step(e.key==='ArrowRight'?1:-1);
+  }
+  else if(e.key==='+'||e.key==='='){ zoomAt(geo.L/2,1.3); }
+  else if(e.key==='-'||e.key==='_'){ zoomAt(geo.L/2,1/1.3); }
+  else if(e.key==='Escape'){ stop(); }
+});
+function relayout(){ if(!TOTAL) return; layout(); clampView(); dirty=false; draw(); }
+addEventListener('resize',relayout);
+addEventListener('orientationchange',()=>setTimeout(relayout,120));
+if(window.ResizeObserver) new ResizeObserver(relayout).observe(stage);
+
+/* ============================ audio ============================ */
+function ensureAudio(){
+  if(audio) return;
+  audio=new Audio();
+  audio.crossOrigin='anonymous';
+  audio.preload='auto';
+  audio.addEventListener('ended',()=>{ step(1); });
+  audio.addEventListener('play',()=>{ppIcon(true);});
+  audio.addEventListener('pause',()=>{ppIcon(false);});
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    actx=new AC();
+    srcNode=actx.createMediaElementSource(audio);
+    srcNode.connect(actx.destination);          // sound first
+    ana=actx.createAnalyser(); ana.fftSize=256; ana.smoothingTimeConstant=0.5;
+    anaData=new Uint8Array(ana.fftSize);
+    srcNode.connect(ana);                       // analyser is a tap, not a link in the chain
+  }catch(err){ ana=null; }
+}
+function play(tr,off,frame){
+  ensureAudio();
+  if(actx&&actx.state==='suspended') actx.resume();
+  if(playing!==tr){
+    playing=tr; sel=tr;
+    audio.src='/audio-mp3/'+encodeURIComponent(tr.file);
+    audio.load();
+  }
+  const go=()=>{ if(playing!==tr) return; try{ audio.currentTime=off||0; }catch(e){} audio.play().catch(()=>{}); };
+  if(audio.readyState>=1) go(); else audio.addEventListener('loadedmetadata',go,{once:true});
+  follow=true;
+  if(frame) frameTrack(tr.seg);
+  readout(); dirty=true;
+}
+function seek(off){ if(!audio)return; try{audio.currentTime=cl(off,0,playing.dur-0.05);}catch(e){} if(audio.paused)audio.play().catch(()=>{}); dirty=true; }
+function toggle(){
+  if(!playing){ play(sel||TR[0],0,true); return; }
+  if(audio.paused){ if(actx&&actx.state==='suspended')actx.resume(); audio.play().catch(()=>{}); }
+  else audio.pause();
+  dirty=true;
+}
+function stop(){ if(audio){audio.pause(); try{audio.currentTime=0;}catch(e){}} playing=null; readout(); dirty=true; }
+function step(dir){
+  const list=SEG.filter(s=>s.t==='track');
+  let i=list.findIndex(s=>s.tr===(playing||sel));
+  if(i<0) i=0;
+  const j=i+dir;
+  if(j<0||j>=list.length){ if(audio) audio.pause(); dirty=true; return; }
+  play(list[j].tr,0,true);
+}
+function ppIcon(on){
+  document.getElementById('ppIcon').setAttribute('d',
+    on?'M2.5 1.5h3.2v11h-3.2z M8.3 1.5h3.2v11h-3.2z':'M2.5 1 L12 7 L2.5 13 Z');
+}
+document.getElementById('pp').addEventListener('click',function(){ toggle(); this.blur(); });
+
+/* ============================ readout ============================ */
+const $=id=>document.getElementById(id);
+const setText=(el,s)=>{ if(el.textContent!==s) el.textContent=s; };
+const bal=$('bal'), bctx=bal.getContext('2d');
+const BMIN=[289,291,257,216,182,144], BMAX=[425,415,388,368,342,306];
+function readout(){
+  const t=playing||sel;
+  if(!t){ $('ftitle').textContent='—'; return; }
+  $('ftitle').textContent=t.title;
+  $('fdate').textContent=t.date||'undated';
+  $('sBpm').textContent=t.bpm;
+  $('sRms').textContent=t.rms.toFixed(1)+' dB';
+  $('sCrest').textContent=t.crest.toFixed(1);
+  $('sOns').textContent=t.onset.toFixed(2)+'/s';
+  bctx.setTransform(2,0,0,2,0,0);
+  bctx.clearRect(0,0,78,16);
+  for(let i=0;i<NB;i++){
+    const v=cl((t.balance[i]-BMIN[i])/(BMAX[i]-BMIN[i]),0,1);
+    const x=i*13, h=Math.max(1,v*14);
+    bctx.fillStyle='rgba(102,93,80,0.28)'; bctx.fillRect(x,1,9,14);
+    bctx.fillStyle=playing===t?RED:INK; bctx.fillRect(x,1+14-h,9,h);
+  }
+}
+function tick(){
+  if(playing&&audio){
+    const cur=audio.currentTime||0;
+    setText($('ftime'),mmss(cur)+' / '+mmss(playing.dur));
+  }else if(sel){ setText($('ftime'),'0:00 / '+mmss(sel.dur)); }
+}
+
+/* ============================ loop ============================ */
+function start(){
+  layout();
+  view.z=zFit; view.u=-14/zFit;
+  clampView();
+  sel=DATED[DATED.length-1]||TR[0];
+  readout();
+  document.getElementById('boot').remove();
+  introRun=true; introT=0; introStart=performance.now();
+  requestAnimationFrame(loop);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{dirty=true;});
+}
+
+function loop(){
+  const now=performance.now();
+  if(introRun) dirty=true;
+  if(anim){
+    const t=cl((now-anim.t0)/anim.d,0,1);
+    const e=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    view.u=anim.u0+(anim.u1-anim.u0)*e;
+    view.z=anim.z0+(anim.z1-anim.z0)*e;
+    clampView();
+    if(t>=1) anim=null;
+    dirty=true;
+  }
+  if(playing&&audio&&!audio.paused){
+    dirty=true;
+    // chart recorder: once the pen reaches the mark, the paper travels under it
+    if(follow&&!anim&&now-lastUser>1400){
+      const p=u2p(playing.seg.u0+audio.currentTime);
+      const lo=geo.legend+(geo.L-geo.legend)*0.06, hi=geo.legend+(geo.L-geo.legend)*0.78;
+      if(p>hi){ view.u+=(p-hi)/view.z; clampView(); }
+      else if(p<lo){ view.u+=(p-geo.legend-(geo.L-geo.legend)*0.25)/view.z; clampView(); }
+    }
+  }
+  tick();
+  if(dirty){ dirty=false; draw(); }
+  requestAnimationFrame(loop);
+}
+
+})();
+</script>

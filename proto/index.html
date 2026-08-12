@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>cantmute — prototypes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#0a0a0b; color:#e8e6e1;
+    font-family:'Archivo',system-ui,sans-serif;
+    padding:clamp(20px,5vw,64px);
+    min-height:100vh;
+  }
+  .head{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap;
+         border-bottom:1px solid #26262a; padding-bottom:14px; }
+  h1{ font-size:clamp(26px,5vw,40px); font-weight:800; letter-spacing:-.03em; line-height:1; }
+  .meta{ font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f6f78; }
+  .note{ font-size:14px; color:#9a9aa4; max-width:64ch; margin:16px 0 30px; line-height:1.55; }
+  .note b{ color:#e8e6e1; font-weight:600; }
+  h2{ font-size:13px; font-weight:600; color:#8a8a94; margin:34px 0 10px;
+      display:flex; align-items:baseline; gap:12px; }
+  h2 .rule{ flex:1; height:1px; background:#26262a; }
+  ul{ list-style:none; display:grid; gap:1px; background:#26262a; border:1px solid #26262a; }
+  a.row{
+    display:grid; grid-template-columns:2rem 1fr auto; gap:clamp(10px,2.5vw,24px);
+    align-items:baseline; padding:18px clamp(12px,2.5vw,22px);
+    background:#0a0a0b; color:inherit; text-decoration:none; transition:background .12s;
+  }
+  a.row:hover,a.row:focus{ background:#151519; outline:none; }
+  .n{ font-family:'JetBrains Mono',monospace; font-size:11px; color:#5a5a63; }
+  .name{ font-size:clamp(19px,3.2vw,27px); font-weight:800; letter-spacing:-.02em; text-transform:uppercase; }
+  .desc{ font-size:13px; color:#9a9aa4; margin-top:5px; line-height:1.5; max-width:56ch; }
+  .verdict{ font-family:'JetBrains Mono',monospace; font-size:11px; white-space:nowrap; }
+  .win{ color:#7fd18a; }
+  .mid{ color:#c9a24a; }
+  .cut{ color:#5a5a63; }
+  .dim{ opacity:.45; }
+  @media(max-width:640px){
+    a.row{ grid-template-columns:1.6rem 1fr; }
+    .verdict{ display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>prototypes</h1>
+    <div class="meta">72 tracks &middot; real audio &middot; marks from your masters</div>
+  </div>
+  <p class="note">
+    Round two is <b>portrait-first with real depth</b> &mdash; the fix for &ldquo;some feel flat&rdquo;.
+    Three of them are properly 3D. Open on your phone if you can; that&rsquo;s what they were designed against.
+    Nothing here touches the live site.
+  </p>
+
+  <h2>Round two &mdash; depth <span class="rule"></span> <span class="meta">new</span></h2>
+  <ul>
+    <li><a class="row" href="/proto/crate.html">
+      <span class="n">07</span>
+      <span><span class="name">Crate</span><span class="desc">3D records you flick through with real weight and physics. The Shelf idea with depth and lighting.</span></span>
+      <span class="verdict">3d &middot; tactile</span></a></li>
+    <li><a class="row" href="/proto/core.html">
+      <span class="n">08</span>
+      <span><span class="name">Core</span><span class="desc">Six years as a geological core sample. Scroll down and you drill back through time. 2024 is barren rock.</span></span>
+      <span class="verdict">vertical</span></a></li>
+    <li><a class="row" href="/proto/slab.html">
+      <span class="n">09</span>
+      <span><span class="name">Slab</span><span class="desc">A corridor of standing stones, each engraved with its song. The carving fills with light as it plays.</span></span>
+      <span class="verdict">3d &middot; material</span></a></li>
+    <li><a class="row" href="/proto/flip.html">
+      <span class="n">10</span>
+      <span><span class="name">Flip</span><span class="desc">A mechanical split-flap board. Every track change clacks through. Pressure&rsquo;s switch, as the whole site.</span></span>
+      <span class="verdict">mechanical</span></a></li>
+    <li><a class="row" href="/proto/fluid.html">
+      <span class="n">11</span>
+      <span><span class="name">Fluid</span><span class="desc">Heavy dark liquid the music physically disturbs. Sculpted by the data before you even press play.</span></span>
+      <span class="verdict">shader</span></a></li>
+    <li><a class="row" href="/proto/tunnel.html">
+      <span class="n">12</span>
+      <span><span class="name">Tunnel</span><span class="desc">Fly through the song itself &mdash; the spectrogram wraps around you. Your position is the playhead.</span></span>
+      <span class="verdict">3d &middot; travel</span></a></li>
+  </ul>
+
+  <h2>Round one <span class="rule"></span> <span class="meta">your verdicts</span></h2>
+  <ul>
+    <li><a class="row" href="/proto/pressure.html">
+      <span class="n">04</span>
+      <span><span class="name">Pressure</span><span class="desc">One enormous word. Bass deforms the letters. You liked the invert switch and the title positioning.</span></span>
+      <span class="verdict win">cleanest</span></a></li>
+    <li><a class="row" href="/proto/spine.html">
+      <span class="n">05</span>
+      <span><span class="name">Spine</span><span class="desc">Tracks stored edge-on like a crate. Pull one out.</span></span>
+      <span class="verdict win">unique af</span></a></li>
+    <li><a class="row" href="/proto/contact.html">
+      <span class="n">06</span>
+      <span><span class="name">Contact</span><span class="desc">All 72 as acoustic fingerprints. Rings = bass&rarr;treble, clockwise = time, size = length.</span></span>
+      <span class="verdict mid">best on desktop</span></a></li>
+    <li class="dim"><a class="row" href="/proto/wall.html">
+      <span class="n">01</span>
+      <span><span class="name">Wall</span><span class="desc">Printed sheets, travel sideways through time.</span></span>
+      <span class="verdict cut">didn&rsquo;t land</span></a></li>
+    <li class="dim"><a class="row" href="/proto/deadwax.html">
+      <span class="n">02</span>
+      <span><span class="name">Dead Wax</span><span class="desc">Lacquer plates, groove cut from the waveform.</span></span>
+      <span class="verdict cut">didn&rsquo;t land</span></a></li>
+    <li class="dim"><a class="row" href="/proto/seismo.html">
+      <span class="n">03</span>
+      <span><span class="name">Seismograph</span><span class="desc">Six years as one instrument trace you zoom into.</span></span>
+      <span class="verdict cut">didn&rsquo;t land</span></a></li>
+  </ul>
+</body>
+</html>
