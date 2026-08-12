@@ -294,8 +294,7 @@ try {
 } catch(e){}
 
 var SITE_TITLE = 'can’t mute me.';
-var dead = {};                 // files that 404 everywhere — skipped, not silently failed
-var triedLocal = {};           // R2 miss -> retried against the site's own copy
+var triedLocal = {};           // R2 miss -> retried once against the site's own copy
 var AUDIO_BASE = '/audio-mp3/';
 var TRACKS = [], cur = 0, playing = false, idxOpen = false;
 var audio = null, actx = null, analy = null, freq = null, srcNode = null, wired = false, switching = false;
@@ -807,17 +806,6 @@ function ensureAudio(){
       var pr = audio.play();
       if (pr && pr.catch) pr.catch(function(){});
       return;
-    }
-    dead[t.file] = true;
-    var n = TRACKS.length, k, idx;
-    for (k = 1; k <= n; k++){
-      idx = (cur + k) % n;
-      if (!dead[TRACKS[idx].file]){
-        cur = idx;
-        stamp();
-        setTimeout(function(){ play(); }, 90);
-        return;
-      }
     }
     setPlaying(false);
   });
