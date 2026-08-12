@@ -29,6 +29,7 @@ REWRITES = [
     (re.compile(r"^/a/.+$"),                   "/index.html"),
     (re.compile(r"^/ep/.+$"),                  "/index.html"),
     (re.compile(r"^/world/?$"),                "/index.html"),
+    (re.compile(r"^/showcase/?$"),             "/showcase/index.html"),
 ]
 
 
