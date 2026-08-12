@@ -793,7 +793,7 @@ function ensureAudio(){
   if (audio) return;
   audio = new Audio();
   audio.crossOrigin = 'anonymous';
-  audio.preload = 'auto';
+  audio.preload = 'metadata';
   audio.addEventListener('ended', function(){ go(1, true); });
   audio.addEventListener('playing', function(){ switching = false; setPlaying(true); });
   // swapping src fires pause; that must not flip the page back to plate
@@ -804,7 +804,7 @@ function ensureAudio(){
   audio.addEventListener('error', function(){
     var t = TRACKS[cur];
     if (!t) return;
-    var want  = AUDIO_BASE + encodeURIComponent(t.file);
+    var want  = srcFor(t);
     var local = '/audio-mp3/' + encodeURIComponent(t.file);
     var src   = audio.getAttribute('src');
     if (src !== want && src !== local) return;        // stale error from a swap
@@ -824,12 +824,16 @@ function ensureAudio(){
   });
 }
 
+function srcFor(t){
+  return (triedLocal[t.file] ? '/audio-mp3/' : AUDIO_BASE) + encodeURIComponent(t.file);
+}
+
 // Load the current track's source WITHOUT starting playback, so the timeline
 // can be scrubbed on a track that has never been played. ensureAudio() alone
 // makes a src-less element — seeking that silently does nothing.
 function ensureLoaded(){
   ensureAudio();
-  var want = AUDIO_BASE + encodeURIComponent(TRACKS[cur].file);
+  var want = srcFor(TRACKS[cur]);
   if (audio.getAttribute('src') !== want){
     switching = true;
     setTimeout(function(){ switching = false; }, 900);
@@ -1075,7 +1079,7 @@ function setPlaying(v){
 
 function toggle(){
   ensureAudio();
-  var want = AUDIO_BASE + encodeURIComponent(TRACKS[cur].file);
+  var want = srcFor(TRACKS[cur]);
   if (audio.getAttribute('src') !== want){ play(); return; }
   // A scrub can load the src before the first play, so this branch is now
   // reachable on a cold start — wire the analyser here too or the type never
@@ -1094,7 +1098,7 @@ function play(){
   wireAnalyser();
   if (actx && actx.state === 'suspended') actx.resume();
   var t = TRACKS[cur];
-  var want = AUDIO_BASE + encodeURIComponent(t.file);
+  var want = srcFor(t);
   if (audio.getAttribute('src') !== want){
     switching = true;
     setTimeout(function(){ switching = false; }, 900);
@@ -1154,6 +1158,22 @@ function render(){
   sizeCanvas();
   drawField(playing && audio && t.dur ? clamp(audio.currentTime/t.dur,0,1) : 0);
   idxRows.forEach(function(r,i){ r.classList.toggle('on', i === cur); });
+  prepare();
+}
+
+// Point the element at the current track without playing, so any R2 miss
+// resolves to the local copy before the user ever taps. Never touches a
+// stream that is already running.
+function prepare(){
+  if (playing || switching) return;
+  var t = TRACKS[cur];
+  if (!t) return;
+  ensureAudio();
+  var want = srcFor(t);
+  if (audio.getAttribute('src') !== want){
+    audio.setAttribute('src', want);
+    audio.load();
+  }
 }
 
 /* ---------------- index overlay ---------------- */
@@ -1305,7 +1325,7 @@ function boot(){
   // Axis-locked drag: vertical past 44px changes track (unchanged), horizontal
   // scrubs the song. The head already spans the viewport as 0..100% of the
   // track, so dragging across the sheet IS the timeline — no extra chrome.
-  var ty = 0, tx = 0, tt = 0, axis = 0, scrubbed = false, swallowClick = false;
+  var ty = 0, tx = 0, tt = 0, axis = 0, scrubbed = false, swallowUntil = 0;
   var SLOP = 10;
 
   // Duration comes from marks.json, so the scrub maths is correct even before
@@ -1371,10 +1391,10 @@ function boot(){
     if (idxOpen) return;
     var ct = ev.changedTouches[0];
     var dy = ct.clientY - ty, dx = ct.clientX - tx;
-    if (axis === 1){ endScrub(); swallowClick = true; return; }
+    if (axis === 1){ endScrub(); swallowUntil = performance.now() + 700; return; }
     endScrub();
     if (Math.abs(dy) > 44 && performance.now() - tt < 700){
-      go(dy < 0 ? 1 : -1); swallowClick = true; return;
+      go(dy < 0 ? 1 : -1); swallowUntil = performance.now() + 700; return;
     }
     // A real tap: act HERE, inside the touch gesture. We used to wait for the
     // synthetic click, but touchmove calls preventDefault() for scrubbing and
@@ -1383,7 +1403,7 @@ function boot(){
     // gesture. Buttons are excluded; they have their own handlers.
     if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && performance.now() - tt < 600){
       var onBtn = ev.target && ev.target.closest && ev.target.closest('button');
-      if (!onBtn){ toggle(); swallowClick = true; }
+      if (!onBtn){ toggle(); swallowUntil = performance.now() + 700; }
     }
   }, { passive:true });
 
@@ -1426,7 +1446,7 @@ function boot(){
   // a drag that scrubbed must not also count as the click that toggles play
   document.getElementById('sheet').addEventListener('click', function(){
     if (idxOpen) return;
-    if (swallowClick){ swallowClick = false; return; }   // touchend already handled it
+    if (performance.now() < swallowUntil) return;   // touchend already handled it
     if (scrubbed){ scrubbed = false; return; }
     toggle();
   });
