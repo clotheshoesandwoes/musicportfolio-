@@ -33,6 +33,28 @@
   ],
   "tracks": [
     {
+      "title": "Older Son",
+      "file": "older son.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": true,
+      "isFeatured": false,
+      "date": "2026-08-05"
+    },
+    {
+      "title": "Real",
+      "file": "real.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": true,
+      "isFeatured": false,
+      "date": "2026-07-15"
+    },
+    {
       "title": "Still Looking For You",
       "file": "still looking for you.mp3",
       "description": "",
@@ -42,6 +64,17 @@
       "isNew": true,
       "isFeatured": false,
       "date": "2026-05-06"
+    },
+    {
+      "title": "Time",
+      "file": "time.mp3",
+      "description": "",
+      "credits": "",
+      "links": {},
+      "tags": [],
+      "isNew": true,
+      "isFeatured": false,
+      "date": "2026-04-13"
     },
     {
       "title": "Rolla",

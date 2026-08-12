@@ -9,3 +9,6 @@ audio-mp3/
 
 # Visual reference materials (rotoscope/Active Theory clips, frames) — local only
 ref-gifs/
+
+# scratch A/B renders for picking mixes — local only
+proto/pick/
